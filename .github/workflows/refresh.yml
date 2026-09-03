@@ -1,0 +1,69 @@
+name: refresh-data
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 11pm ET during EDT (10pm during EST) — heavy run: window moves, full trends refetch
+    - cron: "0 15 * * *"  # 11am ET during EDT (10am during EST) — light run: trends cached, traffic/fires only
+  workflow_dispatch:
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install deps
+        run: pip install -r pipeline/requirements.txt
+
+      - name: census population centroids
+        run: |
+          mkdir -p pipeline/cenpop
+          curl -sf --retry 3 -o pipeline/cenpop/CenPop2020_Mean_BG.txt \
+            https://www2.census.gov/geo/docs/reference/cenpop2020/blkgrp/CenPop2020_Mean_BG.txt
+
+      - name: site traffic (PostHog)
+        env:
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+          POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}
+        run: python pipeline/fetch_traffic.py
+
+      # Trends steps may 429-fail from datacenter IPs; each saves progress per
+      # job, so a partial run still advances and the next run resumes. The
+      # build then uses the freshest data available.
+      - name: trends, in-state
+        continue-on-error: true
+        run: python pipeline/fetch_trends.py state 2026
+
+      - name: trends, metros
+        continue-on-error: true
+        run: python pipeline/fetch_trends.py metro 2026
+
+      - name: fire milestones
+        run: python pipeline/fetch_fires.py
+
+      - name: impact rings
+        run: python pipeline/compute_impact.py
+
+      - name: build dashboard
+        run: python pipeline/build_dashboard.py
+
+      - name: publish
+        run: |
+          cp pipeline/dashboard.html index.html
+          git config user.name "refresh-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Scheduled data refresh" || echo "no changes to commit"
+          git push

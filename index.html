@@ -162,12 +162,13 @@
   .mapcard .mtitle { font-size: 13px; font-weight: 600; margin: 0 0 2px; }
   .mapcard .msub { color: var(--muted); font-size: 11.5px; margin-bottom: 8px; }
   .mapcard .mapbox { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
-  .mapcard svg { max-width: 460px; width: 100%; height: auto; flex: 1 1 300px; }
+  .mapcard .mapbox > svg { max-width: 460px; width: 100%; height: auto; flex: 1 1 300px; }
   .mapcard svg path.dma { cursor: pointer; stroke: var(--bg); stroke-width: 1.2; }
   .mapcard svg path.dma:hover { stroke: var(--ink); stroke-width: 1.5; }
   .mapcard svg path.outline { fill: none; stroke: var(--axis); stroke-width: 1.2; pointer-events: none; }
   .maplegend { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--ink-2); min-width: 150px; }
   .maplegend .li { display: flex; align-items: center; gap: 7px; }
+  .maplegend .li svg { width: 22px; height: 12px; flex: none; }
   .maplegend .swb { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
   .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
@@ -981,7 +982,7 @@ function hideTip(svg) {
 function updateMeta() {
   document.getElementById("meta").textContent =
     `${DATA.timeframe.replace(" ", " → ")} · ${MODE_GEO[mode]} · ${DATA.states.length} states · ` +
-    (DATA.fetchedAt ? `traffic via PostHog as of ${DATA.fetchedAt} · ` : "") + `built 2026-09-03 19:21Z`;
+    (DATA.fetchedAt ? `traffic via PostHog as of ${DATA.fetchedAt} · ` : "") + `built 2026-09-03 19:27Z`;
 }
 updateMeta();
 buildControls();

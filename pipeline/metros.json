@@ -1,0 +1,1000 @@
+{
+ "states": {
+  "arizona": [
+   {
+    "key": "phoenix",
+    "name": "Phoenix",
+    "geo": "US-AZ-753",
+    "dma": 753,
+    "city": "phoenix",
+    "lat": 33.45,
+    "lon": -112.07
+   },
+   {
+    "key": "tucson-sierra-vista",
+    "name": "Tucson\u2013Sierra Vista",
+    "geo": "US-AZ-789",
+    "dma": 789,
+    "city": "tucson",
+    "lat": 32.22,
+    "lon": -110.97
+   },
+   {
+    "key": "yuma-el-centro",
+    "name": "Yuma\u2013El Centro",
+    "geo": "US-AZ-771",
+    "dma": 771,
+    "city": "yuma",
+    "lat": 32.69,
+    "lon": -114.63
+   }
+  ],
+  "california": [
+   {
+    "key": "bakersfield",
+    "name": "Bakersfield",
+    "geo": "US-CA-800",
+    "dma": 800,
+    "city": "bakersfield",
+    "lat": 35.37,
+    "lon": -119.02
+   },
+   {
+    "key": "chico-redding",
+    "name": "Chico\u2013Redding",
+    "geo": "US-CA-868",
+    "dma": 868,
+    "city": "chico",
+    "lat": 39.73,
+    "lon": -121.84
+   },
+   {
+    "key": "eureka",
+    "name": "Eureka",
+    "geo": "US-CA-802",
+    "dma": 802,
+    "city": "eureka",
+    "lat": 40.8,
+    "lon": -124.16
+   },
+   {
+    "key": "fresno-visalia",
+    "name": "Fresno\u2013Visalia",
+    "geo": "US-CA-866",
+    "dma": 866,
+    "city": "fresno",
+    "lat": 36.74,
+    "lon": -119.79
+   },
+   {
+    "key": "los-angeles",
+    "name": "Los Angeles",
+    "geo": "US-CA-803",
+    "dma": 803,
+    "city": "los angeles",
+    "lat": 34.05,
+    "lon": -118.24
+   },
+   {
+    "key": "medford-klamath-falls",
+    "name": "Medford\u2013Klamath Falls",
+    "geo": "US-OR-813",
+    "dma": 813,
+    "city": "medford",
+    "lat": 42.33,
+    "lon": -122.87
+   },
+   {
+    "key": "monterey-salinas",
+    "name": "Monterey\u2013Salinas",
+    "geo": "US-CA-828",
+    "dma": 828,
+    "city": "salinas",
+    "lat": 36.68,
+    "lon": -121.66
+   },
+   {
+    "key": "palm-springs",
+    "name": "Palm Springs",
+    "geo": "US-CA-804",
+    "dma": 804,
+    "city": "palm springs",
+    "lat": 33.83,
+    "lon": -116.55
+   },
+   {
+    "key": "reno",
+    "name": "Reno",
+    "geo": "US-NV-811",
+    "dma": 811,
+    "city": "reno",
+    "lat": 39.53,
+    "lon": -119.81
+   },
+   {
+    "key": "sacramento-stockton-modesto",
+    "name": "Sacramento\u2013Stockton\u2013Modesto",
+    "geo": "US-CA-862",
+    "dma": 862,
+    "city": "sacramento",
+    "lat": 38.58,
+    "lon": -121.49
+   },
+   {
+    "key": "san-diego",
+    "name": "San Diego",
+    "geo": "US-CA-825",
+    "dma": 825,
+    "city": "san diego",
+    "lat": 32.72,
+    "lon": -117.16
+   },
+   {
+    "key": "san-francisco-oakland-san-jose",
+    "name": "San Francisco\u2013Oakland\u2013San Jose",
+    "geo": "US-CA-807",
+    "dma": 807,
+    "city": "san jose",
+    "lat": 37.34,
+    "lon": -121.89
+   },
+   {
+    "key": "santa-barbara-santa-maria-san-luis-obispo",
+    "name": "Santa Barbara\u2013Santa Maria\u2013San Luis Obispo",
+    "geo": "US-CA-855",
+    "dma": 855,
+    "city": "santa maria",
+    "lat": 34.95,
+    "lon": -120.44
+   },
+   {
+    "key": "yuma-el-centro",
+    "name": "Yuma\u2013El Centro",
+    "geo": "US-AZ-771",
+    "dma": 771,
+    "city": "yuma",
+    "lat": 32.69,
+    "lon": -114.63
+   }
+  ],
+  "colorado": [
+   {
+    "key": "colorado-springs-pueblo",
+    "name": "Colorado Springs\u2013Pueblo",
+    "geo": "US-CO-752",
+    "dma": 752,
+    "city": "colorado springs",
+    "lat": 38.83,
+    "lon": -104.82
+   },
+   {
+    "key": "denver",
+    "name": "Denver",
+    "geo": "US-CO-751",
+    "dma": 751,
+    "city": "denver",
+    "lat": 39.74,
+    "lon": -104.99
+   },
+   {
+    "key": "grand-junction-montrose",
+    "name": "Grand Junction\u2013Montrose",
+    "geo": "US-CO-773",
+    "dma": 773,
+    "city": "grand junction",
+    "lat": 39.06,
+    "lon": -108.55
+   }
+  ],
+  "idaho": [
+   {
+    "key": "boise",
+    "name": "Boise",
+    "geo": "US-ID-757",
+    "dma": 757,
+    "city": "boise",
+    "lat": 43.62,
+    "lon": -116.2
+   },
+   {
+    "key": "idaho-falls-pocatello",
+    "name": "Idaho Falls\u2013Pocatello",
+    "geo": "US-ID-758",
+    "dma": 758,
+    "city": "idaho falls",
+    "lat": 43.49,
+    "lon": -112.03
+   },
+   {
+    "key": "spokane",
+    "name": "Spokane",
+    "geo": "US-WA-881",
+    "dma": 881,
+    "city": "spokane",
+    "lat": 47.66,
+    "lon": -117.43
+   },
+   {
+    "key": "twin-falls",
+    "name": "Twin Falls",
+    "geo": "US-ID-760",
+    "dma": 760,
+    "city": "twin falls",
+    "lat": 42.56,
+    "lon": -114.46
+   }
+  ],
+  "minnesota": [
+   {
+    "key": "duluth-superior",
+    "name": "Duluth\u2013Superior",
+    "geo": "US-MN-676",
+    "dma": 676,
+    "city": "duluth",
+    "lat": 46.79,
+    "lon": -92.1
+   },
+   {
+    "key": "fargo-valley-city",
+    "name": "Fargo\u2013Valley City",
+    "geo": "US-ND-724",
+    "dma": 724,
+    "city": "fargo",
+    "lat": 46.88,
+    "lon": -96.79
+   },
+   {
+    "key": "la-crosse-eau-claire",
+    "name": "La Crosse\u2013Eau Claire",
+    "geo": "US-WI-702",
+    "dma": 702,
+    "city": "eau claire",
+    "lat": 44.81,
+    "lon": -91.5
+   },
+   {
+    "key": "mankato",
+    "name": "Mankato",
+    "geo": "US-MN-737",
+    "dma": 737,
+    "city": "mankato",
+    "lat": 44.16,
+    "lon": -94.0
+   },
+   {
+    "key": "minneapolis-st-paul",
+    "name": "Minneapolis\u2013St. Paul",
+    "geo": "US-MN-613",
+    "dma": 613,
+    "city": "minneapolis",
+    "lat": 44.98,
+    "lon": -93.27
+   },
+   {
+    "key": "rochester-mason-city-austin",
+    "name": "Rochester\u2013Mason City\u2013Austin",
+    "geo": "US-MN-611",
+    "dma": 611,
+    "city": "rochester",
+    "lat": 44.02,
+    "lon": -92.47
+   }
+  ],
+  "montana": [
+   {
+    "key": "billings",
+    "name": "Billings",
+    "geo": "US-MT-756",
+    "dma": 756,
+    "city": "billings",
+    "lat": 45.79,
+    "lon": -108.5
+   },
+   {
+    "key": "butte-bozeman",
+    "name": "Butte\u2013Bozeman",
+    "geo": "US-MT-754",
+    "dma": 754,
+    "city": "bozeman",
+    "lat": 45.68,
+    "lon": -111.04
+   },
+   {
+    "key": "glendive",
+    "name": "Glendive",
+    "geo": "US-MT-798",
+    "dma": 798,
+    "city": "glendive",
+    "lat": 47.11,
+    "lon": -104.71
+   },
+   {
+    "key": "great-falls",
+    "name": "Great Falls",
+    "geo": "US-MT-755",
+    "dma": 755,
+    "city": "great falls",
+    "lat": 47.51,
+    "lon": -111.29
+   },
+   {
+    "key": "helena",
+    "name": "Helena",
+    "geo": "US-MT-766",
+    "dma": 766,
+    "city": "helena",
+    "lat": 46.59,
+    "lon": -112.04
+   },
+   {
+    "key": "minot-bismarck-dickinson-williston",
+    "name": "Minot\u2013Bismarck\u2013Dickinson\u2013Williston",
+    "geo": "US-ND-687",
+    "dma": 687,
+    "city": "bismarck",
+    "lat": 46.81,
+    "lon": -100.78
+   },
+   {
+    "key": "missoula",
+    "name": "Missoula",
+    "geo": "US-MT-762",
+    "dma": 762,
+    "city": "missoula",
+    "lat": 46.87,
+    "lon": -113.99
+   }
+  ],
+  "nebraska": [
+   {
+    "key": "cheyenne-scottsbluff",
+    "name": "Cheyenne\u2013Scottsbluff",
+    "geo": "US-WY-759",
+    "dma": 759,
+    "city": "cheyenne",
+    "lat": 41.14,
+    "lon": -104.82
+   },
+   {
+    "key": "denver",
+    "name": "Denver",
+    "geo": "US-CO-751",
+    "dma": 751,
+    "city": "denver",
+    "lat": 39.74,
+    "lon": -104.99
+   },
+   {
+    "key": "lincoln-hastings-kearney",
+    "name": "Lincoln\u2013Hastings\u2013Kearney",
+    "geo": "US-NE-722",
+    "dma": 722,
+    "city": "lincoln",
+    "lat": 40.81,
+    "lon": -96.68
+   },
+   {
+    "key": "north-platte",
+    "name": "North Platte",
+    "geo": "US-NE-740",
+    "dma": 740,
+    "city": "north platte",
+    "lat": 41.12,
+    "lon": -100.77
+   },
+   {
+    "key": "omaha",
+    "name": "Omaha",
+    "geo": "US-NE-652",
+    "dma": 652,
+    "city": "omaha",
+    "lat": 41.26,
+    "lon": -95.93
+   },
+   {
+    "key": "sioux-city",
+    "name": "Sioux City",
+    "geo": "US-IA-624",
+    "dma": 624,
+    "city": "sioux city",
+    "lat": 42.5,
+    "lon": -96.4
+   },
+   {
+    "key": "sioux-falls-mitchell",
+    "name": "Sioux Falls\u2013Mitchell",
+    "geo": "US-SD-725",
+    "dma": 725,
+    "city": "sioux falls",
+    "lat": 43.55,
+    "lon": -96.73
+   }
+  ],
+  "nevada": [
+   {
+    "key": "las-vegas",
+    "name": "Las Vegas",
+    "geo": "US-NV-839",
+    "dma": 839,
+    "city": "las vegas",
+    "lat": 36.17,
+    "lon": -115.14
+   },
+   {
+    "key": "reno",
+    "name": "Reno",
+    "geo": "US-NV-811",
+    "dma": 811,
+    "city": "reno",
+    "lat": 39.53,
+    "lon": -119.81
+   },
+   {
+    "key": "salt-lake-city",
+    "name": "Salt Lake City",
+    "geo": "US-UT-770",
+    "dma": 770,
+    "city": "salt lake city",
+    "lat": 40.76,
+    "lon": -111.89
+   }
+  ],
+  "new-mexico": [
+   {
+    "key": "albuquerque-santa-fe",
+    "name": "Albuquerque\u2013Santa Fe",
+    "geo": "US-NM-790",
+    "dma": 790,
+    "city": "albuquerque",
+    "lat": 35.08,
+    "lon": -106.65
+   },
+   {
+    "key": "amarillo",
+    "name": "Amarillo",
+    "geo": "US-TX-634",
+    "dma": 634,
+    "city": "amarillo",
+    "lat": 35.19,
+    "lon": -101.85
+   },
+   {
+    "key": "el-paso",
+    "name": "El Paso",
+    "geo": "US-TX-765",
+    "dma": 765,
+    "city": "el paso",
+    "lat": 31.76,
+    "lon": -106.49
+   }
+  ],
+  "oklahoma": [
+   {
+    "key": "amarillo",
+    "name": "Amarillo",
+    "geo": "US-TX-634",
+    "dma": 634,
+    "city": "amarillo",
+    "lat": 35.19,
+    "lon": -101.85
+   },
+   {
+    "key": "ft-smith-fayetteville-springdale-rogers",
+    "name": "Ft. Smith\u2013Fayetteville\u2013Springdale\u2013Rogers",
+    "geo": "US-AR-670",
+    "dma": 670,
+    "city": "fort smith",
+    "lat": 35.39,
+    "lon": -94.4
+   },
+   {
+    "key": "oklahoma-city",
+    "name": "Oklahoma City",
+    "geo": "US-OK-650",
+    "dma": 650,
+    "city": "oklahoma city",
+    "lat": 35.47,
+    "lon": -97.52
+   },
+   {
+    "key": "sherman-ada",
+    "name": "Sherman\u2013Ada",
+    "geo": "US-TX-657",
+    "dma": 657,
+    "city": "sherman",
+    "lat": 33.64,
+    "lon": -96.61
+   },
+   {
+    "key": "tulsa",
+    "name": "Tulsa",
+    "geo": "US-OK-671",
+    "dma": 671,
+    "city": "tulsa",
+    "lat": 36.15,
+    "lon": -95.99
+   },
+   {
+    "key": "wichita-falls-lawton",
+    "name": "Wichita Falls\u2013Lawton",
+    "geo": "US-TX-627",
+    "dma": 627,
+    "city": "wichita falls",
+    "lat": 33.91,
+    "lon": -98.49
+   }
+  ],
+  "oregon": [
+   {
+    "key": "bend",
+    "name": "Bend",
+    "geo": "US-OR-821",
+    "dma": 821,
+    "city": "bend",
+    "lat": 44.06,
+    "lon": -121.31
+   },
+   {
+    "key": "boise",
+    "name": "Boise",
+    "geo": "US-ID-757",
+    "dma": 757,
+    "city": "boise",
+    "lat": 43.62,
+    "lon": -116.2
+   },
+   {
+    "key": "eugene",
+    "name": "Eugene",
+    "geo": "US-OR-801",
+    "dma": 801,
+    "city": "eugene",
+    "lat": 44.05,
+    "lon": -123.09
+   },
+   {
+    "key": "medford-klamath-falls",
+    "name": "Medford\u2013Klamath Falls",
+    "geo": "US-OR-813",
+    "dma": 813,
+    "city": "medford",
+    "lat": 42.33,
+    "lon": -122.87
+   },
+   {
+    "key": "portland",
+    "name": "Portland",
+    "geo": "US-OR-820",
+    "dma": 820,
+    "city": "portland",
+    "lat": 45.52,
+    "lon": -122.68
+   },
+   {
+    "key": "yakima-pasco-richland-kennewick",
+    "name": "Yakima\u2013Pasco\u2013Richland\u2013Kennewick",
+    "geo": "US-WA-810",
+    "dma": 810,
+    "city": "yakima",
+    "lat": 46.6,
+    "lon": -120.51
+   }
+  ],
+  "south-dakota": [
+   {
+    "key": "rapid-city",
+    "name": "Rapid City",
+    "geo": "US-SD-764",
+    "dma": 764,
+    "city": "rapid city",
+    "lat": 44.08,
+    "lon": -103.23
+   },
+   {
+    "key": "sioux-falls-mitchell",
+    "name": "Sioux Falls\u2013Mitchell",
+    "geo": "US-SD-725",
+    "dma": 725,
+    "city": "sioux falls",
+    "lat": 43.55,
+    "lon": -96.73
+   }
+  ],
+  "texas": [
+   {
+    "key": "abilene-sweetwater",
+    "name": "Abilene\u2013Sweetwater",
+    "geo": "US-TX-662",
+    "dma": 662,
+    "city": "abilene",
+    "lat": 32.45,
+    "lon": -99.73
+   },
+   {
+    "key": "amarillo",
+    "name": "Amarillo",
+    "geo": "US-TX-634",
+    "dma": 634,
+    "city": "amarillo",
+    "lat": 35.19,
+    "lon": -101.85
+   },
+   {
+    "key": "austin",
+    "name": "Austin",
+    "geo": "US-TX-635",
+    "dma": 635,
+    "city": "austin",
+    "lat": 30.27,
+    "lon": -97.74
+   },
+   {
+    "key": "beaumont-port-arthur",
+    "name": "Beaumont\u2013Port Arthur",
+    "geo": "US-TX-692",
+    "dma": 692,
+    "city": "beaumont",
+    "lat": 30.08,
+    "lon": -94.13
+   },
+   {
+    "key": "corpus-christi",
+    "name": "Corpus Christi",
+    "geo": "US-TX-600",
+    "dma": 600,
+    "city": "corpus christi",
+    "lat": 27.8,
+    "lon": -97.4
+   },
+   {
+    "key": "dallas-ft-worth",
+    "name": "Dallas\u2013Ft. Worth",
+    "geo": "US-TX-623",
+    "dma": 623,
+    "city": "dallas",
+    "lat": 32.78,
+    "lon": -96.8
+   },
+   {
+    "key": "el-paso",
+    "name": "El Paso",
+    "geo": "US-TX-765",
+    "dma": 765,
+    "city": "el paso",
+    "lat": 31.76,
+    "lon": -106.49
+   },
+   {
+    "key": "harlingen-weslaco-brownsville-mcallen",
+    "name": "Harlingen\u2013Weslaco\u2013Brownsville\u2013McAllen",
+    "geo": "US-TX-636",
+    "dma": 636,
+    "city": "brownsville",
+    "lat": 25.9,
+    "lon": -97.5
+   },
+   {
+    "key": "houston",
+    "name": "Houston",
+    "geo": "US-TX-618",
+    "dma": 618,
+    "city": "houston",
+    "lat": 29.76,
+    "lon": -95.37
+   },
+   {
+    "key": "laredo",
+    "name": "Laredo",
+    "geo": "US-TX-749",
+    "dma": 749,
+    "city": "laredo",
+    "lat": 27.51,
+    "lon": -99.51
+   },
+   {
+    "key": "lubbock",
+    "name": "Lubbock",
+    "geo": "US-TX-651",
+    "dma": 651,
+    "city": "lubbock",
+    "lat": 33.58,
+    "lon": -101.86
+   },
+   {
+    "key": "odessa-midland",
+    "name": "Odessa\u2013Midland",
+    "geo": "US-TX-633",
+    "dma": 633,
+    "city": "midland",
+    "lat": 32.0,
+    "lon": -102.08
+   },
+   {
+    "key": "san-angelo",
+    "name": "San Angelo",
+    "geo": "US-TX-661",
+    "dma": 661,
+    "city": "san angelo",
+    "lat": 31.46,
+    "lon": -100.44
+   },
+   {
+    "key": "san-antonio",
+    "name": "San Antonio",
+    "geo": "US-TX-641",
+    "dma": 641,
+    "city": "san antonio",
+    "lat": 29.42,
+    "lon": -98.49
+   },
+   {
+    "key": "sherman-ada",
+    "name": "Sherman\u2013Ada",
+    "geo": "US-TX-657",
+    "dma": 657,
+    "city": "sherman",
+    "lat": 33.64,
+    "lon": -96.61
+   },
+   {
+    "key": "shreveport",
+    "name": "Shreveport",
+    "geo": "US-LA-612",
+    "dma": 612,
+    "city": "shreveport",
+    "lat": 32.53,
+    "lon": -93.75
+   },
+   {
+    "key": "tyler-longview-lufkin-nacogdoches",
+    "name": "Tyler\u2013Longview\u2013Lufkin\u2013Nacogdoches",
+    "geo": "US-TX-709",
+    "dma": 709,
+    "city": "tyler",
+    "lat": 32.35,
+    "lon": -95.3
+   },
+   {
+    "key": "victoria",
+    "name": "Victoria",
+    "geo": "US-TX-626",
+    "dma": 626,
+    "city": "victoria",
+    "lat": 28.81,
+    "lon": -97.0
+   },
+   {
+    "key": "waco-temple-bryan",
+    "name": "Waco\u2013Temple\u2013Bryan",
+    "geo": "US-TX-625",
+    "dma": 625,
+    "city": "waco",
+    "lat": 31.55,
+    "lon": -97.15
+   },
+   {
+    "key": "wichita-falls-lawton",
+    "name": "Wichita Falls\u2013Lawton",
+    "geo": "US-TX-627",
+    "dma": 627,
+    "city": "wichita falls",
+    "lat": 33.91,
+    "lon": -98.49
+   }
+  ],
+  "utah": [
+   {
+    "key": "salt-lake-city",
+    "name": "Salt Lake City",
+    "geo": "US-UT-770",
+    "dma": 770,
+    "city": "salt lake city",
+    "lat": 40.76,
+    "lon": -111.89
+   }
+  ],
+  "washington": [
+   {
+    "key": "portland",
+    "name": "Portland",
+    "geo": "US-OR-820",
+    "dma": 820,
+    "city": "portland",
+    "lat": 45.52,
+    "lon": -122.68
+   },
+   {
+    "key": "seattle-tacoma",
+    "name": "Seattle\u2013Tacoma",
+    "geo": "US-WA-819",
+    "dma": 819,
+    "city": "seattle",
+    "lat": 47.61,
+    "lon": -122.33
+   },
+   {
+    "key": "spokane",
+    "name": "Spokane",
+    "geo": "US-WA-881",
+    "dma": 881,
+    "city": "spokane",
+    "lat": 47.66,
+    "lon": -117.43
+   },
+   {
+    "key": "yakima-pasco-richland-kennewick",
+    "name": "Yakima\u2013Pasco\u2013Richland\u2013Kennewick",
+    "geo": "US-WA-810",
+    "dma": 810,
+    "city": "yakima",
+    "lat": 46.6,
+    "lon": -120.51
+   }
+  ],
+  "wyoming": [
+   {
+    "key": "billings",
+    "name": "Billings",
+    "geo": "US-MT-756",
+    "dma": 756,
+    "city": "billings",
+    "lat": 45.79,
+    "lon": -108.5
+   },
+   {
+    "key": "casper-riverton",
+    "name": "Casper\u2013Riverton",
+    "geo": "US-WY-767",
+    "dma": 767,
+    "city": "casper",
+    "lat": 42.85,
+    "lon": -106.33
+   },
+   {
+    "key": "cheyenne-scottsbluff",
+    "name": "Cheyenne\u2013Scottsbluff",
+    "geo": "US-WY-759",
+    "dma": 759,
+    "city": "cheyenne",
+    "lat": 41.14,
+    "lon": -104.82
+   },
+   {
+    "key": "denver",
+    "name": "Denver",
+    "geo": "US-CO-751",
+    "dma": 751,
+    "city": "denver",
+    "lat": 39.74,
+    "lon": -104.99
+   },
+   {
+    "key": "idaho-falls-pocatello",
+    "name": "Idaho Falls\u2013Pocatello",
+    "geo": "US-ID-758",
+    "dma": 758,
+    "city": "idaho falls",
+    "lat": 43.49,
+    "lon": -112.03
+   },
+   {
+    "key": "rapid-city",
+    "name": "Rapid City",
+    "geo": "US-SD-764",
+    "dma": 764,
+    "city": "rapid city",
+    "lat": 44.08,
+    "lon": -103.23
+   },
+   {
+    "key": "salt-lake-city",
+    "name": "Salt Lake City",
+    "geo": "US-UT-770",
+    "dma": 770,
+    "city": "salt lake city",
+    "lat": 40.76,
+    "lon": -111.89
+   }
+  ],
+  "georgia": [
+   {
+    "key": "atlanta",
+    "name": "Atlanta",
+    "geo": "US-GA-524",
+    "dma": 524,
+    "city": "atlanta",
+    "lat": 33.75,
+    "lon": -84.39
+   },
+   {
+    "key": "savannah",
+    "name": "Savannah",
+    "geo": "US-GA-507",
+    "dma": 507,
+    "city": "savannah",
+    "lat": 32.08,
+    "lon": -81.09
+   }
+  ],
+  "florida": [
+   {
+    "key": "miami-ft-lauderdale",
+    "name": "Miami\u2013Ft. Lauderdale",
+    "geo": "US-FL-528",
+    "dma": 528,
+    "city": "miami",
+    "lat": 25.76,
+    "lon": -80.19
+   },
+   {
+    "key": "orlando",
+    "name": "Orlando",
+    "geo": "US-FL-534",
+    "dma": 534,
+    "city": "orlando",
+    "lat": 28.54,
+    "lon": -81.38
+   },
+   {
+    "key": "tampa-st-petersburg",
+    "name": "Tampa\u2013St. Petersburg",
+    "geo": "US-FL-539",
+    "dma": 539,
+    "city": "tampa",
+    "lat": 27.95,
+    "lon": -82.46
+   }
+  ],
+  "michigan": [
+   {
+    "key": "detroit",
+    "name": "Detroit",
+    "geo": "US-MI-505",
+    "dma": 505,
+    "city": "detroit",
+    "lat": 42.33,
+    "lon": -83.05
+   },
+   {
+    "key": "grand-rapids",
+    "name": "Grand Rapids",
+    "geo": "US-MI-563",
+    "dma": 563,
+    "city": "grand rapids",
+    "lat": 42.96,
+    "lon": -85.66
+   }
+  ],
+  "wisconsin": [
+   {
+    "key": "milwaukee",
+    "name": "Milwaukee",
+    "geo": "US-WI-617",
+    "dma": 617,
+    "city": "milwaukee",
+    "lat": 43.04,
+    "lon": -87.91
+   },
+   {
+    "key": "madison",
+    "name": "Madison",
+    "geo": "US-WI-669",
+    "dma": 669,
+    "city": "madison",
+    "lat": 43.07,
+    "lon": -89.4
+   }
+  ],
+  "arkansas": [
+   {
+    "key": "little-rock",
+    "name": "Little Rock",
+    "geo": "US-AR-693",
+    "dma": 693,
+    "city": "little rock",
+    "lat": 34.75,
+    "lon": -92.29
+   }
+  ]
+ }
+}
