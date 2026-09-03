@@ -6,15 +6,14 @@ Usage: fetch_trends.py [state|national|metro] [year]
   metro    geo per metros.json entry -> trends_data_metro.json
   year     default 2026; e.g. 2025 -> trends_data_2025[.._national].json
 
-Keywords (KWV 2): wildfire {name}, wildfire {abbr}, fire {name}, fire {abbr},
-fire map {name}, fire map {abbr}, fire near me — and, metro mode only,
-fire near {city} (the metro's biggest city).
+Keywords (KWV 3): wildfire {name}, fire {name}, fire {abbr}, fire near me —
+and, metro mode only, fire near {city} (the metro's biggest city). At most 5
+terms per geo, so each job is ONE Google Trends request and all of a geo's
+terms share a single normalization (top term-day = 100; values never exceed
+100, and no anchor rescaling is needed).
 
-Window: Feb 26 of the year through "today" shifted into that year. Google caps
-comparisons at 5 terms and normalizes each request to its own max, so per job:
-batch A = first 5 keywords, batch B = anchor ("fire {name}") + the remaining
-keywords, each rescaled onto A's scale via the anchor ratio. Progress is saved
-after every job (resumable); a stored file with a different timeframe or
+Window: Feb 26 of the year through "today" shifted into that year. Progress is
+saved after every job (resumable); a stored file with a different timeframe or
 keyword version is wiped and refetched. A geo Google rejects outright is
 skipped with a warning instead of killing the run.
 """
@@ -24,7 +23,7 @@ from pytrends.request import TrendReq
 from pytrends import exceptions as ptx
 from metros import METROS, STATE_ABBR
 
-KWV = 2  # keyword-set version; bump when the keyword templates change
+KWV = 3  # keyword-set version; bump when the keyword templates change
 
 MODE = sys.argv[1] if len(sys.argv) > 1 else "state"
 assert MODE in ("state", "national", "metro"), MODE
@@ -43,10 +42,10 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), _name)
 def keywords(state, city=None):
     n = state.replace("_", " ").replace("-", " ")
     a = STATE_ABBR[state].lower()
-    kws = [f"wildfire {n}", f"wildfire {a}", f"fire {n}", f"fire {a}",
-           f"fire map {n}", f"fire map {a}", "fire near me"]
+    kws = [f"wildfire {n}", f"fire {n}", f"fire {a}", "fire near me"]
     if city:
         kws.append(f"fire near {city}")
+    assert len(kws) <= 5, kws
     return kws
 
 # jobs: (job_key, state_name, geo, label, city)
@@ -104,38 +103,22 @@ def main():
             print(f"{job_key}: already fetched, skipping", flush=True)
             continue
         kws = keywords(state, city)
-        anchor = kws[2]  # "fire {name}", present in both batches
-        batch_a, batch_b = kws[:5], [anchor] + kws[5:]
 
         try:
-            print(f"{job_key}: geo {geo} batch A {batch_a}", flush=True)
-            df_a = fetch_batch(pt, batch_a, geo)
-            time.sleep(8 + random.uniform(0, 6))
-            print(f"{job_key}: batch B {batch_b}", flush=True)
-            df_b = fetch_batch(pt, batch_b, geo)
+            print(f"{job_key}: geo {geo} {kws}", flush=True)
+            df = fetch_batch(pt, kws, geo)
         except SkipJob as e:
             print(f"  SKIPPED {job_key} ({geo}): {e}", flush=True)
             skipped.append(job_key)
             time.sleep(5)
             continue
 
-        dates = [d.strftime("%Y-%m-%d") for d in df_a.index] if not df_a.empty else []
-        series = {}
-        for kw in batch_a:
-            series[kw] = [int(v) for v in df_a[kw]] if not df_a.empty else []
-        if not df_b.empty:
-            a_anchor = sum(series.get(anchor, [])) or 0
-            b_anchor = int(df_b[anchor].sum())
-            ratio = (a_anchor / b_anchor) if b_anchor > 0 else 1.0
-            for kw in kws[5:]:
-                series[kw] = [round(float(v) * ratio, 2) for v in df_b[kw]]
-        else:
-            for kw in kws[5:]:
-                series[kw] = []
+        dates = [d.strftime("%Y-%m-%d") for d in df.index] if not df.empty else []
+        series = {kw: ([int(v) for v in df[kw]] if not df.empty else []) for kw in kws}
 
         data.setdefault("meta", {
             "timeframe": TIMEFRAME, "mode": MODE, "kwv": KWV,
-            "anchor_note": "keywords beyond the first five rescaled onto batch-A scale via shared anchor 'fire {state}'",
+            "note": "single request per geo; all terms share one normalization (max term-day = 100)",
         })
         data.setdefault("states", {})[job_key] = {
             "abbr": STATE_ABBR[state], "label": label, "dates": dates,

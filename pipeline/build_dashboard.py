@@ -340,9 +340,10 @@ HTML = r"""<meta charset="utf-8">
   .mapcard .msub { color: var(--muted); font-size: 11.5px; margin-bottom: 8px; }
   .mapcard .mapbox { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
   .mapcard .mapbox > svg { max-width: 460px; width: 100%; height: auto; flex: 1 1 300px; }
-  .mapcard svg path.dma { cursor: pointer; stroke: var(--bg); stroke-width: 1.2; }
-  .mapcard svg path.dma:hover { stroke: var(--ink); stroke-width: 1.5; }
-  .mapcard svg path.outline { fill: none; stroke: var(--axis); stroke-width: 1.2; pointer-events: none; }
+  .mapcard svg path.under { fill: var(--grid); pointer-events: none; }
+  .mapcard svg path.dma { cursor: pointer; stroke: var(--bg); stroke-width: 0.8; }
+  .mapcard svg path.dma:hover { stroke: var(--ink); stroke-width: 1.4; }
+  .mapcard svg path.outline { fill: none; stroke: var(--muted); stroke-width: 1.4; pointer-events: none; }
   .maplegend { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--ink-2); min-width: 150px; }
   .maplegend .li { display: flex; align-items: center; gap: 7px; }
   .maplegend .li svg { width: 22px; height: 12px; flex: none; }
@@ -428,7 +429,7 @@ HTML = r"""<meta charset="utf-8">
     <h1>Wildfire Demand Overlay</h1>
     <span class="meta" id="meta"></span>
   </header>
-  <p class="sub">Google search interest for six fire-keyword templates vs. daily unique users on this
+  <p class="sub">Google search interest for fire keywords vs. daily unique users on this
   site's state &amp; incident pages (each state's total = its state page + all its fire pages).
   Every series is indexed so timing and shape line up: <b>100&nbsp;= that area's peak in the window</b>.
   Search interest is measured in-state (queries from within the state), or per metro via the dropdown on each card.
@@ -453,27 +454,22 @@ HTML = r"""<meta charset="utf-8">
     metro totals are true daily uniques (a person visiting several of a state's pages in one day counts once);
     the per-page list in the "counting" tooltip counts a person once per page visited, so pages can sum to more than
     the total. Trends data: Google Trends daily interest over the same window, measured <b>in-state</b> (queries made
-    from within the state itself, geo US-XX) or per metro (see Metro view). Keywords: the six state templates plus
-    "fire near me" everywhere, and "fire near {city}" (the metro's biggest city) in metro view only.
-    Google normalizes each state's keyword set jointly per mode (top keyword-day = 100), so keyword lines within a state
-    are comparable to each other — but index values are not comparable across the two modes or across states.
-    The keywords exceed Google's 5-term comparison limit, so terms beyond the first five were fetched in a second
-    request sharing the "fire {state}" anchor and rescaled onto the same scale via the anchor ratio. Rescaled terms
-    can exceed 100: a value of 200 means that term's volume was about twice the best day of any first-batch term in
-    that area — common for "fire near me" in metros where state-name phrasings are rare. Where the anchor term itself
-    is weak (e.g. a cross-border metro searching another state's name), the rescaled magnitudes are noisier —
-    trust their timing and shape more than their exact height.</p>
+    from within the state itself, geo US-XX) or per metro (see Metro view). Keywords: wildfire {state},
+    fire {state}, fire {abbr}, and "fire near me" everywhere, plus "fire near {city}" (the metro's biggest city)
+    in metro view only. Each area's full keyword set fits in a single Google Trends request, so all of an area's
+    terms share one normalization — the best term-day in that area = 100, values never exceed 100, and terms are
+    directly comparable to each other within an area. Index values are still not comparable across areas.</p>
     <p><b>Correlation methodology.</b> For each state and geography mode (and each metro), two daily series are compared
     over the window: traffic u<sub>t</sub> = unique users summed across all of that state's pages on day t
-    (the state page plus every fire page), and search s<sub>t</sub> = the unweighted mean of the six keyword
-    indices on day t (each keyword 0–100; because Google normalizes the six jointly, the mean is effectively
+    (the state page plus every fire page), and search s<sub>t</sub> = the unweighted mean of that area's keyword
+    indices on day t (each keyword 0–100; because Google normalizes the set jointly, the mean is effectively
     weighted toward the highest-volume keywords). <b>corr r</b> is the Pearson product-moment correlation between
     u<sub>t</sub> and s<sub>t</sub> across all day-pairs — raw daily values, no smoothing (the 7-day toggle
     affects display only, never r), no lag offset, no log transform. Read it as "do high-search days coincide with
     high-traffic days": both series are spike-dominated, so r mostly reflects whether the major spikes land on the
     same days. A low r despite similar shapes usually means traffic lagged search by a few days — use the zoom view
     to eyeball lead/lag. <b>Traffic peak</b> = day of max u<sub>t</sub>; <b>search peak</b> = day of the single
-    highest keyword index across all six (that keyword shown in parentheses). r is descriptive, not a significance
+    highest keyword index across the set (that keyword shown in parentheses). r is descriptive, not a significance
     test — both series are non-stationary, so no p-value is meaningful here.</p>
     <p><b>Zoom view.</b> The right-hand chart shows the same indexed series restricted to July 1 – end of window,
     with its y-axis rescaled to the maximum visible in that period; index values are unchanged from the full view.</p>
@@ -516,15 +512,12 @@ const DATA = __DATA__;
 /* keyword template slots: hue by template, dash for abbreviation variant */
 const KW_META = [
   { tpl: "wildfire",  varr: "name", color: "var(--wf)", dash: null },
-  { tpl: "wildfire",  varr: "abbr", color: "var(--wf)", dash: "6 4" },
   { tpl: "fire",      varr: "name", color: "var(--f)",  dash: null },
   { tpl: "fire",      varr: "abbr", color: "var(--f)",  dash: "6 4" },
-  { tpl: "fire map",  varr: "name", color: "var(--fm)", dash: null },
-  { tpl: "fire map",  varr: "abbr", color: "var(--fm)", dash: "6 4" },
   { tpl: "fire near", varr: "me",   color: "var(--fn)", dash: null },
   { tpl: "fire near", varr: "city", color: "var(--fn)", dash: "6 4" },  /* metro view only */
 ];
-const visible = { traffic: true, k0: true, k1: true, k2: true, k3: true, k4: true, k5: true, k6: true, k7: true, fires: true };
+const visible = { traffic: true, k0: true, k1: true, k2: true, k3: true, k4: true, fires: true };
 let smooth = false;
 let y25 = false;
 let mode = "state";
@@ -947,12 +940,14 @@ function renderMap(st, map) {
   });
   if (st.metros.some(m => !topTermToday(m)))
     legend += `<div class="li"><span class="swb" style="background:var(--chip-bg);border:1px solid var(--border)"></span>no term registering today</div>`;
+  if (map.gap)
+    legend += `<div class="li"><span class="swb" style="background:var(--grid)"></span>not in any of this state's listed markets</div>`;
   if (activeFires.length)
     legend += `<div class="li">${legendSwatch("fires")}active fire (solid = impactful)</div>
       <div class="li">${legendSwatch("fires_h")}active fire, not impactful</div>`;
   mapEl.innerHTML = `<div class="mtitle">${st.name} by metro area</div>
     <div class="msub">shaded by each metro's strongest search term on ${fdate(DATA.dates[lastFull])} (latest full day) · diamonds = currently active fires · hover for stats · click a metro to open its chart</div>
-    <div class="mapbox"><svg viewBox="0 0 ${map.w} ${map.h}" role="img" aria-label="${st.name} metros by top search term">${paths}<path class="outline" d="${map.outline}"/>${firePaths}</svg>
+    <div class="mapbox"><svg viewBox="0 0 ${map.w} ${map.h}" role="img" aria-label="${st.name} metros by top search term"><path class="under" d="${map.outline}"/>${paths}<path class="outline" d="${map.outline}"/>${firePaths}</svg>
     <div class="maplegend">${legend}</div></div>`;
 
   mapEl.querySelectorAll("path.fmk").forEach(p => {
@@ -1010,7 +1005,6 @@ function renderMap(st, map) {
       const card = document.querySelector(`.card[data-si="${DATA.states.indexOf(st)}"]`);
       const ms = card && card.querySelector(".msel");
       if (ms) { ms.value = String(mi); ms.dispatchEvent(new Event("change")); }
-      card && card.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   });
 }
