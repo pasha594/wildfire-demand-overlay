@@ -313,20 +313,26 @@ HTML = r"""<meta charset="utf-8">
     text-transform: uppercase; letter-spacing: .05em;
     font-family: "IBM Plex Mono", ui-monospace, monospace;
   }
-  .mrow {
-    display: flex; align-items: baseline; gap: 8px; width: 100%;
-    font: inherit; font-size: 12.5px; color: var(--ink-2); text-align: left;
-    background: none; border: 0; border-top: 1px solid var(--grid);
-    padding: 5px 2px; cursor: pointer;
+  table.mtab { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12.5px; }
+  .mtab th {
+    color: var(--muted); font-weight: 500; text-align: right; vertical-align: bottom;
+    padding: 2px 0 4px 8px; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
   }
-  .mrow:hover { background: var(--chip-bg); }
-  .mrow:focus-visible { outline: 2px solid var(--fm); outline-offset: -2px; }
-  .mrow .rk { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; width: 14px; }
-  .mrow .mn { color: var(--ink); font-weight: 600; }
-  .mrow .ab { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; }
-  .mrow .kw { color: var(--ink-2); }
-  .mrow .val { margin-left: auto; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .mrow .val .up { color: var(--f); font-weight: 600; }
+  .mtab th.l { text-align: left; padding-left: 0; }
+  .mtab td {
+    border-top: 1px solid var(--grid); padding: 4px 0 4px 8px; text-align: right;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums;
+    color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mtab td.rk { color: var(--muted); font-size: 11px; text-align: left; padding-left: 0; }
+  .mtab td.mn { text-align: left; font-family: inherit; font-weight: 600; padding-left: 0; }
+  .mtab td.ab { color: var(--muted); font-size: 10.5px; text-align: left; }
+  .mtab td.kw { text-align: left; font-family: inherit; color: var(--ink-2); }
+  .mtab tr.mrow { cursor: pointer; }
+  .mtab tr.mrow:hover td { background: var(--chip-bg); }
+  .mtab tr.mrow:focus-visible { outline: 2px solid var(--fm); outline-offset: -2px; }
+  .mtab .up { color: var(--f); font-weight: 600; }
   .mcol .mempty { color: var(--muted); font-size: 12px; padding: 6px 2px; }
 
   .grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
@@ -1067,19 +1073,26 @@ function buildMovers() {
   dod.sort((a, b) => b.delta - a.delta);
   high.sort((a, b) => b.ratio - a.ratio || b.trailing - a.trailing);
 
-  const row = (e, i, val) =>
-    `<button class="mrow" data-si="${e.si}" data-mi="${e.mi}">
-      <span class="rk">${i + 1}</span><span class="mn">${e.m.name}</span><span class="ab">${e.st.abbr}</span>
-      <span class="kw">${(e.m.kws || e.st.kws)[e.k]}</span><span class="val">${val}</span></button>`;
+  const lead = (e, i) =>
+    `<td class="rk">${i + 1}</td><td class="mn">${e.m.name}</td><td class="ab">${e.st.abbr}</td>
+     <td class="kw">${(e.m.kws || e.st.kws)[e.k]}</td>`;
+  const rowOpen = e => `<tr class="mrow" data-si="${e.si}" data-mi="${e.mi}" tabindex="0">`;
   document.getElementById("mdod").innerHTML = dod.length
-    ? dod.slice(0, 5).map((e, i) => row(e, i,
-        `${Math.round(e.from)} → ${Math.round(e.to)} <span class="up">+${Math.round(e.delta)}</span>`)).join("")
+    ? `<table class="mtab"><colgroup><col style="width:20px"><col><col style="width:26px"><col style="width:34%"><col style="width:46px"><col style="width:50px"><col style="width:46px"></colgroup>
+       <thead><tr><th class="l">#</th><th class="l">metro</th><th class="l"></th><th class="l">term</th><th>prev</th><th>today</th><th>Δ 1d</th></tr></thead><tbody>` +
+      dod.slice(0, 5).map((e, i) => `${rowOpen(e)}${lead(e, i)}<td>${Math.round(e.from)}</td><td>${Math.round(e.to)}</td><td class="up">+${Math.round(e.delta)}</td></tr>`).join("") +
+      `</tbody></table>`
     : `<div class="mempty">no term rose day-over-day</div>`;
   document.getElementById("m7d").innerHTML = high.length
-    ? high.slice(0, 5).map((e, i) => row(e, i,
-        `7-day avg ${e.trailing.toFixed(0)} · <span class="up">${Math.round(e.ratio * 100)}%</span> of window high`)).join("")
+    ? `<table class="mtab"><colgroup><col style="width:20px"><col><col style="width:26px"><col style="width:34%"><col style="width:56px"><col style="width:84px"></colgroup>
+       <thead><tr><th class="l">#</th><th class="l">metro</th><th class="l"></th><th class="l">term</th><th>7d avg</th><th style="white-space:normal">% of window peak</th></tr></thead><tbody>` +
+      high.slice(0, 15).map((e, i) => `${rowOpen(e)}${lead(e, i)}<td>${e.trailing.toFixed(0)}</td><td class="up">${Math.round(e.ratio * 100)}%</td></tr>`).join("") +
+      `</tbody></table>`
     : `<div class="mempty">no metro trends data yet</div>`;
 
+  sec.querySelectorAll(".mrow").forEach(btn => btn.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); btn.click(); }
+  }));
   sec.querySelectorAll(".mrow").forEach(btn => btn.addEventListener("click", () => {
     const st = DATA.states[+btn.dataset.si];
     if (stateFilter !== "-1" && st && stateFilter !== st.key) {
