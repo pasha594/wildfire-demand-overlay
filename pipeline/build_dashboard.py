@@ -448,7 +448,8 @@ HTML = r"""<meta charset="utf-8">
       <h2>Top Metros</h2>
       <select id="mkw" aria-label="Search term for movers"></select>
       <select id="mwin" aria-label="Trailing window for the high metric">
-        <option value="7">vs 7-day high</option>
+        <option value="1">vs 1-day high</option>
+        <option value="7" selected>vs 7-day high</option>
         <option value="14">vs 14-day high</option>
         <option value="30">vs 30-day high</option>
       </select>

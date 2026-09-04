@@ -271,7 +271,8 @@
       <h2>Top Metros</h2>
       <select id="mkw" aria-label="Search term for movers"></select>
       <select id="mwin" aria-label="Trailing window for the high metric">
-        <option value="7">vs 7-day high</option>
+        <option value="1">vs 1-day high</option>
+        <option value="7" selected>vs 7-day high</option>
         <option value="14">vs 14-day high</option>
         <option value="30">vs 30-day high</option>
       </select>
@@ -1005,7 +1006,7 @@ function hideTip(svg) {
 function updateMeta() {
   document.getElementById("meta").textContent =
     `${DATA.timeframe.replace(" ", " → ")} · ${MODE_GEO[mode]} · ${DATA.states.length} states · ` +
-    (DATA.fetchedAt ? `traffic via PostHog as of ${DATA.fetchedAt} · ` : "") + `built 2026-09-04 17:08Z`;
+    (DATA.fetchedAt ? `traffic via PostHog as of ${DATA.fetchedAt} · ` : "") + `built 2026-09-04 17:50Z`;
 }
 updateMeta();
 buildControls();
