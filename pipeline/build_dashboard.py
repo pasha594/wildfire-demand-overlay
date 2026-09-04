@@ -341,6 +341,7 @@ HTML = r"""<meta charset="utf-8">
   .mapcard .mapbox { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
   .mapcard .mapbox > svg { max-width: 460px; width: 100%; height: auto; flex: 1 1 300px; }
   .mapcard svg path.under { fill: var(--grid); pointer-events: none; }
+  .mapcard svg g.fmk { pointer-events: all; cursor: pointer; }
   .mapcard svg path.dma { cursor: pointer; stroke: var(--bg); stroke-width: 0.8; }
   .mapcard svg path.dma:hover { stroke: var(--ink); stroke-width: 1.4; }
   .mapcard svg path.outline { fill: none; stroke: var(--muted); stroke-width: 1.4; pointer-events: none; }
@@ -926,7 +927,10 @@ function renderMap(st, map) {
     const style = imp
       ? `fill="var(--fire-mk)" stroke="var(--ink-2)" stroke-width="0.6"`
       : `fill="none" stroke="var(--fire-mk)" stroke-width="1.3"`;
-    firePaths += `<path class="fmk" data-fi="${fi}" d="M ${x.toFixed(1)} ${(y-s).toFixed(1)} L ${(x+s).toFixed(1)} ${y.toFixed(1)} L ${x.toFixed(1)} ${(y+s).toFixed(1)} L ${(x-s).toFixed(1)} ${y.toFixed(1)} Z" ${style} cursor="pointer"/>`;
+    /* transparent halo makes the whole marker (and a bit around it) hoverable,
+       so hollow diamonds hit-test like filled ones */
+    firePaths += `<g class="fmk" data-fi="${fi}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="transparent" stroke="none"/>
+      <path d="M ${x.toFixed(1)} ${(y-s).toFixed(1)} L ${(x+s).toFixed(1)} ${y.toFixed(1)} L ${x.toFixed(1)} ${(y+s).toFixed(1)} L ${(x-s).toFixed(1)} ${y.toFixed(1)} Z" ${style}/></g>`;
   });
 
   const tplSeen = {};
@@ -950,7 +954,7 @@ function renderMap(st, map) {
     <div class="mapbox"><svg viewBox="0 0 ${map.w} ${map.h}" role="img" aria-label="${st.name} metros by top search term"><path class="under" d="${map.outline}"/>${paths}<path class="outline" d="${map.outline}"/>${firePaths}</svg>
     <div class="maplegend">${legend}</div></div>`;
 
-  mapEl.querySelectorAll("path.fmk").forEach(p => {
+  mapEl.querySelectorAll("g.fmk").forEach(p => {
     const f = activeFires[+p.dataset.fi];
     p.addEventListener("pointermove", e => {
       const pop = f.p ? `${fmt(f.p[impact.ring])} ppl ≤${impact.ring}mi` : "pop n/a";
