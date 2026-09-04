@@ -270,11 +270,16 @@
     <div class="mhead">
       <h2>Top Metros</h2>
       <select id="mkw" aria-label="Search term for movers"></select>
+      <select id="mwin" aria-label="Trailing window for the high metric">
+        <option value="7">vs 7-day high</option>
+        <option value="14">vs 14-day high</option>
+        <option value="30">vs 30-day high</option>
+      </select>
       <span class="mnote" id="mnote"></span>
     </div>
     <div class="mcols">
       <div class="mcol"><h3>Biggest day-over-day jump</h3><div id="mdod"></div></div>
-      <div class="mcol"><h3>Closest to their 7-day high</h3><div id="m7d"></div></div>
+      <div class="mcol"><h3 id="m7dh3">Closest to their 7-day high</h3><div id="m7d"></div></div>
     </div>
   </section>
   <div class="grid" id="grid"></div>
@@ -311,8 +316,9 @@
     normalized within the metro, so compare shapes, not levels, against the state view.</p>
     <p><b>Top Metros.</b> Ranks all fetched metros by recent search momentum, per term or best term per metro.
     "Biggest day-over-day jump" = the change in a term's index between the last two full days (Google's final day is
-    partial and excluded). "Closest to their 7-day high" = the trailing 7-day average as a share of that metro's best
-    7-day average in the window (100% = the term is at its 7-day high right now). Both metrics are computed on each
+    partial and excluded). "Closest to their N-day high" = the trailing N-day average as a share of that metro's best
+    N-day average anywhere in the data window, where N is the 7/14/30-day range picker (100% = the term is at its
+    N-day high right now). Both metrics are computed on each
     metro's own 0–100 index, so they measure momentum relative to that metro's own history — not absolute search
     volume across metros. Click a row to jump to that metro's chart.</p>
     <p><b>Fire milestones.</b> Yellow diamonds straddling the baseline mark wildfire start dates in that state, sourced from the
@@ -856,9 +862,10 @@ function allMetros() {
   return out;
 }
 
-function roll7(s, endI) {
+let moverWin = 7;
+function rollN(s, endI, win) {
   let sum = 0, n = 0;
-  for (let i = Math.max(0, endI - 6); i <= endI; i++) { sum += s[i]; n++; }
+  for (let i = Math.max(0, endI - win + 1); i <= endI; i++) { sum += s[i]; n++; }
   return sum / n;
 }
 
@@ -869,6 +876,7 @@ function buildMovers() {
   sec.hidden = false;
   const lastFull = N - 2;                       /* Google's final day is partial */
   const kwFilter = +document.getElementById("mkw").value;  /* -1 = any term */
+  document.getElementById("m7dh3").textContent = `Closest to their ${moverWin}-day high`;
   document.getElementById("mnote").textContent =
     `latest full day: ${fdate(DATA.dates[lastFull])} · values are each metro's own 0–100 search index`;
 
@@ -881,9 +889,9 @@ function buildMovers() {
       const delta = s[lastFull] - s[lastFull - 1];
       if (!bestD || delta > bestD.delta)
         bestD = { ...e, k, delta, from: s[lastFull - 1], to: s[lastFull] };
-      const trailing = roll7(s, lastFull);
+      const trailing = rollN(s, lastFull, moverWin);
       let peak = 0;
-      for (let i = 6; i <= lastFull; i++) peak = Math.max(peak, roll7(s, i));
+      for (let i = moverWin - 1; i <= lastFull; i++) peak = Math.max(peak, rollN(s, i, moverWin));
       if (peak > 0) {
         const ratio = trailing / peak;
         if (!bestH || ratio > bestH.ratio || (ratio === bestH.ratio && trailing > bestH.trailing))
@@ -908,7 +916,7 @@ function buildMovers() {
     : `<div class="mempty">no term rose day-over-day</div>`;
   document.getElementById("m7d").innerHTML = high.length
     ? `<table class="mtab"><colgroup><col style="width:20px"><col><col style="width:26px"><col style="width:34%"><col style="width:56px"><col style="width:84px"></colgroup>
-       <thead><tr><th class="l">#</th><th class="l">metro</th><th class="l"></th><th class="l">term</th><th>7d avg</th><th style="white-space:normal">% of window peak</th></tr></thead><tbody>` +
+       <thead><tr><th class="l">#</th><th class="l">metro</th><th class="l"></th><th class="l">term</th><th>${moverWin}d avg</th><th style="white-space:normal">% of window peak</th></tr></thead><tbody>` +
       high.slice(0, 15).map((e, i) => `${rowOpen(e)}${lead(e, i)}<td>${e.trailing.toFixed(0)}</td><td class="up">${Math.round(e.ratio * 100)}%</td></tr>`).join("") +
       `</tbody></table>`
     : `<div class="mempty">no metro trends data yet</div>`;
@@ -936,6 +944,10 @@ function initMovers() {
   sel.innerHTML = `<option value="-1">any term</option>` +
     KW_TPL_LABEL.map((l, k) => `<option value="${k}">${l}</option>`).join("");
   sel.addEventListener("change", buildMovers);
+  document.getElementById("mwin").addEventListener("change", e => {
+    moverWin = +e.target.value;
+    buildMovers();
+  });
   buildMovers();
 }
 
@@ -993,7 +1005,7 @@ function hideTip(svg) {
 function updateMeta() {
   document.getElementById("meta").textContent =
     `${DATA.timeframe.replace(" ", " → ")} · ${MODE_GEO[mode]} · ${DATA.states.length} states · ` +
-    (DATA.fetchedAt ? `traffic via PostHog as of ${DATA.fetchedAt} · ` : "") + `built 2026-09-04 16:08Z`;
+    (DATA.fetchedAt ? `traffic via PostHog as of ${DATA.fetchedAt} · ` : "") + `built 2026-09-04 17:08Z`;
 }
 updateMeta();
 buildControls();
