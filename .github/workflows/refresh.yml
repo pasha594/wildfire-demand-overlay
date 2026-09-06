@@ -33,7 +33,11 @@ jobs:
           curl -sf --retry 3 -o pipeline/cenpop/CenPop2020_Mean_BG.txt \
             https://www2.census.gov/geo/docs/reference/cenpop2020/blkgrp/CenPop2020_Mean_BG.txt
 
+      # continue-on-error: a PostHog outage must not skip the trends/fires/build
+      # chain — fetch_traffic writes its output atomically at the end, so a
+      # failed attempt leaves the previous day's traffic in place.
       - name: site traffic (PostHog)
+        continue-on-error: true
         env:
           POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
           POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}

@@ -39,10 +39,12 @@ def hogql_page(query, attempt=0):
         with urllib.request.urlopen(req, timeout=120) as r:
             return json.load(r)["results"]
     except Exception as e:
-        if attempt >= 3:
+        # PostHog intermittently 504s on heavy queries; ride it out patiently
+        if attempt >= 6:
             raise
-        print(f"  retry after {type(e).__name__}", flush=True)
-        time.sleep(10 * (attempt + 1))
+        wait = [10, 20, 30, 60, 90, 120][attempt]
+        print(f"  retry in {wait}s after {type(e).__name__}", flush=True)
+        time.sleep(wait)
         return hogql_page(query, attempt + 1)
 
 PAGE = 20000
