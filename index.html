@@ -138,9 +138,13 @@
   .pill.st-track { background: var(--chip-bg); color: var(--ink-2); border: 1px solid var(--border); }
   .pill.st-miss { background: #d03b3b; color: #fff; }
   .pill.st-low { color: var(--muted); border: 1px dashed var(--axis); }
-  .quad svg { width: 100%; max-width: 460px; height: auto; }
+  .quad svg { width: 100%; max-width: 470px; height: auto; }
   .quad .dot { cursor: pointer; }
   .quad .dot:hover circle { stroke: var(--ink); stroke-width: 1.5; }
+  .quad .qnote { color: var(--muted); font-size: 11.5px; margin-top: 6px; max-width: 60ch; }
+  .mtab td.stcell { overflow: visible; text-overflow: clip; }
+  .mtab td.dim { color: var(--ink-2); }
+  .mtab td.bad { color: #d03b3b; font-weight: 600; }
   .omiss { margin-top: 14px; }
 
   .movers {
@@ -852,35 +856,66 @@ function buildOverview() {
   const rows = healths.filter(Boolean)
     .sort((a, b) => order[a.status] - order[b.status] || (a.ratio ?? 9) - (b.ratio ?? 9));
   document.getElementById("oscore").innerHTML =
-    `<table class="mtab"><colgroup><col><col style="width:112px"><col style="width:74px"><col style="width:46px"><col style="width:62px"></colgroup>
+    `<table class="mtab"><colgroup><col><col style="width:132px"><col style="width:82px"><col style="width:48px"><col style="width:64px"></colgroup>
      <thead><tr><th class="l">state</th><th class="l">status</th><th style="white-space:normal">spike response</th><th>r</th><th>organic</th></tr></thead><tbody>` +
     rows.map(h => `<tr class="orow mrow" data-key="${h.st.key}" tabindex="0">
       <td class="mn">${h.st.name}</td>
-      <td class="ab"><span class="pill ${STATUS[h.status].cls}">${STATUS[h.status].label}</span></td>
+      <td class="stcell"><span class="pill ${STATUS[h.status].cls}">${STATUS[h.status].label}</span></td>
       <td>${h.ratio === null ? "–" : h.ratio.toFixed(2) + "×"}</td>
       <td>${h.r === null ? "–" : h.r.toFixed(2)}</td>
       <td>${fmt(h.totalT)}</td></tr>`).join("") +
     `</tbody></table>`;
 
   /* 2 · quadrant */
-  const Q = 300, QP = 34;
-  let dots = "";
-  healths.filter(h => h && h.status !== "low").forEach(h => {
-    const cx = QP + h.x * (Q - QP - 10), cy = (Q - QP) - h.y * (Q - QP - 10);
-    dots += `<g class="dot orow" data-key="${h.st.key}">
-      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="${STATUS[h.status].color}" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"/>
-      <text x="${(cx + 7).toFixed(1)}" y="${(cy + 3.5).toFixed(1)}" font-size="9.5" fill="var(--ink-2)" font-family="IBM Plex Mono, monospace">${h.st.abbr}</text></g>`;
+  const QW = 420, QH = 330, QL = 44, QR = 46, QT = 14, QB = 40;
+  const PX = v => QL + v * (QW - QL - QR);
+  const PY = v => (QH - QB) - v * (QH - QB - QT);
+  const mono = `font-family="IBM Plex Mono, monospace"`;
+  let g = "";
+  /* frame, gridlines, ticks at 0/50/100% */
+  [0, 0.5, 1].forEach(v => {
+    g += `<line x1="${PX(v)}" y1="${PY(0)}" x2="${PX(v)}" y2="${PY(1)}" stroke="${v ? "var(--grid)" : "var(--axis)"}"/>`;
+    g += `<line x1="${PX(0)}" y1="${PY(v)}" x2="${PX(1)}" y2="${PY(v)}" stroke="${v ? "var(--grid)" : "var(--axis)"}"/>`;
+    g += `<text x="${PX(v)}" y="${PY(0) + 14}" text-anchor="middle" font-size="9.5" fill="var(--muted)" ${mono}>${v * 100}%</text>`;
+    if (v) g += `<text x="${PX(0) - 6}" y="${PY(v) + 3}" text-anchor="end" font-size="9.5" fill="var(--muted)" ${mono}>${v * 100}%</text>`;
+  });
+  g += `<line x1="${PX(0)}" y1="${PY(0)}" x2="${PX(1)}" y2="${PY(1)}" stroke="var(--muted)" stroke-dasharray="5 4" opacity="0.7"/>`;
+  g += `<text x="${PX(1)}" y="${PY(0) - 8}" text-anchor="end" font-size="10" fill="#d03b3b" ${mono}>↓ under-converting</text>`;
+  g += `<text x="${PX(0) + 6}" y="${PY(1) + 10}" font-size="10" fill="#0ca30c" ${mono}>↑ outperforming</text>`;
+  g += `<text x="${(PX(0) + PX(1)) / 2}" y="${QH - 6}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono}>search demand now · % of its own best 14 days</text>`;
+  g += `<text x="12" y="${(PY(0) + PY(1)) / 2}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono} transform="rotate(-90 12 ${(PY(0) + PY(1)) / 2})">our capture now · % of its own best 14 days</text>`;
+
+  /* dots, labels placed greedily so they never overlap */
+  const dotHealths = healths.filter(h => h && h.status !== "low")
+    .sort((a, b) => ({ miss: 0, out: 1, track: 2 })[a.status] - ({ miss: 0, out: 1, track: 2 })[b.status] || (b.x + b.y) - (a.x + a.y));
+  const placed = [];
+  dotHealths.forEach(h => {
+    const cx = PX(h.x), cy = PY(h.y);
+    let lbl = "";
+    const w = h.st.abbr.length * 6.5 + 4, bx = cx + 7, by = cy - 9;
+    if (!placed.some(p => bx < p.bx + p.w && bx + w > p.bx && by < p.by + 11 && by + 11 > p.by)) {
+      placed.push({ bx, by, w });
+      lbl = `<text x="${(cx + 7).toFixed(1)}" y="${(cy + 3.5).toFixed(1)}" font-size="9.5" fill="var(--ink-2)" ${mono}>${h.st.abbr}</text>`;
+    }
+    g += `<g class="dot orow" data-key="${h.st.key}" data-tip="${h.st.name} · demand ${Math.round(h.x * 100)}% of peak · capture ${Math.round(h.y * 100)}% of peak · ${STATUS[h.status].label}">
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="${STATUS[h.status].color}" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"/>${lbl}</g>`;
   });
   document.getElementById("oquad").innerHTML =
-    `<svg viewBox="0 0 ${Q + 60} ${Q}" role="img" aria-label="Demand vs capture by state">
-      <line x1="${QP}" y1="${Q - QP}" x2="${Q + 50}" y2="${Q - QP}" stroke="var(--axis)"/>
-      <line x1="${QP}" y1="10" x2="${QP}" y2="${Q - QP}" stroke="var(--axis)"/>
-      <line x1="${QP}" y1="${Q - QP}" x2="${Q + 24}" y2="4" stroke="var(--grid)" stroke-dasharray="4 4"/>
-      <text x="${(Q + 60) / 2}" y="${Q - 8}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono, monospace">search demand now (% of its peak)</text>
-      <text x="10" y="${(Q - QP) / 2}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono, monospace" transform="rotate(-90 10 ${(Q - QP) / 2})">our capture now (% of its peak)</text>
-      <text x="${Q + 46}" y="${Q - QP - 8}" text-anchor="end" font-size="10" fill="#d03b3b" font-family="IBM Plex Mono, monospace">gap ↘</text>
-      ${dots}</svg>
-    <div class="msub">on the dashed line = capture moves with demand · below it = demand we're not converting · click a dot to open the state</div>`;
+    `<svg viewBox="0 0 ${QW} ${QH}" role="img" aria-label="Demand vs capture by state">${g}</svg>
+    <div class="qnote">Each dot: how hot a state's search demand is right now vs how hot our organic traffic is, each measured
+    against its own best 14-day stretch. On the dashed line = rising and falling together. Below it = demand is closer to
+    its peak than our capture is — a wave we're not riding. Above it = our traffic is outrunning current demand.
+    Hover for exact numbers; click to open the state.</div>`;
+  document.querySelectorAll("#oquad .dot").forEach(d => {
+    d.addEventListener("pointermove", e => {
+      tip.innerHTML = `<div class="d" style="margin:0">${d.dataset.tip}</div>`;
+      tip.style.display = "block";
+      let tx = e.clientX + 14, ty = e.clientY + 12;
+      if (tx + tip.offsetWidth > innerWidth - 8) tx = e.clientX - tip.offsetWidth - 14;
+      tip.style.left = tx + "px"; tip.style.top = ty + "px";
+    });
+    d.addEventListener("pointerleave", () => { tip.style.display = "none"; });
+  });
 
   /* 3 · missed spikes */
   const missed = missedSpikes(healths).slice(0, 12);
@@ -892,7 +927,7 @@ function buildOverview() {
         <td class="kw">${m.h.st.kws[m.k]}</td>
         <td>${fdate(DATA.dates[m.i])}</td>
         <td>${Math.round(m.sPct * 100)}%</td>
-        <td style="color:#d03b3b;font-weight:600">${m.tX.toFixed(1)}× typical</td></tr>`).join("") +
+        <td class="${m.tX < 1 ? "bad" : "dim"}">${m.tX.toFixed(1)}× typical</td></tr>`).join("") +
       `</tbody></table>`
     : `<div class="mempty">no missed spikes detected — every major search spike saw a matching traffic response</div>`;
 
@@ -1219,7 +1254,7 @@ function hideTip(svg) {
 function updateMeta() {
   document.getElementById("meta").textContent =
     `${DATA.timeframe.replace(" ", " → ")} · ${MODE_GEO[mode]} · ${DATA.states.length} states · ` +
-    (DATA.fetchedAt ? `traffic via PostHog as of ${DATA.fetchedAt} · ` : "") + `built 2026-09-08 19:14Z`;
+    (DATA.fetchedAt ? `traffic via PostHog as of ${DATA.fetchedAt} · ` : "") + `built 2026-09-08 19:47Z`;
 }
 updateMeta();
 buildControls();
