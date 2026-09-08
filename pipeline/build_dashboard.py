@@ -496,8 +496,8 @@ HTML = r"""<meta charset="utf-8">
     <h2>Overview — SEO health</h2>
     <div class="osub" id="osub"></div>
     <div class="ocols">
-      <div class="ocol"><h3>Health scorecard · worst first</h3><div id="oscore"></div></div>
-      <div class="ocol quad"><h3>Demand vs capture · trailing 14 days</h3><div id="oquad"></div></div>
+      <div class="ocol"><h3>Health scorecard · last 7 days · worst first</h3><div id="oscore"></div></div>
+      <div class="ocol quad"><h3>Demand lift vs capture lift · last 7 days</h3><div id="oquad"></div></div>
     </div>
   </section>
   <section class="movers" id="movers" hidden>
@@ -551,11 +551,13 @@ HTML = r"""<meta charset="utf-8">
     normalized within the metro, so compare shapes, not levels, against the state view.</p>
     <p><b>Overview / SEO health.</b> Capture = daily uniques arriving from search engines (Google, Bing, DuckDuckGo,
     Yahoo, Ecosia, Brave referrers; falls back to total traffic if the organic slice is empty); demand = the mean of the
-    state's in-state keyword indices. <b>Spike response</b>: high-demand days are those where demand is ≥40% of its
-    window peak; the ratio compares how much our capture lifts on those days vs how much demand lifts (1.0× = we scale
-    exactly with demand; below 0.6× = missing demand; above 1.25× = outperforming; grey = too little signal to judge).
-    The quadrant plots each state's trailing 14-day demand and capture, each as a share of its own best 14-day stretch —
-    dots below the diagonal are demand we're not converting. All of it is inferred from
+    state's in-state keyword indices. Both views run on the same 7-day clock. <b>Demand this week</b> = the last 7 full
+    days' average search index as a multiple of the state's typical (median) day; <b>capture this week</b> = the same for
+    organic uniques (baselines are floored so a near-zero median can't inflate the multiple; within one state's series,
+    index ratios approximate real search-volume ratios). <b>Response ratio</b> = capture lift ÷ demand lift: 1.0× = our
+    traffic multiplied exactly as much as search did; below 0.6× = missing demand; above 1.25× = outperforming;
+    "quiet week" = both sides near an ordinary week, nothing to judge; grey = too little volume. The quadrant plots the
+    same two lifts on log axes — below the diagonal, search surged more than we did. All of it is inferred from
     timing agreement, not from rankings — Search Console data would measure the gap directly.</p>
     <p><b>Top Metros.</b> Ranks all fetched metros by recent search momentum, per term or best term per metro.
     "Biggest day-over-day jump" = the change in a term's index between the last two full days (Google's final day is
@@ -944,6 +946,7 @@ const STATUS = {
   out:   { label: "outperforming", cls: "st-out",   color: "#0ca30c" },
   track: { label: "tracking",      cls: "st-track", color: "#898781" },
   miss:  { label: "missing demand", cls: "st-miss", color: "#d03b3b" },
+  quiet: { label: "quiet week",    cls: "st-low",   color: "#898781" },
   low:   { label: "low signal",    cls: "st-low",   color: "#898781" },
 };
 
@@ -959,46 +962,25 @@ function healthOf(st) {
     kwS.forEach(k => { if (k.length > i) { s += k[i]; n++; } });
     S.push(n ? s / n : 0);
   }
-  const smax = Math.max(...S, 0.001);
-  /* spike days: search at >= 40% of its window peak */
-  const spike = S.map(v => v >= 0.4 * smax);
-  const nSpike = spike.filter(Boolean).length;
-  const mean = (arr, mask, want) => {
-    let s = 0, n = 0;
-    arr.forEach((v, i) => { if (i <= lastFull && mask[i] === want) { s += v; n++; } });
-    return n ? s / n : 0;
+  const median = arr => {
+    const a = [...arr.slice(0, lastFull + 1)].sort((x, y) => x - y);
+    return a[Math.floor(a.length / 2)];
   };
-  const tLift = mean(T, spike, true) / Math.max(mean(T, spike, false), 0.5);
-  const sLift = mean(S, spike, true) / Math.max(mean(S, spike, false), 0.1);
-  const ratio = sLift > 1 ? tLift / sLift : null;
-  /* pearson r between S and organic T */
-  let r = null;
-  {
-    const n = lastFull + 1;
-    let mx = 0, my = 0;
-    for (let i = 0; i < n; i++) { mx += S[i]; my += T[i]; }
-    mx /= n; my /= n;
-    let num = 0, dx = 0, dy = 0;
-    for (let i = 0; i < n; i++) {
-      num += (S[i] - mx) * (T[i] - my);
-      dx += (S[i] - mx) ** 2; dy += (T[i] - my) ** 2;
-    }
-    if (dx > 0 && dy > 0) r = num / Math.sqrt(dx * dy);
-  }
+  /* lift = mean of the last 7 full days vs the series' typical (median) day,
+     with floors so a near-zero baseline can't explode the ratio */
+  const baseS = Math.max(median(S), 0.05 * Math.max(...S), 0.5);
+  const baseT = Math.max(median(T), 1);
+  const D = rollN(S, lastFull, 7) / baseS;   /* demand lift */
+  const C = rollN(T, lastFull, 7) / baseT;   /* capture lift */
+  const ratio = D > 0 ? C / D : null;
   const totalT = T.reduce((a, b) => a + b, 0);
+  const t7 = Math.round(rollN(T, lastFull, 7) * 7);
   let status = "track";
-  if (totalT < 300 || nSpike < 3 || ratio === null) status = "low";
+  if (totalT < 300 || ratio === null) status = "low";
+  else if (D < 1.2 && C < 1.2) status = "quiet";
   else if (ratio < 0.6) status = "miss";
   else if (ratio > 1.25) status = "out";
-  /* trailing-14 intensity vs best rolling-14, for the quadrant */
-  const inten = arr => {
-    const t = rollN(arr, lastFull, 14);
-    let pk = 0;
-    for (let i = 13; i <= lastFull; i++) pk = Math.max(pk, rollN(arr, i, 14));
-    return pk > 0 ? t / pk : 0;
-  };
-  return { st, S, T, smax, ratio, r, status, nSpike, totalT,
-           x: inten(S), y: inten(T), organic: T === st.organic };
+  return { st, D, C, ratio, status, totalT, t7, organic: T === st.organic };
 }
 
 function buildOverview() {
@@ -1009,64 +991,68 @@ function buildOverview() {
   const lastFull = N - 2;
   const anyOrganic = healths.some(h => h && h.organic);
   document.getElementById("osub").textContent =
-    `capture measured on ${anyOrganic ? "search-engine-referred (organic)" : "total"} daily uniques vs in-state search interest · through ${fdate(DATA.dates[lastFull])}`;
+    `last 7 full days (through ${fdate(DATA.dates[lastFull])}) · lift = this week vs the state's typical (median) day · capture = ${anyOrganic ? "search-engine-referred (organic)" : "total"} daily uniques`;
 
   /* 1 · scorecard */
-  const order = { miss: 0, track: 1, out: 2, low: 3 };
+  const order = { miss: 0, track: 1, out: 2, quiet: 3, low: 4 };
   const rows = healths.filter(Boolean)
     .sort((a, b) => order[a.status] - order[b.status] || (a.ratio ?? 9) - (b.ratio ?? 9));
+  const lift = v => v === null ? "–" : (v >= 10 ? v.toFixed(0) : v.toFixed(1)) + "×";
   document.getElementById("oscore").innerHTML =
-    `<table class="mtab"><colgroup><col><col style="width:132px"><col style="width:82px"><col style="width:48px"><col style="width:64px"></colgroup>
-     <thead><tr><th class="l">state</th><th class="l">status</th><th style="white-space:normal">spike response</th><th>r</th><th>organic</th></tr></thead><tbody>` +
+    `<table class="mtab"><colgroup><col><col style="width:132px"><col style="width:86px"><col style="width:86px"><col style="width:82px"><col style="width:70px"></colgroup>
+     <thead><tr><th class="l">state</th><th class="l">status</th><th style="white-space:normal">demand this week</th><th style="white-space:normal">capture this week</th><th style="white-space:normal">response ratio</th><th style="white-space:normal">organic 7d</th></tr></thead><tbody>` +
     rows.map(h => `<tr class="orow mrow" data-key="${h.st.key}" tabindex="0">
       <td class="mn">${h.st.name}</td>
       <td class="stcell"><span class="pill ${STATUS[h.status].cls}">${STATUS[h.status].label}</span></td>
-      <td>${h.ratio === null ? "–" : h.ratio.toFixed(2) + "×"}</td>
-      <td>${h.r === null ? "–" : h.r.toFixed(2)}</td>
-      <td>${fmt(h.totalT)}</td></tr>`).join("") +
+      <td>${lift(h.D)}</td>
+      <td>${lift(h.C)}</td>
+      <td class="${h.ratio !== null && h.ratio < 0.6 && h.status === "miss" ? "bad" : ""}">${h.ratio === null ? "–" : h.ratio.toFixed(2) + "×"}</td>
+      <td>${fmt(h.t7)}</td></tr>`).join("") +
     `</tbody></table>`;
 
-  /* 2 · quadrant */
-  const QW = 420, QH = 330, QL = 44, QR = 46, QT = 14, QB = 40;
-  const PX = v => QL + v * (QW - QL - QR);
-  const PY = v => (QH - QB) - v * (QH - QB - QT);
+  /* 2 · quadrant: lift vs lift, log scale */
+  const QW = 420, QH = 330, QL = 48, QR = 46, QT = 14, QB = 40;
   const mono = `font-family="IBM Plex Mono, monospace"`;
+  const dotHealths = healths.filter(h => h && h.status !== "low");
+  const allLifts = dotHealths.flatMap(h => [h.D, h.C]).filter(v => v > 0);
+  const lo = Math.min(0.4, ...allLifts) * 0.85, hi = Math.max(3, ...allLifts) * 1.2;
+  const LX = v => QL + (Math.log(Math.max(v, lo)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) * (QW - QL - QR);
+  const LY = v => (QH - QB) - (Math.log(Math.max(v, lo)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) * (QH - QB - QT);
   let g = "";
-  /* frame, gridlines, ticks at 0/50/100% */
-  [0, 0.5, 1].forEach(v => {
-    g += `<line x1="${PX(v)}" y1="${PY(0)}" x2="${PX(v)}" y2="${PY(1)}" stroke="${v ? "var(--grid)" : "var(--axis)"}"/>`;
-    g += `<line x1="${PX(0)}" y1="${PY(v)}" x2="${PX(1)}" y2="${PY(v)}" stroke="${v ? "var(--grid)" : "var(--axis)"}"/>`;
-    g += `<text x="${PX(v)}" y="${PY(0) + 14}" text-anchor="middle" font-size="9.5" fill="var(--muted)" ${mono}>${v * 100}%</text>`;
-    if (v) g += `<text x="${PX(0) - 6}" y="${PY(v) + 3}" text-anchor="end" font-size="9.5" fill="var(--muted)" ${mono}>${v * 100}%</text>`;
+  const ticks = [0.25, 0.5, 1, 2, 4, 8, 16, 32, 64].filter(t => t >= lo && t <= hi);
+  ticks.forEach(t => {
+    const em = t === 1;
+    g += `<line x1="${LX(t)}" y1="${LY(lo)}" x2="${LX(t)}" y2="${QT}" stroke="${em ? "var(--axis)" : "var(--grid)"}"/>`;
+    g += `<line x1="${QL}" y1="${LY(t)}" x2="${QW - QR}" y2="${LY(t)}" stroke="${em ? "var(--axis)" : "var(--grid)"}"/>`;
+    g += `<text x="${LX(t)}" y="${QH - QB + 14}" text-anchor="middle" font-size="9.5" fill="var(--muted)" ${mono}>${t}×</text>`;
+    g += `<text x="${QL - 6}" y="${LY(t) + 3}" text-anchor="end" font-size="9.5" fill="var(--muted)" ${mono}>${t}×</text>`;
   });
-  g += `<line x1="${PX(0)}" y1="${PY(0)}" x2="${PX(1)}" y2="${PY(1)}" stroke="var(--muted)" stroke-dasharray="5 4" opacity="0.7"/>`;
-  g += `<text x="${PX(1)}" y="${PY(0) - 8}" text-anchor="end" font-size="10" fill="#d03b3b" ${mono}>↓ under-converting</text>`;
-  g += `<text x="${PX(0) + 6}" y="${PY(1) + 10}" font-size="10" fill="#0ca30c" ${mono}>↑ outperforming</text>`;
-  g += `<text x="${(PX(0) + PX(1)) / 2}" y="${QH - 6}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono}>search demand now · % of its own best 14 days</text>`;
-  g += `<text x="12" y="${(PY(0) + PY(1)) / 2}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono} transform="rotate(-90 12 ${(PY(0) + PY(1)) / 2})">our capture now · % of its own best 14 days</text>`;
+  g += `<line x1="${LX(lo)}" y1="${LY(lo)}" x2="${LX(hi)}" y2="${LY(hi)}" stroke="var(--muted)" stroke-dasharray="5 4" opacity="0.7"/>`;
+  g += `<text x="${QW - QR}" y="${QH - QB - 8}" text-anchor="end" font-size="10" fill="#d03b3b" ${mono}>↓ under-responding</text>`;
+  g += `<text x="${QL + 6}" y="${QT + 10}" font-size="10" fill="#0ca30c" ${mono}>↑ outperforming</text>`;
+  g += `<text x="${(QL + QW - QR) / 2}" y="${QH - 6}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono}>search demand · last 7 days vs typical</text>`;
+  g += `<text x="12" y="${(QT + QH - QB) / 2}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono} transform="rotate(-90 12 ${(QT + QH - QB) / 2})">our capture · last 7 days vs typical</text>`;
 
   /* dots, labels placed greedily so they never overlap */
-  const dotHealths = healths.filter(h => h && h.status !== "low")
-    .sort((a, b) => ({ miss: 0, out: 1, track: 2 })[a.status] - ({ miss: 0, out: 1, track: 2 })[b.status] || (b.x + b.y) - (a.x + a.y));
   const placed = [];
-  dotHealths.forEach(h => {
-    const cx = PX(h.x), cy = PY(h.y);
+  [...dotHealths].sort((a, b) => ({ miss: 0, out: 1, track: 2, quiet: 3 })[a.status] - ({ miss: 0, out: 1, track: 2, quiet: 3 })[b.status] || b.D - a.D)
+    .forEach(h => {
+    const cx = LX(h.D), cy = LY(h.C);
     let lbl = "";
     const w = h.st.abbr.length * 6.5 + 4, bx = cx + 7, by = cy - 9;
     if (!placed.some(p => bx < p.bx + p.w && bx + w > p.bx && by < p.by + 11 && by + 11 > p.by)) {
       placed.push({ bx, by, w });
       lbl = `<text x="${(cx + 7).toFixed(1)}" y="${(cy + 3.5).toFixed(1)}" font-size="9.5" fill="var(--ink-2)" ${mono}>${h.st.abbr}</text>`;
     }
-    g += `<g class="dot orow" data-key="${h.st.key}" data-tip="${h.st.name} · demand ${Math.round(h.x * 100)}% of peak · capture ${Math.round(h.y * 100)}% of peak · ${STATUS[h.status].label}">
+    g += `<g class="dot orow" data-key="${h.st.key}" data-tip="${h.st.name} · demand ${h.D.toFixed(1)}× typical · capture ${h.C.toFixed(1)}× typical · response ${h.ratio.toFixed(2)}× · ${STATUS[h.status].label}">
       <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="${STATUS[h.status].color}" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"/>${lbl}</g>`;
   });
   document.getElementById("oquad").innerHTML =
-    `<svg viewBox="0 0 ${QW} ${QH}" role="img" aria-label="Demand vs capture by state">${g}</svg>
-    <div class="qnote">Each dot: how hot a state's search demand is right now vs how hot our organic traffic is, each measured
-    against its own best 14-day stretch. On the dashed line = rising and falling together. Below it = demand is closer to
-    its peak than our capture is — a wave we're not riding. Above it = our traffic is outrunning current demand.
-    Note the two clocks: dot <i>position</i> is the current fortnight; dot <i>color</i> is the season-long scorecard
-    status — a green dot low in the chart is a historically healthy state currently behind its own demand.
+    `<svg viewBox="0 0 ${QW} ${QH}" role="img" aria-label="Demand lift vs capture lift by state, last 7 days">${g}</svg>
+    <div class="qnote">Each dot: how many times above its typical (median) day a state's search demand ran this week (x)
+    vs how many times above typical our organic traffic ran (y) — log scale. On the dashed diagonal = traffic multiplied
+    exactly as much as search did. Below it = search surged more than we did (e.g. demand 20×, capture 1.5×); above it =
+    we grew more than demand. The 1× lines mark "an ordinary week". Same 7-day clock and colors as the scorecard.
     Hover for exact numbers; click to open the state.</div>`;
   document.querySelectorAll("#oquad .dot").forEach(d => {
     d.addEventListener("pointermove", e => {
