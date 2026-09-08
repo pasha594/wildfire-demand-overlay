@@ -40,6 +40,21 @@ maps = load_opt("maps.json") or {}
 dates = traffic["dates"]
 fetched_at = traffic.get("fetched_at")
 
+# keep the axis inside the trends window: if traffic is fresher than trends
+# (e.g. a failed trends step), truncate rather than plot phantom zero-trend days
+trends_end = tr_state["meta"]["timeframe"].split()[1]
+if dates and dates[-1] > trends_end:
+    cut = sum(1 for d in dates if d <= trends_end)
+    print(f"note: traffic runs {len(dates) - cut} day(s) past trends ({trends_end}); truncating axis")
+    dates = dates[:cut]
+    for _s in traffic["states"].values():
+        _s["total"] = _s["total"][:cut]
+        if _s.get("organic"):
+            _s["organic"] = _s["organic"][:cut]
+        _s["pages"] = {k: v[:cut] for k, v in _s["pages"].items()}
+        for _m in (_s.get("metros") or {}).values():
+            _m["total"] = _m["total"][:cut]
+
 def pearson(xs, ys):
     n = len(xs)
     if n < 3:
@@ -150,6 +165,7 @@ for key in all_keys:
         "name": key.replace("_", " ").replace("-", " ").title(),
         "abbr": ref["abbr"],
         "traffic": [round(v) for v in total_series] if total_series else None,
+        "organic": (tinfo.get("organic") if tinfo else None),
         "pagesLabel": pages_label,
         "pagesDetail": pages_title,
         "kws": ref["keywords"],
@@ -290,6 +306,35 @@ HTML = r"""<meta charset="utf-8">
   .smooth { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 12.5px; cursor: pointer; }
   .smooth input { accent-color: var(--fm); }
   .axis-note { width: 100%; color: var(--muted); font-size: 11.5px; padding-top: 2px; }
+
+  .overview {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px 12px;
+    margin-bottom: 18px;
+  }
+  .overview h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+  .overview .osub { color: var(--muted); font-size: 11.5px; margin-bottom: 10px; }
+  .ocols { display: grid; grid-template-columns: 3fr 2fr; gap: 12px 26px; }
+  @media (max-width: 1000px) { .ocols { grid-template-columns: 1fr; } }
+  .ocol h3 {
+    font-size: 11px; font-weight: 500; color: var(--muted); margin: 4px 0 4px;
+    text-transform: uppercase; letter-spacing: .05em;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  .pill {
+    display: inline-block; border-radius: 999px; padding: 1px 9px;
+    font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  .pill.st-out { background: #0ca30c; color: #fff; }
+  .pill.st-track { background: var(--chip-bg); color: var(--ink-2); border: 1px solid var(--border); }
+  .pill.st-miss { background: #d03b3b; color: #fff; }
+  .pill.st-low { color: var(--muted); border: 1px dashed var(--axis); }
+  .quad svg { width: 100%; max-width: 460px; height: auto; }
+  .quad .dot { cursor: pointer; }
+  .quad .dot:hover circle { stroke: var(--ink); stroke-width: 1.5; }
+  .omiss { margin-top: 14px; }
 
   .movers {
     background: var(--surface);
@@ -443,6 +488,15 @@ HTML = r"""<meta charset="utf-8">
   Hover any chart for exact values; raw user counts are in the tooltip and tables.</p>
 
   <div class="controls" id="controls"></div>
+  <section class="overview" id="overview" hidden>
+    <h2>Overview — SEO health</h2>
+    <div class="osub" id="osub"></div>
+    <div class="ocols">
+      <div class="ocol"><h3>Health scorecard · worst first</h3><div id="oscore"></div></div>
+      <div class="ocol quad"><h3>Demand vs capture · trailing 14 days</h3><div id="oquad"></div></div>
+    </div>
+    <div class="omiss ocol"><h3>Missed demand spikes · biggest first</h3><div id="omissed"></div></div>
+  </section>
   <section class="movers" id="movers" hidden>
     <div class="mhead">
       <h2>Top Metros</h2>
@@ -492,6 +546,15 @@ HTML = r"""<meta charset="utf-8">
     A state's dropdown lists every DMA Google files under that state — cross-border markets (Denver appears under
     Nebraska and Wyoming too) use that state's keywords, capturing spillover audiences. Metro search indices are
     normalized within the metro, so compare shapes, not levels, against the state view.</p>
+    <p><b>Overview / SEO health.</b> Capture = daily uniques arriving from search engines (Google, Bing, DuckDuckGo,
+    Yahoo, Ecosia, Brave referrers; falls back to total traffic if the organic slice is empty); demand = the mean of the
+    state's in-state keyword indices. <b>Spike response</b>: high-demand days are those where demand is ≥40% of its
+    window peak; the ratio compares how much our capture lifts on those days vs how much demand lifts (1.0× = we scale
+    exactly with demand; below 0.6× = missing demand; above 1.25× = outperforming; grey = too little signal to judge).
+    The quadrant plots each state's trailing 14-day demand and capture, each as a share of its own best 14-day stretch —
+    dots below the diagonal are demand we're not converting. <b>Missed spikes</b>: days where demand hit ≥50% of its
+    window peak while our capture stayed below 2× its typical (median) day, worst first. All of it is inferred from
+    timing agreement, not from rankings — Search Console data would measure the gap directly.</p>
     <p><b>Top Metros.</b> Ranks all fetched metros by recent search momentum, per term or best term per metro.
     "Biggest day-over-day jump" = the change in a term's index between the last two full days (Google's final day is
     partial and excluded). "Closest to their N-day high" = the trailing N-day average as a share of that metro's best
@@ -874,6 +937,172 @@ function renderAll() {
   document.querySelectorAll(".card").forEach(renderCard);
 }
 
+/* ---------- overview: SEO health ---------- */
+const STATUS = {
+  out:   { label: "outperforming", cls: "st-out",   color: "#0ca30c" },
+  track: { label: "tracking",      cls: "st-track", color: "#898781" },
+  miss:  { label: "missing demand", cls: "st-miss", color: "#d03b3b" },
+  low:   { label: "low signal",    cls: "st-low",   color: "#898781" },
+};
+
+function healthOf(st) {
+  const kwS = st.modes.state && st.modes.state.kwSeries;
+  const T = st.organic && st.organic.some(v => v > 0) ? st.organic : st.traffic;
+  if (!kwS || !T) return null;
+  const lastFull = N - 2;
+  /* S = mean of the state's keyword indices per day */
+  const S = [];
+  for (let i = 0; i <= lastFull; i++) {
+    let s = 0, n = 0;
+    kwS.forEach(k => { if (k.length > i) { s += k[i]; n++; } });
+    S.push(n ? s / n : 0);
+  }
+  const smax = Math.max(...S, 0.001);
+  /* spike days: search at >= 40% of its window peak */
+  const spike = S.map(v => v >= 0.4 * smax);
+  const nSpike = spike.filter(Boolean).length;
+  const mean = (arr, mask, want) => {
+    let s = 0, n = 0;
+    arr.forEach((v, i) => { if (i <= lastFull && mask[i] === want) { s += v; n++; } });
+    return n ? s / n : 0;
+  };
+  const tLift = mean(T, spike, true) / Math.max(mean(T, spike, false), 0.5);
+  const sLift = mean(S, spike, true) / Math.max(mean(S, spike, false), 0.1);
+  const ratio = sLift > 1 ? tLift / sLift : null;
+  /* pearson r between S and organic T */
+  let r = null;
+  {
+    const n = lastFull + 1;
+    let mx = 0, my = 0;
+    for (let i = 0; i < n; i++) { mx += S[i]; my += T[i]; }
+    mx /= n; my /= n;
+    let num = 0, dx = 0, dy = 0;
+    for (let i = 0; i < n; i++) {
+      num += (S[i] - mx) * (T[i] - my);
+      dx += (S[i] - mx) ** 2; dy += (T[i] - my) ** 2;
+    }
+    if (dx > 0 && dy > 0) r = num / Math.sqrt(dx * dy);
+  }
+  const totalT = T.reduce((a, b) => a + b, 0);
+  let status = "track";
+  if (totalT < 300 || nSpike < 3 || ratio === null) status = "low";
+  else if (ratio < 0.6) status = "miss";
+  else if (ratio > 1.25) status = "out";
+  /* trailing-14 intensity vs best rolling-14, for the quadrant */
+  const inten = arr => {
+    const t = rollN(arr, lastFull, 14);
+    let pk = 0;
+    for (let i = 13; i <= lastFull; i++) pk = Math.max(pk, rollN(arr, i, 14));
+    return pk > 0 ? t / pk : 0;
+  };
+  return { st, S, T, smax, ratio, r, status, nSpike, totalT,
+           x: inten(S), y: inten(T), organic: T === st.organic };
+}
+
+function missedSpikes(healths) {
+  const lastFull = N - 2;
+  const out = [];
+  healths.forEach(h => {
+    if (!h || h.status === "low") return;
+    const medT = [...h.T.slice(0, lastFull + 1)].sort((a, b) => a - b)[Math.floor(lastFull / 2)] || 1;
+    let run = null;
+    for (let i = 0; i <= lastFull; i++) {
+      const sPct = h.S[i] / h.smax;
+      const isSpike = sPct >= 0.5;
+      if (isSpike) {
+        if (!run || h.S[i] > run.s) {
+          const kwS = h.st.modes.state.kwSeries;
+          let bk = 0;
+          kwS.forEach((k, ki) => { if (k.length > i && k[i] > (kwS[bk][i] || 0)) bk = ki; });
+          run = { ...run, i, s: h.S[i], sPct, k: bk, t: h.T[i] };
+        }
+        run.end = i;
+      }
+      if ((!isSpike || i === lastFull) && run) {
+        const tX = run.t / Math.max(medT, 0.5);
+        /* a real demand spike where our capture barely moved off its median day */
+        if (tX < 2)
+          out.push({ h, i: run.i, sPct: run.sPct, k: run.k, tX });
+        run = null;
+      }
+    }
+  });
+  return out.sort((a, b) => b.sPct - a.sPct);
+}
+
+function buildOverview() {
+  const sec = document.getElementById("overview");
+  const healths = DATA.states.map(healthOf);
+  if (!healths.some(Boolean)) { sec.hidden = true; return; }
+  sec.hidden = false;
+  const lastFull = N - 2;
+  const anyOrganic = healths.some(h => h && h.organic);
+  document.getElementById("osub").textContent =
+    `capture measured on ${anyOrganic ? "search-engine-referred (organic)" : "total"} daily uniques vs in-state search interest · through ${fdate(DATA.dates[lastFull])}`;
+
+  /* 1 · scorecard */
+  const order = { miss: 0, track: 1, out: 2, low: 3 };
+  const rows = healths.filter(Boolean)
+    .sort((a, b) => order[a.status] - order[b.status] || (a.ratio ?? 9) - (b.ratio ?? 9));
+  document.getElementById("oscore").innerHTML =
+    `<table class="mtab"><colgroup><col><col style="width:112px"><col style="width:74px"><col style="width:46px"><col style="width:62px"></colgroup>
+     <thead><tr><th class="l">state</th><th class="l">status</th><th style="white-space:normal">spike response</th><th>r</th><th>organic</th></tr></thead><tbody>` +
+    rows.map(h => `<tr class="orow mrow" data-key="${h.st.key}" tabindex="0">
+      <td class="mn">${h.st.name}</td>
+      <td class="ab"><span class="pill ${STATUS[h.status].cls}">${STATUS[h.status].label}</span></td>
+      <td>${h.ratio === null ? "–" : h.ratio.toFixed(2) + "×"}</td>
+      <td>${h.r === null ? "–" : h.r.toFixed(2)}</td>
+      <td>${fmt(h.totalT)}</td></tr>`).join("") +
+    `</tbody></table>`;
+
+  /* 2 · quadrant */
+  const Q = 300, QP = 34;
+  let dots = "";
+  healths.filter(h => h && h.status !== "low").forEach(h => {
+    const cx = QP + h.x * (Q - QP - 10), cy = (Q - QP) - h.y * (Q - QP - 10);
+    dots += `<g class="dot orow" data-key="${h.st.key}">
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="${STATUS[h.status].color}" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"/>
+      <text x="${(cx + 7).toFixed(1)}" y="${(cy + 3.5).toFixed(1)}" font-size="9.5" fill="var(--ink-2)" font-family="IBM Plex Mono, monospace">${h.st.abbr}</text></g>`;
+  });
+  document.getElementById("oquad").innerHTML =
+    `<svg viewBox="0 0 ${Q + 60} ${Q}" role="img" aria-label="Demand vs capture by state">
+      <line x1="${QP}" y1="${Q - QP}" x2="${Q + 50}" y2="${Q - QP}" stroke="var(--axis)"/>
+      <line x1="${QP}" y1="10" x2="${QP}" y2="${Q - QP}" stroke="var(--axis)"/>
+      <line x1="${QP}" y1="${Q - QP}" x2="${Q + 24}" y2="4" stroke="var(--grid)" stroke-dasharray="4 4"/>
+      <text x="${(Q + 60) / 2}" y="${Q - 8}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono, monospace">search demand now (% of its peak)</text>
+      <text x="10" y="${(Q - QP) / 2}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono, monospace" transform="rotate(-90 10 ${(Q - QP) / 2})">our capture now (% of its peak)</text>
+      <text x="${Q + 46}" y="${Q - QP - 8}" text-anchor="end" font-size="10" fill="#d03b3b" font-family="IBM Plex Mono, monospace">gap ↘</text>
+      ${dots}</svg>
+    <div class="msub">on the dashed line = capture moves with demand · below it = demand we're not converting · click a dot to open the state</div>`;
+
+  /* 3 · missed spikes */
+  const missed = missedSpikes(healths).slice(0, 12);
+  document.getElementById("omissed").innerHTML = missed.length
+    ? `<table class="mtab"><colgroup><col style="width:120px"><col style="width:32%"><col style="width:72px"><col style="width:100px"><col style="width:110px"></colgroup>
+       <thead><tr><th class="l">state</th><th class="l">top term that day</th><th>date</th><th style="white-space:normal">search (% of peak)</th><th style="white-space:normal">our traffic vs typical</th></tr></thead><tbody>` +
+      missed.map(m => `<tr class="orow mrow" data-key="${m.h.st.key}" tabindex="0">
+        <td class="mn">${m.h.st.name}</td>
+        <td class="kw">${m.h.st.kws[m.k]}</td>
+        <td>${fdate(DATA.dates[m.i])}</td>
+        <td>${Math.round(m.sPct * 100)}%</td>
+        <td style="color:#d03b3b;font-weight:600">${m.tX.toFixed(1)}× typical</td></tr>`).join("") +
+      `</tbody></table>`
+    : `<div class="mempty">no missed spikes detected — every major search spike saw a matching traffic response</div>`;
+
+  sec.querySelectorAll(".orow").forEach(el => {
+    const go = () => {
+      stateFilter = el.dataset.key;
+      const sf = document.getElementById("statef");
+      if (sf) sf.value = stateFilter;
+      applyStateFilter();
+      const card = document.querySelector(`.card[data-si]:not([hidden])`);
+      card && card.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    el.addEventListener("click", go);
+    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+  });
+}
+
 /* ---------- state filter + metro map ---------- */
 const mapEl = document.createElement("div");
 mapEl.className = "card mapcard";
@@ -1188,6 +1417,7 @@ function updateMeta() {
 updateMeta();
 buildControls();
 buildCards();
+buildOverview();
 initMovers();
 renderAll();
 </script>

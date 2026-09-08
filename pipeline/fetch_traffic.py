@@ -112,6 +112,21 @@ for day, st, users in rows:
         state_total[st][didx[day]] += users
 print(f"  {len(rows)} rows -> {len(state_total)} states", flush=True)
 
+# ---- organic slice: daily uniques arriving from search engines ----
+SEARCH_REF = ("(properties.$referring_domain LIKE '%google%' OR properties.$referring_domain LIKE '%bing%' "
+              "OR properties.$referring_domain LIKE '%duckduckgo%' OR properties.$referring_domain LIKE '%yahoo%' "
+              "OR properties.$referring_domain LIKE '%ecosia%' OR properties.$referring_domain LIKE '%brave%')")
+print("querying organic (search-referred) daily uniques...", flush=True)
+rows = hogql(f"SELECT toDate(timestamp) AS day, {STATE_EXPR} AS st, "
+             f"count(DISTINCT person_id) AS users FROM events WHERE {BASE_WHERE} "
+             f"AND {STATE_EXPR} IN {STATE_SET} AND {SEARCH_REF} GROUP BY day, st ORDER BY day, st")
+state_organic = collections.defaultdict(lambda: [0.0] * len(dates))
+for day, st, users in rows:
+    day = str(day)[:10]
+    if day in didx:
+        state_organic[st][didx[day]] += users
+print(f"  {len(rows)} rows", flush=True)
+
 # ---- per-page breakdown (a person counts once per page they visited) ----
 print("querying per-page breakdown...", flush=True)
 rows = hogql(f"SELECT toDate(timestamp) AS day, {PATH_EXPR} AS path, "
@@ -154,6 +169,7 @@ out = {
     "states": {
         s: {
             "total": [round(v, 1) for v in series],
+            "organic": [round(v) for v in state_organic.get(s, [0.0] * len(dates))],
             "pages": {k: v for k, v in state_pages[s].items()},
             "metros": metro_traffic.get(s, {}),
         }
