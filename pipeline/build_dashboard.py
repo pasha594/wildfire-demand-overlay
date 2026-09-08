@@ -316,7 +316,8 @@ HTML = r"""<meta charset="utf-8">
   }
   .overview h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
   .overview .osub { color: var(--muted); font-size: 11.5px; margin-bottom: 10px; }
-  #oscore { max-width: 860px; }
+  .ocols { display: grid; grid-template-columns: 3fr 2fr; gap: 12px 26px; }
+  @media (max-width: 1000px) { .ocols { grid-template-columns: 1fr; } }
   .ocol h3 {
     font-size: 11px; font-weight: 500; color: var(--muted); margin: 4px 0 4px;
     text-transform: uppercase; letter-spacing: .05em;
@@ -330,6 +331,9 @@ HTML = r"""<meta charset="utf-8">
   .pill.st-track { background: var(--chip-bg); color: var(--ink-2); border: 1px solid var(--border); }
   .pill.st-miss { background: #d03b3b; color: #fff; }
   .pill.st-low { color: var(--muted); border: 1px dashed var(--axis); }
+  .quad svg { width: 100%; max-width: 470px; height: auto; }
+  .quad .dot { cursor: pointer; }
+  .quad .dot:hover circle { stroke: var(--ink); stroke-width: 1.5; }
   .overview .qnote { color: var(--muted); font-size: 11.5px; margin-top: 6px; max-width: 92ch; }
   .mtab td.stcell { overflow: visible; text-overflow: clip; }
   .mtab td.dim { color: var(--ink-2); }
@@ -491,12 +495,10 @@ HTML = r"""<meta charset="utf-8">
   <section class="overview" id="overview" hidden>
     <h2>Overview — SEO health</h2>
     <div class="osub" id="osub"></div>
-    <div class="ocol"><h3>Health scorecard · worst first</h3><div id="oscore"></div></div>
-    <div class="omiss ocol"><h3>Missed demand spikes · biggest first</h3><div id="omissed"></div>
-      <div class="qnote">Each row: a day that state's search demand ran hot (≥50% of its seasonal peak, driven by the term shown)
-      while our organic traffic stayed near an ordinary day (under 2× its median — <span style="color:#d03b3b">red</span> = below
-      even a typical day). Read it as "demand showed up, we mostly didn't." The same state + term repeating across nearby dates
-      is a systematic gap worth investigating; a lone row may be noise.</div></div>
+    <div class="ocols">
+      <div class="ocol"><h3>Health scorecard · worst first</h3><div id="oscore"></div></div>
+      <div class="ocol quad"><h3>Demand vs capture · trailing 14 days</h3><div id="oquad"></div></div>
+    </div>
   </section>
   <section class="movers" id="movers" hidden>
     <div class="mhead">
@@ -552,8 +554,8 @@ HTML = r"""<meta charset="utf-8">
     state's in-state keyword indices. <b>Spike response</b>: high-demand days are those where demand is ≥40% of its
     window peak; the ratio compares how much our capture lifts on those days vs how much demand lifts (1.0× = we scale
     exactly with demand; below 0.6× = missing demand; above 1.25× = outperforming; grey = too little signal to judge).
-    <b>Missed spikes</b>: days where demand hit ≥50% of its
-    window peak while our capture stayed below 2× its typical (median) day, worst first. All of it is inferred from
+    The quadrant plots each state's trailing 14-day demand and capture, each as a share of its own best 14-day stretch —
+    dots below the diagonal are demand we're not converting. All of it is inferred from
     timing agreement, not from rankings — Search Console data would measure the gap directly.</p>
     <p><b>Top Metros.</b> Ranks all fetched metros by recent search momentum, per term or best term per metro.
     "Biggest day-over-day jump" = the change in a term's index between the last two full days (Google's final day is
@@ -999,37 +1001,6 @@ function healthOf(st) {
            x: inten(S), y: inten(T), organic: T === st.organic };
 }
 
-function missedSpikes(healths) {
-  const lastFull = N - 2;
-  const out = [];
-  healths.forEach(h => {
-    if (!h || h.status === "low") return;
-    const medT = [...h.T.slice(0, lastFull + 1)].sort((a, b) => a - b)[Math.floor(lastFull / 2)] || 1;
-    let run = null;
-    for (let i = 0; i <= lastFull; i++) {
-      const sPct = h.S[i] / h.smax;
-      const isSpike = sPct >= 0.5;
-      if (isSpike) {
-        if (!run || h.S[i] > run.s) {
-          const kwS = h.st.modes.state.kwSeries;
-          let bk = 0;
-          kwS.forEach((k, ki) => { if (k.length > i && k[i] > (kwS[bk][i] || 0)) bk = ki; });
-          run = { ...run, i, s: h.S[i], sPct, k: bk, t: h.T[i] };
-        }
-        run.end = i;
-      }
-      if ((!isSpike || i === lastFull) && run) {
-        const tX = run.t / Math.max(medT, 0.5);
-        /* a real demand spike where our capture barely moved off its median day */
-        if (tX < 2)
-          out.push({ h, i: run.i, sPct: run.sPct, k: run.k, tX });
-        run = null;
-      }
-    }
-  });
-  return out.sort((a, b) => b.sPct - a.sPct);
-}
-
 function buildOverview() {
   const sec = document.getElementById("overview");
   const healths = DATA.states.map(healthOf);
@@ -1055,19 +1026,58 @@ function buildOverview() {
       <td>${fmt(h.totalT)}</td></tr>`).join("") +
     `</tbody></table>`;
 
-  /* 3 · missed spikes */
-  const missed = missedSpikes(healths).slice(0, 12);
-  document.getElementById("omissed").innerHTML = missed.length
-    ? `<table class="mtab"><colgroup><col style="width:120px"><col style="width:32%"><col style="width:72px"><col style="width:100px"><col style="width:110px"></colgroup>
-       <thead><tr><th class="l">state</th><th class="l">top term that day</th><th>date</th><th style="white-space:normal">search (% of peak)</th><th style="white-space:normal">our traffic vs typical</th></tr></thead><tbody>` +
-      missed.map(m => `<tr class="orow mrow" data-key="${m.h.st.key}" tabindex="0">
-        <td class="mn">${m.h.st.name}</td>
-        <td class="kw">${m.h.st.kws[m.k]}</td>
-        <td>${fdate(DATA.dates[m.i])}</td>
-        <td>${Math.round(m.sPct * 100)}%</td>
-        <td class="${m.tX < 1 ? "bad" : "dim"}">${m.tX.toFixed(1)}× typical</td></tr>`).join("") +
-      `</tbody></table>`
-    : `<div class="mempty">no missed spikes detected — every major search spike saw a matching traffic response</div>`;
+  /* 2 · quadrant */
+  const QW = 420, QH = 330, QL = 44, QR = 46, QT = 14, QB = 40;
+  const PX = v => QL + v * (QW - QL - QR);
+  const PY = v => (QH - QB) - v * (QH - QB - QT);
+  const mono = `font-family="IBM Plex Mono, monospace"`;
+  let g = "";
+  /* frame, gridlines, ticks at 0/50/100% */
+  [0, 0.5, 1].forEach(v => {
+    g += `<line x1="${PX(v)}" y1="${PY(0)}" x2="${PX(v)}" y2="${PY(1)}" stroke="${v ? "var(--grid)" : "var(--axis)"}"/>`;
+    g += `<line x1="${PX(0)}" y1="${PY(v)}" x2="${PX(1)}" y2="${PY(v)}" stroke="${v ? "var(--grid)" : "var(--axis)"}"/>`;
+    g += `<text x="${PX(v)}" y="${PY(0) + 14}" text-anchor="middle" font-size="9.5" fill="var(--muted)" ${mono}>${v * 100}%</text>`;
+    if (v) g += `<text x="${PX(0) - 6}" y="${PY(v) + 3}" text-anchor="end" font-size="9.5" fill="var(--muted)" ${mono}>${v * 100}%</text>`;
+  });
+  g += `<line x1="${PX(0)}" y1="${PY(0)}" x2="${PX(1)}" y2="${PY(1)}" stroke="var(--muted)" stroke-dasharray="5 4" opacity="0.7"/>`;
+  g += `<text x="${PX(1)}" y="${PY(0) - 8}" text-anchor="end" font-size="10" fill="#d03b3b" ${mono}>↓ under-converting</text>`;
+  g += `<text x="${PX(0) + 6}" y="${PY(1) + 10}" font-size="10" fill="#0ca30c" ${mono}>↑ outperforming</text>`;
+  g += `<text x="${(PX(0) + PX(1)) / 2}" y="${QH - 6}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono}>search demand now · % of its own best 14 days</text>`;
+  g += `<text x="12" y="${(PY(0) + PY(1)) / 2}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono} transform="rotate(-90 12 ${(PY(0) + PY(1)) / 2})">our capture now · % of its own best 14 days</text>`;
+
+  /* dots, labels placed greedily so they never overlap */
+  const dotHealths = healths.filter(h => h && h.status !== "low")
+    .sort((a, b) => ({ miss: 0, out: 1, track: 2 })[a.status] - ({ miss: 0, out: 1, track: 2 })[b.status] || (b.x + b.y) - (a.x + a.y));
+  const placed = [];
+  dotHealths.forEach(h => {
+    const cx = PX(h.x), cy = PY(h.y);
+    let lbl = "";
+    const w = h.st.abbr.length * 6.5 + 4, bx = cx + 7, by = cy - 9;
+    if (!placed.some(p => bx < p.bx + p.w && bx + w > p.bx && by < p.by + 11 && by + 11 > p.by)) {
+      placed.push({ bx, by, w });
+      lbl = `<text x="${(cx + 7).toFixed(1)}" y="${(cy + 3.5).toFixed(1)}" font-size="9.5" fill="var(--ink-2)" ${mono}>${h.st.abbr}</text>`;
+    }
+    g += `<g class="dot orow" data-key="${h.st.key}" data-tip="${h.st.name} · demand ${Math.round(h.x * 100)}% of peak · capture ${Math.round(h.y * 100)}% of peak · ${STATUS[h.status].label}">
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="${STATUS[h.status].color}" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"/>${lbl}</g>`;
+  });
+  document.getElementById("oquad").innerHTML =
+    `<svg viewBox="0 0 ${QW} ${QH}" role="img" aria-label="Demand vs capture by state">${g}</svg>
+    <div class="qnote">Each dot: how hot a state's search demand is right now vs how hot our organic traffic is, each measured
+    against its own best 14-day stretch. On the dashed line = rising and falling together. Below it = demand is closer to
+    its peak than our capture is — a wave we're not riding. Above it = our traffic is outrunning current demand.
+    Note the two clocks: dot <i>position</i> is the current fortnight; dot <i>color</i> is the season-long scorecard
+    status — a green dot low in the chart is a historically healthy state currently behind its own demand.
+    Hover for exact numbers; click to open the state.</div>`;
+  document.querySelectorAll("#oquad .dot").forEach(d => {
+    d.addEventListener("pointermove", e => {
+      tip.innerHTML = `<div class="d" style="margin:0">${d.dataset.tip}</div>`;
+      tip.style.display = "block";
+      let tx = e.clientX + 14, ty = e.clientY + 12;
+      if (tx + tip.offsetWidth > innerWidth - 8) tx = e.clientX - tip.offsetWidth - 14;
+      tip.style.left = tx + "px"; tip.style.top = ty + "px";
+    });
+    d.addEventListener("pointerleave", () => { tip.style.display = "none"; });
+  });
 
   sec.querySelectorAll(".orow").forEach(el => {
     const go = () => {
