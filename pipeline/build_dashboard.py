@@ -334,7 +334,7 @@ HTML = r"""<meta charset="utf-8">
   .quad svg { width: 100%; max-width: 470px; height: auto; }
   .quad .dot { cursor: pointer; }
   .quad .dot:hover circle { stroke: var(--ink); stroke-width: 1.5; }
-  .quad .qnote { color: var(--muted); font-size: 11.5px; margin-top: 6px; max-width: 60ch; }
+  .overview .qnote { color: var(--muted); font-size: 11.5px; margin-top: 6px; max-width: 92ch; }
   .mtab td.stcell { overflow: visible; text-overflow: clip; }
   .mtab td.dim { color: var(--ink-2); }
   .mtab td.bad { color: #d03b3b; font-weight: 600; }
@@ -499,7 +499,11 @@ HTML = r"""<meta charset="utf-8">
       <div class="ocol"><h3>Health scorecard · worst first</h3><div id="oscore"></div></div>
       <div class="ocol quad"><h3>Demand vs capture · trailing 14 days</h3><div id="oquad"></div></div>
     </div>
-    <div class="omiss ocol"><h3>Missed demand spikes · biggest first</h3><div id="omissed"></div></div>
+    <div class="omiss ocol"><h3>Missed demand spikes · biggest first</h3><div id="omissed"></div>
+      <div class="qnote">Each row: a day that state's search demand ran hot (≥50% of its seasonal peak, driven by the term shown)
+      while our organic traffic stayed near an ordinary day (under 2× its median — <span style="color:#d03b3b">red</span> = below
+      even a typical day). Read it as "demand showed up, we mostly didn't." The same state + term repeating across nearby dates
+      is a systematic gap worth investigating; a lone row may be noise.</div></div>
   </section>
   <section class="movers" id="movers" hidden>
     <div class="mhead">
