@@ -585,6 +585,8 @@ HTML = r"""<meta charset="utf-8">
     padding: 8px 10px; font-size: 12px; min-width: 190px;
   }
   #tip .d { font-weight: 600; margin-bottom: 5px; }
+  #tip .d .pill { font-size: 10.5px; padding: 0 7px; margin-left: 6px; vertical-align: 1px; }
+  #tip .tnote { color: var(--muted); font-size: 11px; margin-top: 4px; }
   #tip .row { display: flex; align-items: center; gap: 7px; justify-content: space-between; color: var(--ink-2); padding: 1px 0; }
   #tip .row .v { font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); font-variant-numeric: tabular-nums; }
   #tip .row .n { display: inline-flex; align-items: center; gap: 6px; max-width: 300px; overflow-wrap: anywhere; }
@@ -1336,11 +1338,11 @@ function whyOf(h) {
 }
 
 const QPRESETS = {
-  dv: { label: "search demand → our visibility", x: "search demand (Trends)", y: "our impressions (Search Console)",
+  dv: { label: "search demand → our visibility", x: "search demand (Trends)", y: "our impressions (Search Console)", xs: "Search", ys: "Impressions",
         pick: h => h.g && ({ x: h.g.Dg, y: h.g.I, low: h.g.low || h.sparse }) },
-  dc: { label: "search demand → our traffic", x: "search demand (Trends)", y: "our organic traffic",
+  dc: { label: "search demand → our traffic", x: "search demand (Trends)", y: "our organic traffic", xs: "Search", ys: "Our traffic",
         pick: h => ({ x: h.D, y: h.C, low: h.status === "low" }) },
-  vc: { label: "our visibility → our clicks", x: "our impressions (Search Console)", y: "our clicks (Search Console)",
+  vc: { label: "our visibility → our clicks", x: "our impressions (Search Console)", y: "our clicks (Search Console)", xs: "Impressions", ys: "Clicks",
         pick: h => h.g && ({ x: h.g.I, y: h.g.C, low: h.g.low }) },
 };
 let qpreset = GSC ? "dv" : "dc";
@@ -1456,7 +1458,7 @@ function renderQuad(healths) {
 
   /* red dots always get a label; the rest are placed greedily so labels never overlap */
   const placed = [];
-  [...pts].sort((a, b) => ({ miss: 0, out: 1, track: 2, quiet: 3 })[a.status] - ({ miss: 0, out: 1, track: 2, quiet: 3 })[b.status] || b.x - a.x)
+  [...pts].sort((a, b) => ({ miss: 0, out: 1, track: 2 })[a.status] - ({ miss: 0, out: 1, track: 2 })[b.status] || b.x - a.x)
     .forEach(pt => {
       const h = pt.h;
       const [rx, ry] = onRay(pt.x, pt.y);
@@ -1472,7 +1474,7 @@ function renderQuad(healths) {
         placed.push({ bx, by, w });
         lbl = `<text x="${bx.toFixed(1)}" y="${(cy + 3.5).toFixed(1)}" font-size="9.5" fill="${pt.status === "miss" ? "#d03b3b" : "var(--ink-2)"}" ${mono}>${text}</text>`;
       }
-      g += `<g class="dot orow" data-key="${h.st.key}" data-tip="${esc(h.st.name)} · ${esc(P.x)} ${pt.x.toFixed(1)}× typical · ${esc(P.y)} ${pt.y.toFixed(1)}× typical · ${STATUS[pt.status].label}">
+      g += `<g class="dot orow" data-key="${h.st.key}" data-pi="${pts.indexOf(pt)}">
         <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="${STATUS[pt.status].color}" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"/>${lbl}</g>`;
     });
   const gEnd = GSC_LAST != null ? fdate(DATA.dates[GSC_LAST]) : "–";
@@ -1490,9 +1492,16 @@ function renderQuad(healths) {
     is drawn scaled down along its own line from the origin (so it stays on the correct side of the diagonal) and
     labelled with both values. States whose search is too sparse to judge are left off. Hover a dot for exact values;
     click to open the state.</div>`;
+  const gEndTip = GSC_LAST != null && qpreset !== "dc" ? `, to ${fdate(DATA.dates[GSC_LAST])}` : "";
   document.querySelectorAll("#oquad .dot").forEach(d => {
     d.addEventListener("pointermove", e => {
-      tip.innerHTML = `<div class="d" style="margin:0">${d.dataset.tip}</div>`;
+      const pt = pts[+d.dataset.pi];
+      tip.innerHTML = `<div class="d">${esc(pt.h.st.name)} <span class="pill ${STATUS[pt.status].cls}">${STATUS[pt.status].label}</span></div>
+        <table class="tt"><tbody>
+          <tr><td class="n">${P.xs}</td><td>${liftFmt(pt.x)}</td></tr>
+          <tr><td class="n">${P.ys}</td><td>${liftFmt(pt.y)}</td></tr>
+        </tbody></table>
+        <div class="tnote">vs a typical day · last ${WIN} days${gEndTip}</div>`;
       tip.style.display = "block";
       let tx = e.clientX + 14, ty = e.clientY + 12;
       if (tx + tip.offsetWidth > innerWidth - 8) tx = e.clientX - tip.offsetWidth - 14;
