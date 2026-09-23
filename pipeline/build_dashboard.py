@@ -155,6 +155,7 @@ for key in all_keys:
             "key": mkey,
             "name": minfo["name"],
             "traffic": m_traffic,
+            "city": minfo.get("city"),
             "kws": m_entry["keywords"] if m_entry else None,
             "mode": m_mode,
         })
@@ -186,9 +187,42 @@ for key in all_keys:
 
 states_payload.sort(key=lambda s: s["name"])
 
+# ---- Search Console (optional; produced locally by gsc_sync.py) ----
+gsc_raw = load_opt("gsc_daily.json")
+gsc_payload = None
+if gsc_raw:
+    gidx = {d: k for k, d in enumerate(gsc_raw["meta"]["dates"])}
+
+    def galign(t):
+        """{c,i,p} on the GSC date axis -> same on the dashboard axis; None where GSC has no day."""
+        pos = [gidx.get(d) for d in dates]
+        return {f: [t[f][k] if k is not None else None for k in pos] for f in ("c", "i", "p")}
+
+    in_window = lambda t: any((v or 0) > 0 for v in galign(t)["i"])
+    for sp in states_payload:
+        g = gsc_raw["states"].get(sp["key"])
+        if not g:
+            continue
+        sp["gsc"] = {t: galign(v) for t, v in g["types"].items() if in_window(v)}
+        for mp in sp["metros"]:
+            mg = g["metros"].get(mp["key"])
+            if mg:
+                mp["gsc"] = {t: galign(v) for t, v in mg.items() if in_window(v)}
+    gm = gsc_raw["meta"]
+    gsc_payload = {
+        "property": gm["property"], "pageFilter": gm["page_filter"], "exportedAt": gm["exported_at"],
+        "lastDate": gm["last_date"], "lastComplete": gm["last_complete_date"], "coveredFrom": gm.get("covered_from"),
+        "types": [t for t in gm["types"] if any(t in (sp.get("gsc") or {}) for sp in states_payload)],
+        "topWindow": gm["top_window"], "prevWindow": gm["prev_window"],
+        "topQueries": gsc_raw["top_queries"],
+    }
+    print(f"search console: {gm['property']} through {gm['last_date']} (complete through {gm['last_complete_date']}), "
+          f"types {gsc_payload['types']}, {sum(1 for sp in states_payload if sp.get('gsc'))} states, "
+          f"{sum(1 for sp in states_payload for mp in sp['metros'] if mp.get('gsc'))} metro slices")
+
 payload = {"dates": dates, "timeframe": tr_state["meta"]["timeframe"],
            "has25": bool(tr25_state or tr25_natl), "hasNatl": bool(tr_natl),
-           "fetchedAt": fetched_at, "states": states_payload, "maps": maps}
+           "fetchedAt": fetched_at, "states": states_payload, "maps": maps, "gsc": gsc_payload}
 generated = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%MZ")
 
 HTML = r"""<meta charset="utf-8">
@@ -210,6 +244,8 @@ HTML = r"""<meta charset="utf-8">
     --f: #1baf7a;       /* fire */
     --fm: #2a78d6;      /* fire map */
     --fn: #4a3aa7;      /* fire near */
+    --gi: #e87ba4;      /* search console impressions */
+    --gc: #2a78d6;      /* search console clicks */
     --traffic: #6f6d67;
     --traffic-fill: rgba(137,135,129,.20);
     --fire-mk: #eda100;
@@ -231,6 +267,8 @@ HTML = r"""<meta charset="utf-8">
       --f: #199e70;
       --fm: #3987e5;
       --fn: #9085e9;
+      --gi: #d55181;
+      --gc: #3987e5;
       --traffic: #a3a19a;
       --traffic-fill: rgba(137,135,129,.22);
       --fire-mk: #c98500;
@@ -251,8 +289,12 @@ HTML = r"""<meta charset="utf-8">
     --wf: #d95926;
     --f: #199e70;
     --fm: #3987e5;
+    --fn: #9085e9;
+    --gi: #d55181;
+    --gc: #3987e5;
     --traffic: #a3a19a;
     --traffic-fill: rgba(137,135,129,.22);
+    --fire-mk: #c98500;
     --chip-bg: rgba(255,255,255,.06);
     --tooltip-bg: #242423;
   }
@@ -316,8 +358,14 @@ HTML = r"""<meta charset="utf-8">
   }
   .overview h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
   .overview .osub { color: var(--muted); font-size: 11.5px; margin-bottom: 10px; }
-  .ocols { display: grid; grid-template-columns: 3fr 2fr; gap: 12px 26px; }
-  @media (max-width: 1000px) { .ocols { grid-template-columns: 1fr; } }
+  .ocols { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  .quad #oquad { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: flex-start; }
+  .quad #oquad svg { flex: 0 1 470px; }
+  .quad #oquad .qnote { flex: 1 1 280px; margin-top: 16px; }
+  .qhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+  .qhead select { font: inherit; font-size: 12px; color: var(--ink-2); background: var(--chip-bg);
+    border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; cursor: pointer; }
+  #oscore { overflow-x: auto; }
   .ocol h3 {
     font-size: 11px; font-weight: 500; color: var(--muted); margin: 4px 0 4px;
     text-transform: uppercase; letter-spacing: .05em;
@@ -334,7 +382,10 @@ HTML = r"""<meta charset="utf-8">
   .quad svg { width: 100%; max-width: 470px; height: auto; }
   .quad .dot { cursor: pointer; }
   .quad .dot:hover circle { stroke: var(--ink); stroke-width: 1.5; }
-  .overview .qnote { color: var(--muted); font-size: 11.5px; margin-top: 6px; max-width: 92ch; }
+  .impact select { font: inherit; font-size: 12px; color: var(--ink); background: transparent;
+    border: 1px solid var(--border); border-radius: 6px; padding: 1px 4px; cursor: pointer; }
+  .chart svg.strip { margin-top: 2px; }
+  .overview .qnote, .movers .qnote { color: var(--muted); font-size: 11.5px; margin-top: 6px; max-width: 92ch; }
   .mtab td.stcell { overflow: visible; text-overflow: clip; }
   .mtab td.dim { color: var(--ink-2); }
   .mtab td.bad { color: #d03b3b; font-weight: 600; }
@@ -497,7 +548,8 @@ HTML = r"""<meta charset="utf-8">
     <div class="osub" id="osub"></div>
     <div class="ocols">
       <div class="ocol"><h3>Health scorecard · last 7 days · worst first</h3><div id="oscore"></div></div>
-      <div class="ocol quad"><h3>Demand lift vs capture lift · last 7 days</h3><div id="oquad"></div></div>
+      <div class="ocol quad"><div class="qhead"><h3 id="oqtitle">Lift vs lift · last 7 days</h3>
+        <select id="qpreset" aria-label="Which two lifts to compare"></select></div><div id="oquad"></div></div>
     </div>
   </section>
   <section class="movers" id="movers" hidden>
@@ -516,6 +568,22 @@ HTML = r"""<meta charset="utf-8">
       <div class="mcol"><h3>Biggest day-over-day jump</h3><div id="mdod"></div></div>
       <div class="mcol"><h3 id="m7dh3">Closest to their 7-day high</h3><div id="m7d"></div></div>
     </div>
+  </section>
+  <section class="movers" id="tq" hidden>
+    <div class="mhead">
+      <h2>Top Queries</h2>
+      <select id="tqtype" aria-label="Search type for top queries"></select>
+      <span class="mnote" id="tqnote"></span>
+    </div>
+    <div class="mcols">
+      <div class="mcol"><h3>Rising · impressions vs the prior 7 days</h3><div id="tqrise"></div></div>
+      <div class="mcol"><h3>Seen but not ranking · avg position worse than 10</h3><div id="tqunr"></div></div>
+    </div>
+    <div class="qnote">Real search queries from Search Console that led to impressions of our pages. <b>Rising</b> = biggest
+    increase in impressions vs the week before. <b>Seen but not ranking</b> = queries where we appeared, on average,
+    below the first page of results (position &gt; 10), sorted by how often — the demand we're visible for but not
+    winning. Click a row to open the state its top landing page belongs to (hover shows the page). Google withholds
+    rare queries, so these lists cover roughly half of all impressions.</div>
   </section>
   <div class="grid" id="grid"></div>
 
@@ -559,6 +627,15 @@ HTML = r"""<meta charset="utf-8">
     "quiet week" = both sides near an ordinary week, nothing to judge; grey = too little volume. The quadrant plots the
     same two lifts on log axes — below the diagonal, search surged more than we did. All of it is inferred from
     timing agreement, not from rankings — Search Console data would measure the gap directly.</p>
+    <p><b>Search Console.</b> Clicks, impressions, CTR and average position come from the Google Search Console API
+    for the https://fires.cornea.is/ property, synced daily on the maintainer's machine (the last 7 days are re-fetched
+    every run, so Google's revisions and missed days are picked up). State series use page-level totals, which are
+    complete; Google withholds rare queries whenever query text is requested (about half of impressions here), so the
+    query-based views — metro slices and Top Queries — cover only the queries Google discloses. A metro view counts
+    queries that mention the metro's biggest city and landed on that state's pages. CTR is recomputed from summed
+    clicks and impressions; average position is impression-weighted (1 = the top result). Web, Image, Video, News tab,
+    Discover and Google News are separate search types; Discover and Google News report no query text or position.
+    Data lags about two days, and the most recent day or two are partial until Google finalizes them.</p>
     <p><b>Top Metros.</b> Ranks all fetched metros by recent search momentum, per term or best term per metro.
     "Biggest day-over-day jump" = the change in a term's index between the last two full days (Google's final day is
     partial and excluded). "Closest to their N-day high" = the trailing N-day average as a share of that metro's best
@@ -598,10 +675,14 @@ const KW_META = [
   { tpl: "fire near", varr: "me",   color: "var(--fn)", dash: null },
   { tpl: "fire near", varr: "city", color: "var(--fn)", dash: "6 4" },  /* metro view only */
 ];
-const visible = { traffic: true, k0: true, k1: true, k2: true, k3: true, k4: true, fires: true };
+const visible = { traffic: true, k0: true, k1: true, k2: true, k3: true, k4: true, fires: true, gi: true, gc: true };
 let smooth = false;
 let y25 = false;
 let mode = "state";
+const GSC = DATA.gsc;
+const GSC_LABEL = { web: "Web", image: "Image", video: "Video", news: "News tab", discover: "Discover", googleNews: "Google News" };
+let gscType = "web";
+let gscStrip = "pos";   /* "pos" | "ctr" | "off" */
 const MODE_LABEL = { state: "in-state", national: "national" };
 const MODE_GEO = { state: "geo US-XX (in-state)", national: "geo US (national)" };
 
@@ -645,6 +726,38 @@ function smooth7(s) {
   return out;
 }
 
+/* null-aware helpers for Search Console series (null = day not available) */
+function smooth7n(s) {
+  return s.map((v, i) => {
+    if (v == null) return null;
+    let sum = 0, n = 0;
+    for (let j = Math.max(0, i - 3); j <= Math.min(s.length - 1, i + 3); j++) if (s[j] != null) { sum += s[j]; n++; }
+    return sum / n;
+  });
+}
+function idxOf(s) {
+  let mx = 0;
+  s.forEach(v => { if (v != null && v > mx) mx = v; });
+  return s.map(v => v == null ? null : (mx ? v / mx * 100 : 0));
+}
+function gscOf(st, sel) {
+  const src = sel ? sel.gsc : st.gsc;
+  return (src && src[gscType]) || null;
+}
+/* 7 complete days ending at `end`: totals + recomputed CTR + impression-weighted position */
+function gsc7(gs, end) {
+  if (!gs || end == null) return null;
+  let c = 0, i = 0, pw = 0, pi = 0, days = 0;
+  for (let k = Math.max(0, end - 6); k <= end; k++) {
+    if (gs.i[k] == null) continue;
+    days++; c += gs.c[k]; i += gs.i[k];
+    if (gs.p[k] != null) { pw += gs.p[k] * gs.i[k]; pi += gs.i[k]; }
+  }
+  return days ? { c, i, ctr: i ? c / i : null, pos: pi ? pw / pi : null } : null;
+}
+const fpct = v => v == null ? "–" : (v * 100).toFixed(v < 0.1 ? 1 : 0) + "%";
+const fposn = v => v == null ? "–" : v.toFixed(1);
+
 /* ---------- controls / legend ---------- */
 function legendSwatch(meta) {
   if (meta === "traffic")
@@ -671,6 +784,13 @@ function buildControls() {
     html += `<button class="lg" data-k="k${i}" aria-pressed="true">${legendSwatch(m)}<span class="sw">${lbl}</span></button>`;
   });
   html += `<button class="lg" data-k="fires" aria-pressed="true">${legendSwatch("fires")}<span class="sw">fire starts <span style="color:var(--muted)">&gt;100 ac</span></span></button>`;
+  if (GSC) {
+    html += `<button class="lg" data-k="gi" aria-pressed="true">${legendSwatch({ color: "var(--gi)" })}<span class="sw">GSC impressions</span></button>`;
+    html += `<button class="lg" data-k="gc" aria-pressed="true">${legendSwatch({ color: "var(--gc)" })}<span class="sw">GSC clicks</span></button>`;
+    html += `<span class="impact">Search Console
+      <select id="gtype" aria-label="Search Console search type">${GSC.types.map(t => `<option value="${t}">${GSC_LABEL[t]}</option>`).join("")}</select>
+      strip <select id="gstrip" aria-label="Metric shown under each chart"><option value="pos">avg position</option><option value="ctr">CTR</option><option value="off">off</option></select></span>`;
+  }
   html += `<span class="impact" title="A fire is impactful when at least this many people (2020 Census) live within this distance of its start point, measured from the fire's approximate edge">
     ${legendSwatch("fires")} impactful ≥
     <input type="range" id="ipop" min="0" max="${POP_STEPS.length-1}" step="1" value="${POP_STEPS.indexOf(impact.pop)}" aria-label="Impactful population threshold">
@@ -682,7 +802,8 @@ function buildControls() {
   html += `<label class="smooth"><input type="checkbox" id="sm"> 7-day smooth</label>`;
   html += `<div class="axis-note">${DATA.hasNatl ? "Trends geography: <b>in-state</b> = searches from within the state, <b>national</b> = all US. " : "State charts show in-state search interest (searches made from within the state); pick a metro on a card for metro-level data. "}
     Click a legend chip to show/hide that series everywhere. Solid = full state name, dashed = two-letter abbreviation. y-axis: index, 100 = peak in window.
-    Fire markers: ${legendSwatch("fires")} = impactful under the current sliders, ${legendSwatch("fires_h")} = not.</div>`;
+    Fire markers: ${legendSwatch("fires")} = impactful under the current sliders, ${legendSwatch("fires_h")} = not.
+    ${GSC ? `Search Console lines (impressions, clicks) are indexed to their own peak like traffic; the strip under each chart shows average position (1 = top result) or CTR. Search Console lags ~2 days, so its lines end early and start where syncing began (${fdate(GSC.coveredFrom || DATA.dates[0])}). In a metro view they cover queries that mention the metro's biggest city.` : ""}</div>`;
   c.innerHTML = html;
   document.getElementById("statef").addEventListener("change", e => {
     stateFilter = e.target.value;
@@ -709,6 +830,14 @@ function buildControls() {
     renderAll();
   }));
   document.getElementById("sm").addEventListener("change", e => { smooth = e.target.checked; renderAll(); });
+  const gt = document.getElementById("gtype"), gsSel = document.getElementById("gstrip");
+  if (gt) gt.addEventListener("change", e => {
+    gscType = e.target.value;
+    document.querySelectorAll(".tblwrap").forEach(w => { delete w.dataset.built; w.innerHTML = ""; });
+    updateModeStats();
+    renderAll();
+  });
+  if (gsSel) gsSel.addEventListener("change", e => { gscStrip = e.target.value; renderAll(); });
   const y25t = document.getElementById("y25t");
   if (y25t) y25t.addEventListener("change", e => { y25 = e.target.checked; renderAll(); });
   let raf = 0;
@@ -732,6 +861,10 @@ const N = DATA.dates.length;
 const zoomStart = Math.max(0, DATA.dates.findIndex(d => d >= DATA.dates[N-1].slice(0, 4) + "-07-01"));
 const DIDX = {};
 DATA.dates.forEach((d, i) => DIDX[d] = i);
+/* last complete Search Console day on the dashboard axis */
+const GSC_LAST = !GSC ? null
+  : DIDX[GSC.lastComplete] !== undefined ? DIDX[GSC.lastComplete]
+  : GSC.lastComplete > DATA.dates[N - 1] ? N - 1 : null;
 function fireMap(st) {
   if (!st._fmap) {
     st._fmap = {};
@@ -772,6 +905,10 @@ function renderChart(st, rkey, sel) {
   if (visible.traffic && hasTraffic) scan(disp(trafIdx));
   if (kwS) kwS.forEach((s, i) => { if (visible["k"+i] && s.length) scan(disp(s)); });
   if (k25) k25.forEach((s, i) => { if (visible["k"+i] && s.length) scan(disp(s)); });
+  const gs = gscOf(st, sel);
+  const gLines = gs ? [["gi", idxOf(gs.i), "var(--gi)"], ["gc", idxOf(gs.c), "var(--gc)"]]
+    .filter(([k]) => visible[k]).map(([k, s, col]) => [k, smooth ? smooth7n(s) : s, col]) : [];
+  gLines.forEach(([, s]) => scan(s));
   if (rkey === "full") rawMax = Math.max(rawMax, 100);
   const { step, ymax } = niceAxis(rawMax);
   const Y = v => MT + IH - (v / ymax) * IH;
@@ -816,6 +953,16 @@ function renderChart(st, rkey, sel) {
     g += `<path d="${path(disp(s0))}" fill="none" stroke="${m.color}" stroke-width="1.6"${m.dash ? ` stroke-dasharray="${m.dash}"` : ""} stroke-linejoin="round" opacity="0.95"/>`;
   });
 
+  gLines.forEach(([k, s, col]) => {
+    let d = "", pen = false;
+    for (let i = r0; i <= r1; i++) {
+      if (s[i] == null) { pen = false; continue; }
+      d += (pen ? "L" : "M") + Xr(i).toFixed(1) + " " + Y(s[i]).toFixed(1);
+      pen = true;
+    }
+    if (d) g += `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.5" stroke-linejoin="round" opacity="0.95"/>`;
+  });
+
   if (visible.fires) {
     const fm = fireMap(st), y0 = Y(0);
     for (const di in fm) {
@@ -835,6 +982,52 @@ function renderChart(st, rkey, sel) {
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Search interest (${viewOf(st, sel).label}) vs site traffic for ${st.name}, ${RANGE_LABEL[rkey]}">${g}</svg>`;
 }
 
+/* compact Search Console strip under each chart: avg position (inverted) or CTR */
+const HS = 70, SMT = 17, SMB = 8;
+function renderStrip(st, rkey, sel) {
+  if (!GSC || gscStrip === "off") return "";
+  const [r0, r1] = RANGES[rkey];
+  const Xr = i => ML + ((i - r0) / (r1 - r0)) * IW;
+  const gs = gscOf(st, sel);
+  const what = gscStrip === "pos" ? "avg position · 1 = top result" : "CTR";
+  const mono = `font-family="IBM Plex Mono, monospace"`;
+  const lab = `<text x="${ML}" y="11" font-size="9.5" fill="var(--muted)" ${mono}>SEARCH CONSOLE · ${GSC_LABEL[gscType].toUpperCase()} · ${what.toUpperCase()}</text>`;
+  let series = null;
+  if (gs) series = gscStrip === "pos" ? gs.p : gs.c.map((c, k) => (gs.i[k] ? c / gs.i[k] * 100 : null));
+  if (series && smooth) series = smooth7n(series);
+  const vals = series ? series.slice(r0, r1 + 1).filter(v => v != null) : [];
+  if (!vals.length) {
+    const why = !gs ? "no Search Console data for this view"
+      : gscStrip === "pos" ? `position not reported for ${GSC_LABEL[gscType]}` : "no impressions in this range";
+    return `<svg viewBox="0 0 ${W} 30" class="strip">${lab}<text x="${ML}" y="25" font-size="10" fill="var(--muted)" ${mono}>${why}</text></svg>`;
+  }
+  const IHs = HS - SMT - SMB;
+  let lo, hi, Y;
+  if (gscStrip === "pos") {
+    lo = 1; hi = Math.max(10, Math.ceil(Math.max(...vals)));
+    Y = v => SMT + (v - lo) / (hi - lo) * IHs;              /* 1 at the top */
+  } else {
+    lo = 0; hi = Math.max(1, Math.ceil(Math.max(...vals)));
+    Y = v => SMT + IHs - (v - lo) / (hi - lo) * IHs;
+  }
+  const tick = v => gscStrip === "pos" ? String(v) : v + "%";
+  let g = lab;
+  [lo, hi].forEach(v => {
+    g += `<line x1="${ML}" y1="${Y(v).toFixed(1)}" x2="${W - MR}" y2="${Y(v).toFixed(1)}" stroke="var(--grid)"/>`;
+    g += `<text x="${ML - 6}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--muted)" ${mono}>${tick(v)}</text>`;
+  });
+  let d = "", pen = false;
+  for (let i = r0; i <= r1; i++) {
+    const v = series[i];
+    if (v == null) { pen = false; continue; }
+    d += (pen ? "L" : "M") + Xr(i).toFixed(1) + " " + Y(v).toFixed(1);
+    pen = true;
+  }
+  g += `<path d="${d}" fill="none" stroke="${gscStrip === "pos" ? "var(--ink-2)" : "var(--gc)"}" stroke-width="1.4" stroke-linejoin="round"/>`;
+  g += `<line class="xh" x1="-10" y1="${SMT}" x2="-10" y2="${SMT + IHs}" stroke="var(--muted)" stroke-width="1" opacity="0"/>`;
+  return `<svg viewBox="0 0 ${W} ${HS}" class="strip" role="img" aria-label="Search Console ${what} for ${st.name}">${g}</svg>`;
+}
+
 /* ---------- cards ---------- */
 function modeStatsHtml(st, sel) {
   const m = sel ? sel.mode : st.modes[mode];
@@ -851,6 +1044,9 @@ function modeStatsHtml(st, sel) {
     h += `<span><span class="lbl">search peak</span> <b>–</b></span>`;
   h += `<span><span class="lbl">corr r</span> <b>${m.r === null ? "–" : m.r.toFixed(2)}</b></span>`;
   if (sel) h += `<span class="lbl">trends geo: metro DMA</span>`;
+  const g7 = GSC ? gsc7(gscOf(st, sel), GSC_LAST) : null;
+  if (g7) h += `<span><span class="lbl">GSC ${GSC_LABEL[gscType].toLowerCase()}, 7d to ${fdate(DATA.dates[GSC_LAST])}${sel ? ` · "${sel.city}" queries` : ""}</span>
+    <b>${fmt(g7.i)}</b> <span class="lbl">impr ·</span> <b>${fmt(g7.c)}</b> <span class="lbl">clicks ·</span> <b>${fpct(g7.ctr)}</b> <span class="lbl">CTR · pos</span> <b>${fposn(g7.pos)}</b></span>`;
   return h;
 }
 function buildCards() {
@@ -887,9 +1083,14 @@ function buildCards() {
       if (!this.open || wrap.dataset.built) return;
       wrap.dataset.built = "1";
       const kwS = kwOf(st) || st.kws.map(() => []);
-      let h = `<table><thead><tr><th>Date</th><th>Users</th>${st.kws.map(k => `<th>${k} (${MODE_LABEL[mode]})</th>`).join("")}</tr></thead><tbody>`;
-      for (let i = 0; i < N; i++)
-        h += `<tr><td>${DATA.dates[i]}</td><td>${st.traffic ? st.traffic[i] : "–"}</td>${kwS.map(s => `<td>${s.length ? s[i] : "–"}</td>`).join("")}</tr>`;
+      const gs = GSC ? gscOf(st, null) : null;
+      const gh = gs ? `<th>GSC impr</th><th>GSC clicks</th><th>GSC CTR</th><th>GSC pos</th>` : "";
+      let h = `<table><thead><tr><th>Date</th><th>Users</th>${st.kws.map(k => `<th>${k} (${MODE_LABEL[mode]})</th>`).join("")}${gh}</tr></thead><tbody>`;
+      for (let i = 0; i < N; i++) {
+        const gd = !gs ? "" : gs.i[i] == null ? `<td>–</td><td>–</td><td>–</td><td>–</td>`
+          : `<td>${gs.i[i]}</td><td>${gs.c[i]}</td><td>${gs.i[i] ? fpct(gs.c[i] / gs.i[i]) : "–"}</td><td>${fposn(gs.p[i])}</td>`;
+        h += `<tr><td>${DATA.dates[i]}</td><td>${st.traffic ? st.traffic[i] : "–"}</td>${kwS.map(s => `<td>${s.length ? s[i] : "–"}</td>`).join("")}${gd}</tr>`;
+      }
       wrap.innerHTML = h + "</tbody></table>";
     });
     const pg = card.querySelector(".pages");
@@ -920,7 +1121,7 @@ function buildCards() {
 }
 
 function updateModeStats() {
-  document.querySelectorAll(".card").forEach(card => {
+  document.querySelectorAll(".card[data-si]").forEach(card => {
     const st = DATA.states[+card.dataset.si];
     card.querySelector(".modestats").innerHTML = modeStatsHtml(st, selOf(card, st));
   });
@@ -930,7 +1131,8 @@ function renderCard(card) {
   const st = DATA.states[+card.dataset.si];
   const sel = selOf(card, st);
   card.querySelectorAll(".chart").forEach(chart => {
-    chart.innerHTML = `<div class="rlabel">${RANGE_LABEL[chart.dataset.r]}</div>` + renderChart(st, chart.dataset.r, sel);
+    chart.innerHTML = `<div class="rlabel">${RANGE_LABEL[chart.dataset.r]}</div>` + renderChart(st, chart.dataset.r, sel)
+      + renderStrip(st, chart.dataset.r, sel);
   });
   const fc = card.querySelector(".fscount");
   if (fc) fc.textContent = (st.fires || []).filter(isImpactful).length;
@@ -938,8 +1140,18 @@ function renderCard(card) {
 
 function renderAll() {
   tip.style.display = "none";
-  document.querySelectorAll(".card").forEach(renderCard);
+  document.querySelectorAll(".card[data-si]").forEach(renderCard);
 }
+
+function openState(key) {
+  stateFilter = key;
+  const sf = document.getElementById("statef");
+  if (sf) sf.value = key;
+  applyStateFilter();
+  const card = document.querySelector(`.card[data-si]:not([hidden])`);
+  card && card.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+const esc = v => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /* ---------- overview: SEO health ---------- */
 const STATUS = {
@@ -975,13 +1187,52 @@ function healthOf(st) {
   const ratio = D > 0 ? C / D : null;
   const totalT = T.reduce((a, b) => a + b, 0);
   const t7 = Math.round(rollN(T, lastFull, 7) * 7);
-  let status = "track";
-  if (totalT < 300 || ratio === null) status = "low";
-  else if (D < 1.2 && C < 1.2) status = "quiet";
-  else if (ratio < 0.6) status = "miss";
-  else if (ratio > 1.25) status = "out";
-  return { st, D, C, ratio, status, totalT, t7, organic: T === st.organic };
+  const status = statusOf(D, C, totalT < 300);
+  /* Search Console (web), on its own clock: the 7 complete days ending GSC_LAST.
+     Baseline = its typical (median) synced day, so lifts firm up as history accumulates. */
+  let g = null;
+  const gw = st.gsc && st.gsc.web;
+  if (GSC && gw && GSC_LAST != null) {
+    const k0 = gw.i.findIndex(v => v != null);
+    if (k0 >= 0 && k0 <= GSC_LAST) {
+      const med = arr => {
+        const a = arr.slice(k0, GSC_LAST + 1).filter(v => v != null).sort((x, y) => x - y);
+        return a.length ? a[Math.floor(a.length / 2)] : 0;
+      };
+      const mean7 = arr => {
+        let sum = 0, n = 0;
+        for (let k = Math.max(k0, GSC_LAST - 6); k <= GSC_LAST; k++) if (arr[k] != null) { sum += arr[k]; n++; }
+        return n ? sum / n : 0;
+      };
+      const g7 = gsc7(gw, GSC_LAST);
+      const totalI = gw.i.reduce((a, v) => a + (v || 0), 0);
+      g = { I: mean7(gw.i) / Math.max(med(gw.i), 1), C: mean7(gw.c) / Math.max(med(gw.c), 1),
+            ctr: g7 && g7.ctr, pos: g7 && g7.pos, i7: g7 ? g7.i : 0, c7: g7 ? g7.c : 0,
+            Dg: rollN(S, Math.min(GSC_LAST, lastFull), 7) / baseS,
+            low: totalI < 300, days: GSC_LAST - k0 + 1 };
+    }
+  }
+  return { st, D, C, ratio, status, totalT, t7, organic: T === st.organic, g };
 }
+
+/* one rule for every lift-vs-lift pair: y/x below 0.6 = missing, above 1.25 = outperforming */
+function statusOf(x, y, low) {
+  if (low || !(x > 0)) return "low";
+  if (x < 1.2 && y < 1.2) return "quiet";
+  const r = y / x;
+  return r < 0.6 ? "miss" : r > 1.25 ? "out" : "track";
+}
+
+/* quadrant presets: which two lifts to plot */
+const QPRESETS = {
+  dc: { label: "search demand → our traffic", x: "search demand (Trends)", y: "our organic traffic (PostHog)",
+        pick: h => ({ x: h.D, y: h.C, low: h.status === "low" }) },
+  dv: { label: "search demand → our visibility", x: "search demand (Trends)", y: "our impressions (Search Console)",
+        pick: h => h.g && ({ x: h.g.Dg, y: h.g.I, low: h.g.low }) },
+  vc: { label: "our visibility → our clicks", x: "our impressions (Search Console)", y: "our clicks (Search Console)",
+        pick: h => h.g && ({ x: h.g.I, y: h.g.C, low: h.g.low }) },
+};
+let qpreset = "dc";
 
 function buildOverview() {
   const sec = document.getElementById("overview");
@@ -990,31 +1241,57 @@ function buildOverview() {
   sec.hidden = false;
   const lastFull = N - 2;
   const anyOrganic = healths.some(h => h && h.organic);
+  const gDays = Math.max(0, ...healths.filter(h => h && h.g).map(h => h.g.days));
   document.getElementById("osub").textContent =
-    `last 7 full days (through ${fdate(DATA.dates[lastFull])}) · lift = this week vs the state's typical (median) day · capture = ${anyOrganic ? "search-engine-referred (organic)" : "total"} daily uniques`;
+    `last 7 full days (through ${fdate(DATA.dates[lastFull])}) · lift = this week vs the state's typical (median) day · capture = ${anyOrganic ? "search-engine-referred (organic)" : "total"} daily uniques`
+    + (GSC && GSC_LAST != null ? ` · Search Console columns: web, 7 days to ${fdate(DATA.dates[GSC_LAST])}, baseline = ${gDays} synced days${gDays < 28 ? " (short — lifts firm up after a longer backfill)" : ""}` : "");
 
   /* 1 · scorecard */
   const order = { miss: 0, track: 1, out: 2, quiet: 3, low: 4 };
   const rows = healths.filter(Boolean)
     .sort((a, b) => order[a.status] - order[b.status] || (a.ratio ?? 9) - (b.ratio ?? 9));
-  const lift = v => v === null ? "–" : (v >= 10 ? v.toFixed(0) : v.toFixed(1)) + "×";
+  const lift = v => v == null ? "–" : (v >= 10 ? v.toFixed(0) : v.toFixed(1)) + "×";
+  const hasG = GSC && rows.some(h => h.g);
+  const gCols = hasG ? `<col style="width:74px"><col style="width:74px"><col style="width:58px"><col style="width:52px">` : "";
+  const gHead = hasG ? `<th style="white-space:normal">GSC impr lift</th><th style="white-space:normal">GSC clicks lift</th><th style="white-space:normal">GSC CTR 7d</th><th style="white-space:normal">GSC avg pos</th>` : "";
+  const gCells = h => !hasG ? "" : !h.g ? `<td>–</td><td>–</td><td>–</td><td>–</td>`
+    : `<td>${lift(h.g.I)}</td><td>${lift(h.g.C)}</td><td>${fpct(h.g.ctr)}</td><td>${fposn(h.g.pos)}</td>`;
   document.getElementById("oscore").innerHTML =
-    `<table class="mtab"><colgroup><col><col style="width:132px"><col style="width:86px"><col style="width:86px"><col style="width:82px"><col style="width:70px"></colgroup>
-     <thead><tr><th class="l">state</th><th class="l">status</th><th style="white-space:normal">demand this week</th><th style="white-space:normal">capture this week</th><th style="white-space:normal">response ratio</th><th style="white-space:normal">organic 7d</th></tr></thead><tbody>` +
+    `<table class="mtab" style="min-width:${hasG ? 900 : 620}px"><colgroup><col><col style="width:132px"><col style="width:78px"><col style="width:78px"><col style="width:76px"><col style="width:64px">${gCols}</colgroup>
+     <thead><tr><th class="l">state</th><th class="l">status</th><th style="white-space:normal">demand this week</th><th style="white-space:normal">capture this week</th><th style="white-space:normal">response ratio</th><th style="white-space:normal">organic 7d</th>${gHead}</tr></thead><tbody>` +
     rows.map(h => `<tr class="orow mrow" data-key="${h.st.key}" tabindex="0">
       <td class="mn">${h.st.name}</td>
       <td class="stcell"><span class="pill ${STATUS[h.status].cls}">${STATUS[h.status].label}</span></td>
       <td>${lift(h.D)}</td>
       <td>${lift(h.C)}</td>
       <td class="${h.ratio !== null && h.ratio < 0.6 && h.status === "miss" ? "bad" : ""}">${h.ratio === null ? "–" : h.ratio.toFixed(2) + "×"}</td>
-      <td>${fmt(h.t7)}</td></tr>`).join("") +
+      <td>${fmt(h.t7)}</td>${gCells(h)}</tr>`).join("") +
     `</tbody></table>`;
+  const qsel = document.getElementById("qpreset");
+  if (!qsel.options.length) {
+    qsel.innerHTML = Object.entries(QPRESETS).filter(([k]) => k === "dc" || hasG)
+      .map(([k, v]) => `<option value="${k}">${v.label}</option>`).join("");
+    qsel.addEventListener("change", e => { qpreset = e.target.value; renderQuad(healths); });
+  }
+  renderQuad(healths);
+  sec.querySelectorAll("#oscore .orow").forEach(el => {
+    el.addEventListener("click", () => openState(el.dataset.key));
+    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openState(el.dataset.key); } });
+  });
+}
+
+function renderQuad(healths) {
+  const P = QPRESETS[qpreset];
 
   /* 2 · quadrant: lift vs lift, log scale */
   const QW = 420, QH = 330, QL = 48, QR = 46, QT = 14, QB = 40;
   const mono = `font-family="IBM Plex Mono, monospace"`;
-  const dotHealths = healths.filter(h => h && h.status !== "low");
-  const allLifts = dotHealths.flatMap(h => [h.D, h.C]).filter(v => v > 0);
+  const pts = healths.filter(Boolean).map(h => {
+    const v = P.pick(h);
+    if (!v) return null;
+    return { h, x: v.x, y: v.y, ratio: v.x > 0 ? v.y / v.x : null, status: statusOf(v.x, v.y, v.low) };
+  }).filter(p => p && p.status !== "low");
+  const allLifts = pts.flatMap(p => [p.x, p.y]).filter(v => v > 0);
   const lo = Math.min(0.4, ...allLifts) * 0.85, hi = Math.max(3, ...allLifts) * 1.2;
   const LX = v => QL + (Math.log(Math.max(v, lo)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) * (QW - QL - QR);
   const LY = v => (QH - QB) - (Math.log(Math.max(v, lo)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) * (QH - QB - QT);
@@ -1030,30 +1307,38 @@ function buildOverview() {
   g += `<line x1="${LX(lo)}" y1="${LY(lo)}" x2="${LX(hi)}" y2="${LY(hi)}" stroke="var(--muted)" stroke-dasharray="5 4" opacity="0.7"/>`;
   g += `<text x="${QW - QR}" y="${QH - QB - 8}" text-anchor="end" font-size="10" fill="#d03b3b" ${mono}>↓ under-responding</text>`;
   g += `<text x="${QL + 6}" y="${QT + 10}" font-size="10" fill="#0ca30c" ${mono}>↑ outperforming</text>`;
-  g += `<text x="${(QL + QW - QR) / 2}" y="${QH - 6}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono}>search demand · last 7 days vs typical</text>`;
-  g += `<text x="12" y="${(QT + QH - QB) / 2}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono} transform="rotate(-90 12 ${(QT + QH - QB) / 2})">our capture · last 7 days vs typical</text>`;
+  g += `<text x="${(QL + QW - QR) / 2}" y="${QH - 6}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono}>${P.x} · × typical</text>`;
+  g += `<text x="12" y="${(QT + QH - QB) / 2}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono} transform="rotate(-90 12 ${(QT + QH - QB) / 2})">${P.y} · × typical</text>`;
 
   /* dots, labels placed greedily so they never overlap */
   const placed = [];
-  [...dotHealths].sort((a, b) => ({ miss: 0, out: 1, track: 2, quiet: 3 })[a.status] - ({ miss: 0, out: 1, track: 2, quiet: 3 })[b.status] || b.D - a.D)
-    .forEach(h => {
-    const cx = LX(h.D), cy = LY(h.C);
+  [...pts].sort((a, b) => ({ miss: 0, out: 1, track: 2, quiet: 3 })[a.status] - ({ miss: 0, out: 1, track: 2, quiet: 3 })[b.status] || b.x - a.x)
+    .forEach(pt => {
+    const h = pt.h;
+    const cx = LX(pt.x), cy = LY(pt.y);
     let lbl = "";
     const w = h.st.abbr.length * 6.5 + 4, bx = cx + 7, by = cy - 9;
     if (!placed.some(p => bx < p.bx + p.w && bx + w > p.bx && by < p.by + 11 && by + 11 > p.by)) {
       placed.push({ bx, by, w });
       lbl = `<text x="${(cx + 7).toFixed(1)}" y="${(cy + 3.5).toFixed(1)}" font-size="9.5" fill="var(--ink-2)" ${mono}>${h.st.abbr}</text>`;
     }
-    g += `<g class="dot orow" data-key="${h.st.key}" data-tip="${h.st.name} · demand ${h.D.toFixed(1)}× typical · capture ${h.C.toFixed(1)}× typical · response ${h.ratio.toFixed(2)}× · ${STATUS[h.status].label}">
-      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="${STATUS[h.status].color}" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"/>${lbl}</g>`;
+    g += `<g class="dot orow" data-key="${h.st.key}" data-tip="${esc(h.st.name)} · ${esc(P.x)} ${pt.x.toFixed(1)}× typical · ${esc(P.y)} ${pt.y.toFixed(1)}× typical · ratio ${pt.ratio.toFixed(2)}× · ${STATUS[pt.status].label}">
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="${STATUS[pt.status].color}" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"/>${lbl}</g>`;
   });
   document.getElementById("oquad").innerHTML =
     `<svg viewBox="0 0 ${QW} ${QH}" role="img" aria-label="Demand lift vs capture lift by state, last 7 days">${g}</svg>
-    <div class="qnote">Each dot: how many times above its typical (median) day a state's search demand ran this week (x)
-    vs how many times above typical our organic traffic ran (y) — log scale. On the dashed diagonal = traffic multiplied
-    exactly as much as search did. Below it = search surged more than we did (e.g. demand 20×, capture 1.5×); above it =
-    we grew more than demand. The 1× lines mark "an ordinary week". Same 7-day clock and colors as the scorecard.
-    Hover for exact numbers; click to open the state.</div>`;
+    <div class="qnote">${{
+      dc: `Each dot: how many times above its typical (median) day a state's search demand ran this week (x) vs how many
+        times above typical our organic traffic ran (y) — log scale. On the dashed diagonal = traffic multiplied exactly as
+        much as search did. Below it = search surged more than we did (e.g. demand 20×, traffic 1.5×). Same 7-day clock and
+        colors as the scorecard.`,
+      dv: `Did Google show us more as searching rose? x = search demand lift, y = our Search Console impressions lift, both
+        over the 7 complete days to ${GSC_LAST != null ? fdate(DATA.dates[GSC_LAST]) : "–"}. Below the diagonal = demand grew
+        but our visibility didn't keep up — a ranking or indexing gap, not a click-through gap.`,
+      vc: `When we were shown, did people click? x = impressions lift, y = clicks lift (Search Console, same 7 days). Below
+        the diagonal = we were seen more but clicked proportionally less — a title/snippet or position problem.`,
+    }[qpreset]} The 1× lines mark "an ordinary week". Colors = this chart's own ratio (below 0.6× red, above 1.25×
+    green). Hover for exact numbers; click to open the state.</div>`;
   document.querySelectorAll("#oquad .dot").forEach(d => {
     d.addEventListener("pointermove", e => {
       tip.innerHTML = `<div class="d" style="margin:0">${d.dataset.tip}</div>`;
@@ -1063,19 +1348,7 @@ function buildOverview() {
       tip.style.left = tx + "px"; tip.style.top = ty + "px";
     });
     d.addEventListener("pointerleave", () => { tip.style.display = "none"; });
-  });
-
-  sec.querySelectorAll(".orow").forEach(el => {
-    const go = () => {
-      stateFilter = el.dataset.key;
-      const sf = document.getElementById("statef");
-      if (sf) sf.value = stateFilter;
-      applyStateFilter();
-      const card = document.querySelector(`.card[data-si]:not([hidden])`);
-      card && card.scrollIntoView({ behavior: "smooth", block: "start" });
-    };
-    el.addEventListener("click", go);
-    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    d.addEventListener("click", () => openState(d.dataset.key));
   });
 }
 
@@ -1212,6 +1485,28 @@ function renderMap(st, map) {
       } else {
         body += `<tr><td class="n" colspan="4" style="color:var(--muted)">trends not fetched yet</td></tr>`;
       }
+      if (GSC) {
+        const mg = m.gsc && m.gsc[gscType];
+        body += `<tr><td class="n" colspan="4" style="padding-top:7px;color:var(--muted)">Search Console · ${GSC_LABEL[gscType]} · queries mentioning "${esc(m.city)}"${GSC_LAST != null ? " · " + fdate(DATA.dates[GSC_LAST]) : ""}</td></tr>`;
+        if (mg && GSC_LAST != null && mg.i[GSC_LAST] != null) {
+          const j = GSC_LAST;
+          const ctrA = mg.c.map((c, k) => (mg.i[k] ? c / mg.i[k] * 100 : null));
+          const gd = (arr, off) => j - off >= 0 && arr[j] != null && arr[j - off] != null ? arr[j] - arr[j - off] : null;
+          const gcell = (d, better) => {
+            if (d == null) return `<td class="zero">–</td>`;
+            const v = Math.round(d * 10) / 10;
+            return `<td class="${v === 0 ? "zero" : (better ? v < 0 : v > 0) ? "pos" : ""}">${v > 0 ? "+" : ""}${v}</td>`;
+          };
+          const grow = (name, sw, arr, fv, lowerIsBetter) =>
+            `<tr><td class="n"><span class="sw">${sw}</span>${name}</td><td>${arr[j] == null ? "–" : fv(arr[j])}</td>${gcell(gd(arr, 1), lowerIsBetter)}${gcell(gd(arr, 7), lowerIsBetter)}</tr>`;
+          body += grow("impressions", legendSwatch({ color: "var(--gi)" }), mg.i, v => v, false);
+          body += grow("clicks", legendSwatch({ color: "var(--gc)" }), mg.c, v => v, false);
+          body += grow("CTR %", "", ctrA, v => v.toFixed(1), false);
+          body += grow("avg position", "", mg.p, v => v.toFixed(1), true);
+        } else {
+          body += `<tr><td class="n" colspan="4" style="color:var(--muted)">no "${esc(m.city)}" queries on ${GSC_LAST != null ? fdate(DATA.dates[GSC_LAST]) : "the latest day"}</td></tr>`;
+        }
+      }
       tip.innerHTML = `<div class="d">${m.name} metro</div>
         <table class="tt"><thead><tr><th>series</th><th>${fdate(DATA.dates[i])}</th><th>Δ 1d</th><th>Δ 7d</th></tr></thead>
         <tbody>${body}</tbody></table>`;
@@ -1334,6 +1629,43 @@ function initMovers() {
   buildMovers();
 }
 
+/* ---------- top queries (Search Console) ---------- */
+function buildTopQueries() {
+  const sec = document.getElementById("tq");
+  if (!GSC || !GSC.topQueries || !Object.keys(GSC.topQueries).length) { sec.hidden = true; return; }
+  sec.hidden = false;
+  const sel = document.getElementById("tqtype");
+  if (!sel.options.length) {
+    sel.innerHTML = Object.keys(GSC.topQueries).map(t => `<option value="${t}">${GSC_LABEL[t]}</option>`).join("");
+    sel.addEventListener("change", buildTopQueries);
+  }
+  const t = sel.value, tq = GSC.topQueries[t];
+  document.getElementById("tqnote").textContent =
+    `${fdate(GSC.topWindow[0])} – ${fdate(GSC.topWindow[1])} (last 7 complete days) vs ${fdate(GSC.prevWindow[0])} – ${fdate(GSC.prevWindow[1])} · ${GSC_LABEL[t]} search`;
+  const known = new Set(DATA.states.map(x => x.key));
+  const abbr = k => { const x = DATA.states.find(z => z.key === k); return x ? x.abbr : "–"; };
+  const open = r => known.has(r.state)
+    ? `<tr class="mrow tqrow" data-key="${r.state}" tabindex="0" title="${esc(r.page)}">`
+    : `<tr title="${esc(r.page)}">`;
+  const lead = (r, i) => `<td class="rk">${i + 1}</td><td class="kw" style="color:var(--ink)">${esc(r.q)}</td><td class="ab">${abbr(r.state)}</td>`;
+  const tail = r => `<td>${fmt(r.c)}</td><td>${fpct(r.ctr)}</td><td>${fposn(r.pos)}</td>`;
+  const cols = extra => `<colgroup><col style="width:22px"><col><col style="width:28px">${extra}<col style="width:50px"><col style="width:50px"><col style="width:42px"></colgroup>`;
+  document.getElementById("tqrise").innerHTML = tq.rising.length
+    ? `<table class="mtab">${cols('<col style="width:58px"><col style="width:62px">')}
+       <thead><tr><th class="l">#</th><th class="l">query</th><th class="l"></th><th>impr 7d</th><th>Δ vs prior</th><th>clicks</th><th>CTR</th><th>pos</th></tr></thead><tbody>` +
+      tq.rising.map((r, i) => `${open(r)}${lead(r, i)}<td>${fmt(r.i)}</td><td class="up">+${fmt(r.i - r.i0)}</td>${tail(r)}</tr>`).join("") + `</tbody></table>`
+    : `<div class="mempty">no query gained impressions this week</div>`;
+  document.getElementById("tqunr").innerHTML = tq.unranked.length
+    ? `<table class="mtab">${cols('<col style="width:58px">')}
+       <thead><tr><th class="l">#</th><th class="l">query</th><th class="l"></th><th>impr 7d</th><th>clicks</th><th>CTR</th><th>pos</th></tr></thead><tbody>` +
+      tq.unranked.map((r, i) => `${open(r)}${lead(r, i)}<td>${fmt(r.i)}</td>${tail(r)}</tr>`).join("") + `</tbody></table>`
+    : `<div class="mempty">no query with 20+ impressions ranked below position 10 this week</div>`;
+  sec.querySelectorAll(".tqrow").forEach(el => {
+    el.addEventListener("click", () => openState(el.dataset.key));
+    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openState(el.dataset.key); } });
+  });
+}
+
 /* ---------- hover ---------- */
 const tip = document.getElementById("tip");
 function attachHover(card) {
@@ -1344,11 +1676,12 @@ function attachHover(card) {
     if (!svg) return;
     const r = svg.getBoundingClientRect();
     const fx = (e.clientX - r.left) / r.width * W;
-    if (fx < ML - 6 || fx > W - MR + 6) { hideTip(svg); return; }
+    if (fx < ML - 6 || fx > W - MR + 6) { hideTip(chart); return; }
     const i = Math.max(r0, Math.min(r1, Math.round(r0 + (fx - ML) / IW * (r1 - r0))));
     const xi = ML + ((i - r0) / (r1 - r0)) * IW;
-    const xh = svg.querySelector(".xh");
-    xh.setAttribute("x1", xi); xh.setAttribute("x2", xi); xh.setAttribute("opacity", "0.55");
+    chart.querySelectorAll(".xh").forEach(xh => {
+      xh.setAttribute("x1", xi); xh.setAttribute("x2", xi); xh.setAttribute("opacity", "0.55");
+    });
     const sel = selOf(card, st);
     const { traf, kwS, kws, k25, label } = viewOf(st, sel);
     let rows = "";
@@ -1368,6 +1701,16 @@ function attachHover(card) {
       });
       if (todays.length > 6) rows += `<div class="row"><span class="n" style="color:var(--muted)">+${todays.length - 6} more fires</span></div>`;
     }
+    const gs = GSC ? gscOf(st, sel) : null;
+    if (gs && (visible.gi || visible.gc || gscStrip !== "off")) {
+      rows += `<div class="row" style="margin-top:4px"><span class="n" style="color:var(--muted)">Search Console · ${GSC_LABEL[gscType]}${sel ? ` · "${sel.city}" queries` : ""}</span></div>`;
+      if (gs.i[i] == null)
+        rows += `<div class="row"><span class="n" style="color:var(--muted)">not available for this day (lags ~2 days)</span></div>`;
+      else
+        rows += `<div class="row"><span class="n">${legendSwatch({ color: "var(--gi)" })} impressions</span><span class="v">${gs.i[i]}</span></div>
+          <div class="row"><span class="n">${legendSwatch({ color: "var(--gc)" })} clicks</span><span class="v">${gs.c[i]}</span></div>
+          <div class="row"><span class="n">CTR · avg position</span><span class="v">${gs.i[i] ? fpct(gs.c[i] / gs.i[i]) : "–"} · ${fposn(gs.p[i])}</span></div>`;
+    }
     tip.innerHTML = `<div class="d">${st.name} · ${fdateY(DATA.dates[i])} · ${label}</div>` + rows;
     tip.style.display = "block";
     const tw = tip.offsetWidth, th = tip.offsetHeight;
@@ -1377,11 +1720,11 @@ function attachHover(card) {
     tip.style.left = tx + "px"; tip.style.top = ty + "px";
   }));
   card.querySelectorAll(".chart").forEach(chart =>
-    chart.addEventListener("pointerleave", () => hideTip(chart.querySelector("svg"))));
+    chart.addEventListener("pointerleave", () => hideTip(chart)));
 }
-function hideTip(svg) {
+function hideTip(el) {
   tip.style.display = "none";
-  if (svg) { const xh = svg.querySelector(".xh"); if (xh) xh.setAttribute("opacity", "0"); }
+  if (el) el.querySelectorAll(".xh").forEach(xh => xh.setAttribute("opacity", "0"));
 }
 
 /* ---------- boot ---------- */
@@ -1395,6 +1738,7 @@ buildControls();
 buildCards();
 buildOverview();
 initMovers();
+buildTopQueries();
 renderAll();
 </script>
 """

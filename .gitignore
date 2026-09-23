@@ -1,0 +1,8 @@
+# raw Search Console rows (query-level) stay on the maintainer's machine; only
+# the aggregate pipeline/gsc_daily.json is published
+*.sqlite
+*.sqlite-journal
+*.sqlite.bak
+logs/
+.venv/
+__pycache__/
