@@ -282,7 +282,9 @@ HTML = r"""<meta charset="utf-8">
     --fm: #2a78d6;      /* fire map */
     --fn: #4a3aa7;      /* fire near */
     --gi: #e87ba4;      /* search console impressions */
-    --gc: #2a78d6;      /* search console clicks */
+    --gc: #2a78d6;      /* search console clicks / CTR */
+    --gp: var(--ink);   /* search console avg position (dotted) */
+    --range-bg: rgba(42,120,214,.13);   /* date picker: days inside the range */
     --traffic: #6f6d67;
     --traffic-fill: rgba(137,135,129,.20);
     --fire-mk: #eda100;
@@ -306,6 +308,7 @@ HTML = r"""<meta charset="utf-8">
       --fn: #9085e9;
       --gi: #d55181;
       --gc: #3987e5;
+      --range-bg: rgba(57,135,229,.24);
       --traffic: #a3a19a;
       --traffic-fill: rgba(137,135,129,.22);
       --fire-mk: #c98500;
@@ -329,6 +332,7 @@ HTML = r"""<meta charset="utf-8">
     --fn: #9085e9;
     --gi: #d55181;
     --gc: #3987e5;
+    --range-bg: rgba(57,135,229,.24);
     --traffic: #a3a19a;
     --traffic-fill: rgba(137,135,129,.22);
     --fire-mk: #c98500;
@@ -382,6 +386,44 @@ HTML = r"""<meta charset="utf-8">
   .lg.off .sw { text-decoration: line-through; }
   .lg svg { display: block; }
   .controls .gap { flex: 1; }
+  .controls .cbreak { flex-basis: 100%; height: 0; }
+  .dbtn { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 500; }
+  .dbtn .lbl { color: var(--muted); font-weight: 400; }
+  details.pop.dpick .popbody { flex-direction: row; align-items: flex-start; gap: 14px; padding: 12px; }
+  .dpresets { display: flex; flex-direction: column; gap: 2px; min-width: 116px; }
+  .dpresets button { font: inherit; font-size: 12.5px; text-align: left; padding: 5px 9px; border: 0; border-radius: 6px;
+    background: transparent; color: var(--ink-2); cursor: pointer; white-space: nowrap; }
+  .dpresets button:hover { background: var(--chip-bg); }
+  .dpresets button.on { background: var(--ink); color: var(--bg); font-weight: 600; }
+  .dcals { display: flex; gap: 18px; border-left: 1px solid var(--border); padding-left: 14px; }
+  .dcal { width: 212px; }
+  .dchead { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .dchead b { color: var(--ink); font-weight: 600; text-transform: none; letter-spacing: 0; font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 12.5px; margin-left: 4px; }
+  .dcnav { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; font-weight: 600;
+    color: var(--ink); margin-bottom: 4px; }
+  .dnav { font: inherit; font-size: 15px; line-height: 1; width: 26px; height: 26px; border: 1px solid var(--border);
+    border-radius: 6px; background: transparent; color: var(--ink-2); cursor: pointer; }
+  .dnav:disabled { opacity: .3; cursor: default; }
+  .dgrid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 2px; }
+  .dgrid .dow { font-size: 10.5px; color: var(--muted); text-align: center; padding: 2px 0 4px; }
+  .dday { font: inherit; font-size: 12px; height: 28px; padding: 0; border: 0; border-radius: 0; background: transparent;
+    color: var(--ink); cursor: pointer; font-variant-numeric: tabular-nums; }
+  .dday:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--muted); border-radius: 6px; }
+  .dday:disabled { color: var(--axis); cursor: default; }
+  .dday.in { background: var(--range-bg); }
+  .dday.rs { border-radius: 6px 0 0 6px; }
+  .dday.re { border-radius: 0 6px 6px 0; }
+  .dday.rs.re, .dday.pick { border-radius: 6px; }
+  .dday.pick { background: var(--ink); color: var(--bg); font-weight: 600; }
+  .dday:focus-visible, .dnav:focus-visible, .dpresets button:focus-visible { outline: 2px solid var(--fm); outline-offset: -2px; }
+  .card, .mapcard { scroll-margin-top: calc(var(--ctrl-h, 0px) + 10px); }
+  @media (max-width: 700px) {
+    .controls { position: static; }
+    details.pop.dpick .popbody { flex-direction: column; max-width: calc(100vw - 24px); }
+    .dpresets { flex-direction: row; flex-wrap: wrap; }
+    .dcals { flex-direction: column; border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 10px; }
+  }
   .smooth { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 12.5px; cursor: pointer; }
   .smooth input { accent-color: var(--fm); }
   .axis-note { width: 100%; color: var(--muted); font-size: 11.5px; padding-top: 2px; }
@@ -395,7 +437,8 @@ HTML = r"""<meta charset="utf-8">
   }
   .overview h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
   .overview .osub { color: var(--muted); font-size: 11.5px; margin-bottom: 10px; }
-  .ocols { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  .ocols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  #msurge, #tqlist { overflow-x: auto; }
   .quad #oquad { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: flex-start; }
   .quad #oquad svg { flex: 0 1 470px; }
   .quad #oquad .qnote { flex: 1 1 280px; margin-top: 16px; }
@@ -452,7 +495,6 @@ HTML = r"""<meta charset="utf-8">
   .howto svg { vertical-align: -1px; }
   .impact select { font: inherit; font-size: 12px; color: var(--ink); background: transparent;
     border: 1px solid var(--border); border-radius: 6px; padding: 1px 4px; cursor: pointer; }
-  .chart svg.strip { margin-top: 2px; }
   .overview .qnote, .movers .qnote { color: var(--muted); font-size: 11.5px; margin-top: 6px; max-width: 92ch; }
   .mtab td.stcell { overflow: visible; text-overflow: clip; }
   .mtab td.dim { color: var(--ink-2); }
@@ -537,14 +579,7 @@ HTML = r"""<meta charset="utf-8">
   .maplegend .li { display: flex; align-items: center; gap: 7px; }
   .maplegend .li svg { width: 22px; height: 12px; flex: none; }
   .maplegend .swb { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
-  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-  @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
-  .chart .rlabel {
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 10.5px; color: var(--muted);
-    text-transform: uppercase; letter-spacing: .05em;
-    margin: 6px 0 2px;
-  }
+  .chart { margin-top: 8px; }
 
   .card {
     background: var(--surface);
@@ -626,7 +661,8 @@ HTML = r"""<meta charset="utf-8">
   </header>
   <p class="sub">Google search interest for fire keywords vs. daily unique users on this
   site's state &amp; incident pages (each state's total = its state page + all its fire pages).
-  Every series is indexed so timing and shape line up: <b>100&nbsp;= that area's peak in the window</b>.
+  Every series is indexed so timing and shape line up: <b>100&nbsp;= that area's peak in the window</b>
+  (Search Console position and CTR use their own units on the right-hand axis).
   Search interest is measured in-state (queries from within the state), or per metro via the dropdown on each card.
   Hover any chart for exact values; raw user counts are in the tooltip and tables.</p>
 
@@ -682,7 +718,7 @@ HTML = r"""<meta charset="utf-8">
     <b>us</b> = the same for our organic visits (search-engine referrers: Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave).
     Status comes from us ÷ search, whether search rose or fell: below 0.6× = missing demand (our traffic fell behind search),
     above 1.25× = outperforming, otherwise tracking. <b>Est. missed visits/wk</b> = (search multiple − our multiple) × our
-    typical day × 7. <b>Likely why</b> reads Search Console over the same stretch: "losing visibility" = Google impressions
+    typical day × 7. <b>Likely why</b> reads Search Console over the same stretch: "losing visibility" = impressions
     didn't keep up with search (a ranking or indexing gap); "shown, not clicked" = impressions rose but clicks didn't
     (a title/snippet or position gap); "Google clicks kept pace" = the shortfall is outside Google search.
     <b>Can't judge yet:</b> Google Trends reports low-volume days as zero except for the most recent ~14 days of each
@@ -691,8 +727,14 @@ HTML = r"""<meta charset="utf-8">
     with 7 days, while a real surge still registers the day after it starts. The quadrant plots any two of these
     multiples on log axes, capped at 24× (states past the cap are drawn scaled down along their own ray, so they stay on
     the correct side of the diagonal).</p>
-    <p><b>Zoom view.</b> The right-hand chart shows the same indexed series restricted to July 1 – end of window,
-    with its y-axis rescaled to the maximum visible in that period; index values are unchanged from the full view.</p>
+    <p><b>Chart dates.</b> The date button at the top sets the window every state chart shows: the last 7, 14, 30 or 90
+    days, all data, or any start and end day picked on its two calendars. The health tables, surge list and opportunities
+    keep their own fixed windows. The left axis rescales to the largest value visible in the chosen dates, but index
+    values don't change when you pick dates: traffic and Search Console impressions stay indexed to their own peak over
+    the whole window, and the search terms share one Google Trends scale per area (100 = the busiest term-day). Search
+    Console average position and CTR are plotted on the right-hand axis in their own units, sharing the left axis'
+    gridlines; position is inverted (1 = top result at the top). With 7-day smoothing on, both are impression-weighted
+    over the 7 days.</p>
     <p><b>Metro view.</b> The dropdown on a state card narrows both series to one metro area: site traffic counts only
     visitors whose GeoIP location is within 50 miles of the metro's biggest city (still viewing that state's pages), and
     search interest is fetched for the metro's own Google Trends market (Nielsen DMA, e.g. geo US-OR-820 for Portland).
@@ -749,14 +791,13 @@ const KW_META = [
   { tpl: "fire near", varr: "city", color: "var(--fn)", dash: "6 4" },  /* metro view only */
 ];
 /* "wildfire {state}" (zero on ~95% of days) and "fire near me" start hidden under "more terms" */
-const visible = { traffic: true, k0: false, k1: true, k2: true, k3: false, k4: true, fires: true, gi: true };
+const visible = { traffic: true, k0: false, k1: true, k2: true, k3: false, k4: true, fires: true, gi: true, gpos: true, gctr: false };
 let smooth = false;
 let y25 = false;
 let mode = "state";
 const GSC = DATA.gsc;
 const GSC_LABEL = { web: "Web", image: "Image", video: "Video", news: "News tab", discover: "Discover", googleNews: "Google News" };
 const gscType = "web";   /* image/video/news are <1% of web impressions */
-let gscStrip = "pos";   /* "pos" | "ctr" | "off" */
 const MODE_LABEL = { state: "in-state", national: "national" };
 const MODE_GEO = { state: "geo US-XX (in-state)", national: "geo US (national)" };
 
@@ -829,7 +870,7 @@ function legendSwatch(meta) {
     return '<svg width="22" height="12" aria-hidden="true"><path d="M11 1.5 L15 6 L11 10.5 L7 6 Z" fill="var(--fire-mk)" stroke="var(--ink-2)" stroke-width="0.6"/></svg>';
   if (meta === "fires_h")
     return '<svg width="22" height="12" aria-hidden="true"><path d="M11 2 L14.5 6 L11 10 L7.5 6 Z" fill="none" stroke="var(--fire-mk)" stroke-width="1.4"/></svg>';
-  return `<svg width="22" height="12" aria-hidden="true"><line x1="1" y1="6" x2="21" y2="6" stroke="${meta.color}" stroke-width="2.4"${meta.dash ? ` stroke-dasharray="${meta.dash}"` : ""}/></svg>`;
+  return `<svg width="22" height="12" aria-hidden="true"><line x1="2" y1="6" x2="20" y2="6" stroke="${meta.color}" stroke-width="2.4"${meta.dash ? ` stroke-dasharray="${meta.dash}"` : ""}${meta.cap ? ` stroke-linecap="round"` : ""}/></svg>`;
 }
 let stateFilter = "-1";
 function chip(k, sw, label) {
@@ -841,14 +882,13 @@ function buildControls() {
   const both = `<svg width="22" height="12" aria-hidden="true"><line x1="1" y1="3.5" x2="21" y2="3.5" stroke="var(--f)" stroke-width="2"/><line x1="1" y1="8.5" x2="21" y2="8.5" stroke="var(--f)" stroke-width="2" stroke-dasharray="4 3"/></svg>`;
   let html = `<select class="statef" id="statef" aria-label="State filter"><option value="-1">All states</option>` +
     DATA.states.map(st => `<option value="${st.key}">${st.name}</option>`).join("") + `</select>`;
-  html += chip("traffic", legendSwatch("traffic"), "our traffic");
-  html += chip("k1,k2", both, `fire <span style="color:var(--muted)">{state / abbr}</span>`);
-  html += chip("fires", legendSwatch("fires"), "fire starts");
-  if (GSC) html += chip("gi", legendSwatch({ color: "var(--gi)" }), "GSC impressions");
-  html += `<details class="pop"><summary class="lg">more terms ▾</summary><div class="popbody">
-      ${chip("k0", legendSwatch(KW_META[0]), `wildfire <span style="color:var(--muted)">{state}</span>`)}
-      ${chip("k3", legendSwatch(KW_META[3]), "fire near me")}
-      ${chip("k4", legendSwatch(KW_META[4]), `fire near <span style="color:var(--muted)">{city} · metro view</span>`)}
+  html += `<details class="pop dpick" id="dpick"><summary class="lg dbtn" title="Dates shown on every state chart">
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1.5" y="2.5" width="11" height="10" rx="1.5"/><line x1="1.5" y1="5.6" x2="12.5" y2="5.6"/><line x1="4.5" y1="1" x2="4.5" y2="3.8"/><line x1="9.5" y1="1" x2="9.5" y2="3.8"/></svg>
+      <span id="dlabel"></span> ▾</summary>
+    <div class="popbody dpbody">
+      <div class="dpresets" role="group" aria-label="Date presets">` +
+      RANGE_PRESETS.map(([k, l]) => `<button type="button" data-p="${k}" aria-pressed="false">${l}</button>`).join("") + `</div>
+      <div class="dcals"><div class="dcal" id="dcal-start"></div><div class="dcal" id="dcal-end"></div></div>
     </div></details>`;
   html += `<span class="gap"></span>`;
   html += `<label class="smooth"><input type="checkbox" id="sm"> 7-day smooth</label>`;
@@ -859,16 +899,30 @@ function buildControls() {
         <b id="ipopv">2k</b> people within
         <input type="range" id="irad" min="0" max="${RING_STEPS.length - 1}" step="1" value="${RING_STEPS.indexOf(impact.ring)}" aria-label="Impactful radius">
         <b id="iradv">5 mi</b></div>
-      ${GSC ? `<div class="prow">strip under each chart
-        <select id="gstrip" aria-label="Metric shown under each chart"><option value="pos">Search Console avg position</option><option value="ctr">Search Console CTR</option><option value="off">off</option></select></div>` : ""}
     </div></details>`;
   html += `<button class="lg" id="howtoBtn" aria-expanded="false">ⓘ how to read</button>`;
+  html += `<span class="cbreak"></span>`;
+  html += chip("traffic", legendSwatch("traffic"), "our traffic");
+  html += chip("k1,k2", both, `fire <span style="color:var(--muted)">{state / abbr}</span>`);
+  html += chip("fires", legendSwatch("fires"), "fire starts");
+  if (GSC) {
+    html += chip("gi", legendSwatch({ color: "var(--gi)" }), "GSC impressions");
+    html += chip("gpos", legendSwatch({ color: "var(--gp)", dash: "0.1 3.6", cap: true }), `GSC avg position <span style="color:var(--muted)">· right axis</span>`);
+    html += chip("gctr", legendSwatch({ color: "var(--gc)" }), `GSC CTR <span style="color:var(--muted)">· right axis</span>`);
+  }
+  html += `<details class="pop"><summary class="lg">more terms ▾</summary><div class="popbody">
+      ${chip("k0", legendSwatch(KW_META[0]), `wildfire <span style="color:var(--muted)">{state}</span>`)}
+      ${chip("k3", legendSwatch(KW_META[3]), "fire near me")}
+      ${chip("k4", legendSwatch(KW_META[4]), `fire near <span style="color:var(--muted)">{city} · metro view</span>`)}
+    </div></details>`;
   c.innerHTML = html;
 
   document.getElementById("howto").innerHTML = `Every line is indexed so shapes line up: 100 = that series' peak in the window.
     Search terms are in-state Google Trends (searches made from within the state); pick a metro on a card for metro-level data.
     The green chip draws "fire {state}" solid and the two-letter abbreviation dashed. Search Console impressions (pink) are indexed
-    the same way; the strip under each chart shows average position (1 = the top result) or CTR, and Search Console lags about two days.
+    the same way. Search Console average position (dotted) and CTR (blue) are drawn in their own units on the right-hand axis;
+    position is inverted so 1, the top result, sits at the top. Search Console lags about two days.
+    The date button at the top sets the window every state chart shows.
     In a metro view, Search Console covers queries that mention the metro's biggest city. Fire markers: ${legendSwatch("fires")} = impactful
     under the current settings, ${legendSwatch("fires_h")} = not. Full definitions are in the notes at the bottom of the page.`;
   document.getElementById("howtoBtn").addEventListener("click", e => {
@@ -876,9 +930,20 @@ function buildControls() {
     h.hidden = !h.hidden;
     e.currentTarget.setAttribute("aria-expanded", String(!h.hidden));
   });
+  /* composedPath: a click that re-renders the popover (month arrows) must not count as "outside" */
   document.addEventListener("click", e => {
-    document.querySelectorAll("details.pop[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
+    const path = e.composedPath();
+    document.querySelectorAll("details.pop[open]").forEach(d => { if (!path.includes(d)) d.open = false; });
   });
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    document.querySelectorAll("details.pop[open]").forEach(d => { d.open = false; d.querySelector("summary").focus(); });
+  });
+  /* keep jump-to-card targets clear of the sticky bar */
+  const setCtrlH = () => document.documentElement.style.setProperty("--ctrl-h",
+    (getComputedStyle(c).position === "sticky" ? c.offsetHeight : 0) + "px");
+  if (window.ResizeObserver) new ResizeObserver(setCtrlH).observe(c);
+  setCtrlH();
   document.getElementById("statef").addEventListener("change", e => {
     stateFilter = e.target.value;
     applyStateFilter();
@@ -892,8 +957,77 @@ function buildControls() {
     renderAll();
   }));
   document.getElementById("sm").addEventListener("change", e => { smooth = e.target.checked; renderAll(); });
-  const gsSel = document.getElementById("gstrip");
-  if (gsSel) gsSel.addEventListener("change", e => { gscStrip = e.target.value; renderAll(); });
+  /* ---- chart dates: presets + a start calendar and an end calendar ---- */
+  const dpick = document.getElementById("dpick");
+  const D0 = DATA.dates[0], D1 = DATA.dates[N - 1];
+  const ymd = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const monthOf = iso => { const [y, m] = iso.split("-"); return { y: +y, m: +m - 1 }; };
+  const calView = {};
+  const presetOf = () => range.r1 !== N - 1 ? "custom" : range.r0 === 0 ? "all"
+    : (RANGE_PRESETS.find(([k]) => k !== "all" && N - +k === range.r0) || ["custom"])[0];
+  function renderCal(which) {
+    const el = document.getElementById("dcal-" + which), v = calView[which];
+    const first = new Date(v.y, v.m, 1), days = new Date(v.y, v.m + 1, 0).getDate();
+    const s0 = DATA.dates[range.r0], s1 = DATA.dates[range.r1], picked = which === "start" ? s0 : s1;
+    const canPrev = ymd(v.y, v.m, 1) > D0, canNext = ymd(v.y, v.m, days) < D1;
+    let h = `<div class="dchead">${which === "start" ? "Start" : "End"} <b>${fdateY(picked)}</b></div>
+      <div class="dcnav"><button type="button" class="dnav" data-dir="-1" aria-label="Previous month"${canPrev ? "" : " disabled"}>‹</button>
+      <span>${first.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
+      <button type="button" class="dnav" data-dir="1" aria-label="Next month"${canNext ? "" : " disabled"}>›</button></div>
+      <div class="dgrid">` + ["S", "M", "T", "W", "T", "F", "S"].map(d => `<span class="dow" aria-hidden="true">${d}</span>`).join("");
+    for (let k = 0; k < first.getDay(); k++) h += `<span></span>`;
+    for (let d = 1; d <= days; d++) {
+      const iso = ymd(v.y, v.m, d);
+      const cls = [iso === picked ? "pick" : "", iso >= s0 && iso <= s1 ? "in" : "", iso === s0 ? "rs" : "", iso === s1 ? "re" : ""].filter(Boolean).join(" ");
+      h += `<button type="button" class="dday ${cls}" data-d="${iso}"${iso < D0 || iso > D1 ? " disabled" : ""}
+        aria-label="${which} date ${fdateY(iso)}" aria-pressed="${iso === picked}">${d}</button>`;
+    }
+    el.innerHTML = h + `</div>`;
+  }
+  const syncRange = (resetViews = true) => {
+    range.preset = presetOf();
+    const pl = (RANGE_PRESETS.find(([k]) => k === range.preset) || [])[1];
+    document.getElementById("dlabel").innerHTML = pl ? `${pl} <span class="lbl">· ${rangeText()}</span>` : rangeText();
+    dpick.querySelectorAll("[data-p]").forEach(b => {
+      const on = b.dataset.p === range.preset;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    if (resetViews || !calView.start) { calView.start = monthOf(DATA.dates[range.r0]); calView.end = monthOf(DATA.dates[range.r1]); }
+    renderCal("start"); renderCal("end");
+    try { localStorage.setItem("wdo-chart-range", JSON.stringify(range.preset === "custom"
+      ? { p: "custom", from: DATA.dates[range.r0], to: DATA.dates[range.r1] } : { p: range.preset })); } catch (e) {}
+  };
+  /* first index on or after a YYYY-MM-DD date */
+  const idxAt = d => { const i = DATA.dates.findIndex(x => x >= d); return i < 0 ? N - 1 : i; };
+  try {
+    const saved = JSON.parse(localStorage.getItem("wdo-chart-range") || "null");
+    if (saved && saved.p === "custom" && saved.from && saved.to) {
+      const [a, b] = saved.from <= saved.to ? [saved.from, saved.to] : [saved.to, saved.from];
+      if (b >= D0 && a <= D1) setRange("custom", idxAt(a), idxAt(b));   /* ignore a range the data has moved past */
+    } else if (saved && RANGE_PRESETS.some(([k]) => k === saved.p)) setRange(saved.p);
+  } catch (e) {}
+  syncRange();
+  dpick.querySelector(".dpbody").addEventListener("click", e => {
+    const pr = e.target.closest("[data-p]"), nav = e.target.closest(".dnav"), day = e.target.closest(".dday");
+    if (pr) { setRange(pr.dataset.p); syncRange(); renderAll(); dpick.open = false; return; }
+    if (nav && !nav.disabled) {
+      const which = nav.closest(".dcal").id.slice(5), v = calView[which];
+      const d = new Date(v.y, v.m + +nav.dataset.dir, 1);
+      calView[which] = { y: d.getFullYear(), m: d.getMonth() };
+      renderCal(which);
+      return;
+    }
+    if (day && !day.disabled) {
+      /* move the picked end; if it crosses the other end, carry that one along to keep the span */
+      const which = day.closest(".dcal").id.slice(5), i = DIDX[day.dataset.d], span = range.r1 - range.r0;
+      if (which === "start") setRange("custom", i, i < range.r1 ? range.r1 : i + span);
+      else setRange("custom", i > range.r0 ? range.r0 : i - span, i);
+      syncRange(false); renderAll();
+      const again = dpick.querySelector(`#dcal-${which} .dday[data-d="${DATA.dates[which === "start" ? range.r0 : range.r1]}"]`);
+      if (again) again.focus();
+    }
+  });
   let raf = 0;
   const queueRender = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; renderAll(); }); };
   document.getElementById("ipop").addEventListener("input", e => {
@@ -909,10 +1043,8 @@ function buildControls() {
 }
 
 /* ---------- chart ---------- */
-const W = 860, H = 248, ML = 38, MR = 10, MT = 20, MB = 22;
-const IW = W - ML - MR, IH = H - MT - MB;
 const N = DATA.dates.length;
-const zoomStart = Math.max(0, DATA.dates.findIndex(d => d >= DATA.dates[N-1].slice(0, 4) + "-07-01"));
+const ML = 38, MT = 22, MB = 22, RAX = 42;   /* RAX = width of each right-hand axis column */
 const DIDX = {};
 DATA.dates.forEach((d, i) => DIDX[d] = i);
 /* last complete Search Console day on the dashboard axis */
@@ -929,11 +1061,46 @@ function fireMap(st) {
   }
   return st._fmap;
 }
-const RANGES = { full: [0, N-1], zoom: [zoomStart, N-1] };
-const RANGE_LABEL = {
-  full: `full window · ${fdate(DATA.dates[0])} – ${fdate(DATA.dates[N-1])}`,
-  zoom: `zoom · ${fdate(DATA.dates[zoomStart])} – ${fdate(DATA.dates[N-1])}`,
-};
+
+/* one date range for every state chart, set from the bar at the top */
+const RANGE_PRESETS = [["7", "Last 7 days"], ["14", "Last 14 days"], ["30", "Last 30 days"], ["90", "Last 90 days"], ["all", "All data"]];
+const range = { preset: "90", r0: 0, r1: N - 1 };
+function setRange(preset, r0, r1) {
+  range.preset = preset;
+  if (preset !== "custom") { r1 = N - 1; r0 = preset === "all" ? 0 : N - +preset; }
+  r0 = Math.max(0, Math.min(N - 2, r0));
+  r1 = Math.max(r0 + 1, Math.min(N - 1, r1));   /* at least two days so the x-axis has a span */
+  range.r0 = r0; range.r1 = r1;
+}
+setRange("90");
+const rangeText = () => `${fdate(DATA.dates[range.r0])} – ${fdate(DATA.dates[range.r1])}`;
+
+/* right-hand axes: Search Console avg position and CTR in their own units */
+const rightAxes = () => GSC ? ["gpos", "gctr"].filter(k => visible[k]) : [];
+/* every card is the same width, so one geometry serves all charts (and keeps their x-axes aligned) */
+function chartGeom() {
+  const grid = document.getElementById("grid");
+  const w = Math.max(300, Math.round((grid && grid.clientWidth ? grid.clientWidth : 900) - 34));
+  const h = w < 560 ? 210 : 260;
+  const nr = rightAxes().length;
+  const mr = nr ? 6 + RAX * nr : 12;
+  return { w, h, mr, iw: w - ML - mr, ih: h - MT - MB };
+}
+/* impression-weighted daily (or centered 7-day) Search Console ratio: "pos" or "ctr" (in %) */
+function gscRatio(gs, kind) {
+  return DATA.dates.map((_, i) => {
+    if (gs.i[i] == null) return null;
+    const a = smooth ? Math.max(0, i - 3) : i, b = smooth ? Math.min(N - 1, i + 3) : i;
+    let num = 0, den = 0;
+    for (let j = a; j <= b; j++) {
+      if (!gs.i[j]) continue;
+      if (kind === "ctr") { num += gs.c[j]; den += gs.i[j]; }
+      else if (gs.p[j] != null) { num += gs.p[j] * gs.i[j]; den += gs.i[j]; }
+    }
+    return den ? (kind === "ctr" ? num / den * 100 : num / den) : null;
+  });
+}
+const stepUp = (raw, steps) => steps.find(s => s >= raw - 1e-9) || steps[steps.length - 1] * Math.ceil(raw / steps[steps.length - 1]);
 
 function niceAxis(rawMax) {
   if (!(rawMax > 0)) rawMax = 100;
@@ -945,90 +1112,156 @@ function niceAxis(rawMax) {
   return { step, ymax: Math.ceil(rawMax / step) * step };
 }
 
-function renderChart(st, rkey, sel) {
-  const [r0, r1] = RANGES[rkey];
-  const Xr = i => ML + ((i - r0) / (r1 - r0)) * IW;
+/* x-axis labels sized to the range: days, every other day, Mondays (1/2/4-weekly) or months,
+   whichever is the finest that fits */
+function xTicks(r0, r1, iw) {
+  const span = r1 - r0, maxL = Math.max(2, Math.floor(iw / 58)), out = [];
+  const dt = i => { const [y, m, d] = DATA.dates[i].split("-"); return new Date(+y, m - 1, +d); };
+  const lab = i => dt(i).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (span + 1 <= maxL) { for (let i = r0; i <= r1; i++) out.push([i, lab(i), "middle"]); return out; }
+  if (span <= 31 && Math.floor(span / 2) + 1 <= maxL) { for (let i = r1; i >= r0; i -= 2) out.unshift([i, lab(i), "middle"]); return out; }
+  const wk = span <= 120 && [7, 14, 28].find(e => Math.floor(span / e) + 1 <= maxL);
+  if (wk) {
+    let mondays = 0;
+    for (let i = r0; i <= r1; i++) if (dt(i).getDay() === 1 && mondays++ % (wk / 7) === 0) out.push([i, lab(i), "middle"]);
+    return out;
+  }
+  const every = [1, 2, 3, 6].find(e => Math.floor(span / 30.44 / e) + 1 <= maxL) || 12;
+  for (let i = r0; i <= r1; i++) {
+    const d = dt(i);
+    /* month names start at the 1st; drop one that would run past the right edge */
+    if (d.getDate() === 1 && d.getMonth() % every === 0 && (i - r0) / span * iw < iw - 22)
+      out.push([i, d.toLocaleDateString(undefined, { month: "short" }), "start"]);
+  }
+  return out;
+}
+
+function renderChart(st, sel, G) {
+  const { r0, r1 } = range;
+  const { w, h, mr, iw, ih } = G;
+  const Xr = i => ML + ((i - r0) / (r1 - r0)) * iw;
   const { traf, kwS, k25 } = viewOf(st, sel);
   const hasTraffic = !!traf;
   const trafMax = hasTraffic ? Math.max(...traf, 1) : 1;
   const trafIdx = hasTraffic ? traf.map(v => v / trafMax * 100) : null;
   const disp = s => smooth ? smooth7(s) : s;
-
-  let rawMax = 0;
-  const scan = s => { for (let i = r0; i <= r1; i++) if (s[i] > rawMax) rawMax = s[i]; };
-  if (visible.traffic && hasTraffic) scan(disp(trafIdx));
   const dispN = s => smooth ? smooth7n(s) : s;
+  const mono = `font-family="IBM Plex Mono, monospace"`;
+
+  /* left axis: indexed series, fitted to what's visible in the range */
+  let rawMax = 0;
+  const scan = s => { for (let i = r0; i <= r1; i++) if (s[i] != null && s[i] > rawMax) rawMax = s[i]; };
+  if (visible.traffic && hasTraffic) scan(disp(trafIdx));
   if (kwS) kwS.forEach((s, i) => { if (visible["k"+i] && s.length) scan(dispN(s)); });
   if (k25) k25.forEach((s, i) => { if (visible["k"+i] && s.length) scan(disp(s)); });
   const gs = gscOf(st, sel);
   const gLines = gs && visible.gi ? [["gi", dispN(idxOf(gs.i)), "var(--gi)"]] : [];
   gLines.forEach(([, s]) => scan(s));
-  if (rkey === "full") rawMax = Math.max(rawMax, 100);
   const { step, ymax } = niceAxis(rawMax);
-  const Y = v => MT + IH - (v / ymax) * IH;
+  const nGrid = Math.round(ymax / step);
+  const Y = v => MT + ih - (v / ymax) * ih;
 
-  function path(series) {
-    let d = "";
-    for (let i = r0; i <= r1; i++) d += (i > r0 ? "L" : "M") + Xr(i).toFixed(1) + " " + Y(series[i]).toFixed(1);
-    return d;
-  }
-  /* gaps where a value is missing (null) instead of drawing it as zero */
-  function pathN(series) {
+  /* right axes share the left axis' gridlines: same number of steps, their own nice step size */
+  const rAxes = rightAxes().map((k, ai) => {
+    const series = gs ? gscRatio(gs, k === "gpos" ? "pos" : "ctr") : null;
+    const vals = series ? series.slice(r0, r1 + 1).filter(v => v != null) : [];
+    const ax = { k, series, x: w - mr + 8 + ai * RAX, has: vals.length > 0 };
+    if (k === "gpos") {      /* inverted: 1 = top result at the top */
+      const hi = vals.length ? Math.max(...vals) : 1;
+      ax.step = stepUp(Math.max(0, hi - 1) / nGrid, [1, 2, 3, 4, 5, 10, 15, 20, 25, 50, 100]);
+      ax.Y = v => MT + (v - 1) / (ax.step * nGrid) * ih;
+      ax.tick = kk => String(1 + kk * ax.step);
+      ax.color = "var(--gp)"; ax.title = "pos";
+    } else {
+      ax.step = stepUp(vals.length ? Math.max(...vals) / nGrid : 0, [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50]);
+      ax.Y = v => MT + ih - v / (ax.step * nGrid) * ih;
+      ax.tick = kk => String(+(kk * ax.step).toFixed(2)) + "%";
+      ax.color = "var(--gc)"; ax.title = "CTR";
+    }
+    return ax;
+  });
+
+  const pathOf = (series, Yf) => {
     let d = "", pen = false;
     for (let i = r0; i <= r1; i++) {
       if (series[i] == null) { pen = false; continue; }
-      d += (pen ? "L" : "M") + Xr(i).toFixed(1) + " " + Y(series[i]).toFixed(1);
+      d += (pen ? "L" : "M") + Xr(i).toFixed(1) + " " + Yf(series[i]).toFixed(1);
       pen = true;
     }
     return d;
-  }
+  };
 
   let g = "";
-  for (let k = 0; k * step <= ymax + 1e-9; k++) {
-    const v = k * step;
-    g += `<line x1="${ML}" y1="${Y(v).toFixed(1)}" x2="${W-MR}" y2="${Y(v).toFixed(1)}" stroke="${v === 0 ? "var(--axis)" : "var(--grid)"}" stroke-width="1"/>`;
-    if (v > 0) g += `<text x="${ML-6}" y="${(Y(v)+3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${step < 1 ? v.toFixed(1) : v}</text>`;
+  g += `<text x="${ML - 6}" y="${MT - 10}" text-anchor="end" font-size="9.5" fill="var(--muted)" ${mono}>INDEX</text>`;
+  for (let k = 0; k <= nGrid; k++) {
+    const v = k * step, y = Y(v).toFixed(1);
+    g += `<line x1="${ML}" y1="${y}" x2="${w - mr}" y2="${y}" stroke="${v === 0 ? "var(--axis)" : "var(--grid)"}" stroke-width="1"/>`;
+    if (v > 0) g += `<text x="${ML - 6}" y="${(+y + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--muted)" ${mono}>${+v.toFixed(3)}</text>`;
   }
-  for (let i = r0; i <= r1; i++) if (DATA.dates[i].slice(8) === "01") {
-    const [y, m] = DATA.dates[i].split("-");
-    g += `<text x="${Xr(i).toFixed(1)}" y="${H-6}" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${new Date(+y, m-1, 1).toLocaleDateString(undefined, {month:"short"})}</text>`;
-  }
+  rAxes.forEach(ax => {
+    g += `<text x="${ax.x}" y="${MT - 10}" font-size="9.5" fill="${ax.color}" ${mono}>${ax.title.toUpperCase()}</text>`;
+    if (!ax.has) { g += `<text x="${ax.x}" y="${MT + 12}" font-size="10" fill="var(--muted)" ${mono}>–</text>`; return; }
+    for (let k = 0; k <= nGrid; k++) {
+      const y = (ax.k === "gpos" ? ax.Y(1 + k * ax.step) : ax.Y(k * ax.step));
+      g += `<text x="${ax.x}" y="${(y + 3.5).toFixed(1)}" font-size="10" fill="${ax.color}" ${mono}>${ax.tick(k)}</text>`;
+    }
+  });
+  let lastR = -1e9;
+  xTicks(r0, r1, iw).forEach(([i, t, anchor]) => {
+    const tw = t.length * 6.1;          /* IBM Plex Mono 10px */
+    let x = Xr(i);
+    if (anchor === "middle") x = Math.min(w - mr - tw / 2 + 4, Math.max(ML + tw / 2 - 4, x));
+    const left = anchor === "start" ? x : x - tw / 2;
+    if (left < lastR + 6) return;       /* never let two labels touch */
+    lastR = left + tw;
+    g += `<text x="${x.toFixed(1)}" y="${h - 6}" text-anchor="${anchor}" font-size="10" fill="var(--muted)" ${mono}>${t}</text>`;
+  });
 
   if (visible.traffic && hasTraffic) {
-    const s = disp(trafIdx);
-    g += `<path d="${path(s)} L ${(W-MR).toFixed(1)} ${Y(0).toFixed(1)} L ${ML} ${Y(0).toFixed(1)} Z" fill="var(--traffic-fill)" stroke="none"/>`;
-    g += `<path d="${path(s)}" fill="none" stroke="var(--traffic)" stroke-width="1.8" stroke-linejoin="round"/>`;
+    const s = disp(trafIdx), p = pathOf(s, Y);
+    g += `<path d="${p} L ${Xr(r1).toFixed(1)} ${Y(0).toFixed(1)} L ${ML} ${Y(0).toFixed(1)} Z" fill="var(--traffic-fill)" stroke="none"/>`;
+    g += `<path d="${p}" fill="none" stroke="var(--traffic)" stroke-width="1.8" stroke-linejoin="round"/>`;
     /* selective direct label: traffic peak within the visible range */
     let pi = r0;
     for (let i = r0; i <= r1; i++) if (traf[i] > traf[pi]) pi = i;
-    const px = Xr(pi), anchor = px > W - 130 ? "end" : px < ML + 70 ? "start" : "middle";
-    const py = Y(s[pi]);
+    const px = Xr(pi), py = Y(s[pi]);
+    let lx = px, ly = py - 6, anchor = px > w - mr - 90 ? "end" : px < ML + 70 ? "start" : "middle";
+    if (ly < MT - 2) {                   /* no room above: put it beside the dot */
+      ly = py + 3.5;
+      if (px > w - mr - 120) { anchor = "end"; lx = px - 6; } else { anchor = "start"; lx = px + 6; }
+    }
     g += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2.6" fill="var(--traffic)"/>`;
-    g += `<text x="${px.toFixed(1)}" y="${(Math.max(10, py-6)).toFixed(1)}" text-anchor="${anchor}" font-size="10" fill="var(--ink-2)" font-family="IBM Plex Mono, monospace">peak ${fmt(traf[pi])} users</text>`;
+    g += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" font-size="10" fill="var(--ink-2)" ${mono}>peak ${fmt(traf[pi])} users</text>`;
   }
   if (k25) k25.forEach((s0, i) => {
     if (!visible["k"+i] || !s0.length) return;
     const m = KW_META[i];
-    g += `<path d="${path(disp(s0))}" fill="none" stroke="${m.color}" stroke-width="1.1"${m.dash ? ` stroke-dasharray="${m.dash}"` : ""} stroke-linejoin="round" opacity="0.3"/>`;
+    g += `<path d="${pathOf(disp(s0), Y)}" fill="none" stroke="${m.color}" stroke-width="1.1"${m.dash ? ` stroke-dasharray="${m.dash}"` : ""} stroke-linejoin="round" opacity="0.3"/>`;
   });
   if (kwS) kwS.forEach((s0, i) => {
     if (!visible["k"+i] || !s0.length) return;
     const m = KW_META[i];
-    g += `<path d="${pathN(dispN(s0))}" fill="none" stroke="${m.color}" stroke-width="1.6"${m.dash ? ` stroke-dasharray="${m.dash}"` : ""} stroke-linejoin="round" opacity="0.95"/>`;
+    g += `<path d="${pathOf(dispN(s0), Y)}" fill="none" stroke="${m.color}" stroke-width="1.6"${m.dash ? ` stroke-dasharray="${m.dash}"` : ""} stroke-linejoin="round" opacity="0.95"/>`;
   });
-
-  gLines.forEach(([k, s, col]) => {
-    let d = "", pen = false;
-    for (let i = r0; i <= r1; i++) {
-      if (s[i] == null) { pen = false; continue; }
-      d += (pen ? "L" : "M") + Xr(i).toFixed(1) + " " + Y(s[i]).toFixed(1);
-      pen = true;
-    }
+  gLines.forEach(([, s, col]) => {
+    const d = pathOf(s, Y);
     if (d) g += `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.5" stroke-linejoin="round" opacity="0.95"/>`;
+  });
+  rAxes.forEach(ax => {
+    if (!ax.has) return;
+    /* a day with no neighbours has no line segment: draw it as a dot */
+    for (let i = r0; i <= r1; i++)
+      if (ax.series[i] != null && (i === r0 || ax.series[i - 1] == null) && (i === r1 || ax.series[i + 1] == null))
+        g += `<circle cx="${Xr(i).toFixed(1)}" cy="${ax.Y(ax.series[i]).toFixed(1)}" r="1.8" fill="${ax.color}"/>`;
+    const d = pathOf(ax.series, ax.Y);
+    g += ax.k === "gpos"
+      ? `<path d="${d}" fill="none" stroke="var(--gp)" stroke-width="1.6" stroke-dasharray="0.1 3.2" stroke-linecap="round" stroke-linejoin="round"/>`
+      : `<path d="${d}" fill="none" stroke="var(--gc)" stroke-width="1.5" stroke-linejoin="round" opacity="0.95"/>`;
   });
 
   if (visible.fires) {
     const fm = fireMap(st), y0 = Y(0);
+    let lastCount = -1e9;
     for (const di in fm) {
       const i = +di;
       if (i < r0 || i > r1) continue;
@@ -1039,57 +1272,14 @@ function renderChart(st, rkey, sel) {
         g += `<path d="M ${x.toFixed(1)} ${(y0-4.5).toFixed(1)} L ${(x+3.5).toFixed(1)} ${y0.toFixed(1)} L ${x.toFixed(1)} ${(y0+4.5).toFixed(1)} L ${(x-3.5).toFixed(1)} ${y0.toFixed(1)} Z" fill="var(--fire-mk)" stroke="var(--ink-2)" stroke-width="0.5"/>`;
       else
         g += `<path d="M ${x.toFixed(1)} ${(y0-4).toFixed(1)} L ${(x+3.1).toFixed(1)} ${y0.toFixed(1)} L ${x.toFixed(1)} ${(y0+4).toFixed(1)} L ${(x-3.1).toFixed(1)} ${y0.toFixed(1)} Z" fill="none" stroke="var(--fire-mk)" stroke-width="1.1" opacity="0.8"/>`;
-      if (n > 1) g += `<text x="${x.toFixed(1)}" y="${(y0-7).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${n}</text>`;
+      if (n > 1 && x - lastCount >= 11) {
+        g += `<text x="${x.toFixed(1)}" y="${(y0-7).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="var(--muted)" ${mono}>${n}</text>`;
+        lastCount = x;
+      }
     }
   }
-  g += `<line class="xh" x1="-10" y1="${MT}" x2="-10" y2="${MT+IH}" stroke="var(--muted)" stroke-width="1" opacity="0"/>`;
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Search interest (${viewOf(st, sel).label}) vs site traffic for ${st.name}, ${RANGE_LABEL[rkey]}">${g}</svg>`;
-}
-
-/* compact Search Console strip under each chart: avg position (inverted) or CTR */
-const HS = 70, SMT = 17, SMB = 8;
-function renderStrip(st, rkey, sel) {
-  if (!GSC || gscStrip === "off") return "";
-  const [r0, r1] = RANGES[rkey];
-  const Xr = i => ML + ((i - r0) / (r1 - r0)) * IW;
-  const gs = gscOf(st, sel);
-  const what = gscStrip === "pos" ? "avg position · 1 = top result" : "CTR";
-  const mono = `font-family="IBM Plex Mono, monospace"`;
-  const lab = `<text x="${ML}" y="11" font-size="9.5" fill="var(--muted)" ${mono}>SEARCH CONSOLE · ${GSC_LABEL[gscType].toUpperCase()} · ${what.toUpperCase()}</text>`;
-  let series = null;
-  if (gs) series = gscStrip === "pos" ? gs.p : gs.c.map((c, k) => (gs.i[k] ? c / gs.i[k] * 100 : null));
-  if (series && smooth) series = smooth7n(series);
-  const vals = series ? series.slice(r0, r1 + 1).filter(v => v != null) : [];
-  if (!vals.length) {
-    const why = !gs ? "no Search Console data for this view"
-      : gscStrip === "pos" ? `position not reported for ${GSC_LABEL[gscType]}` : "no impressions in this range";
-    return `<svg viewBox="0 0 ${W} 30" class="strip">${lab}<text x="${ML}" y="25" font-size="10" fill="var(--muted)" ${mono}>${why}</text></svg>`;
-  }
-  const IHs = HS - SMT - SMB;
-  let lo, hi, Y;
-  if (gscStrip === "pos") {
-    lo = 1; hi = Math.max(10, Math.ceil(Math.max(...vals)));
-    Y = v => SMT + (v - lo) / (hi - lo) * IHs;              /* 1 at the top */
-  } else {
-    lo = 0; hi = Math.max(1, Math.ceil(Math.max(...vals)));
-    Y = v => SMT + IHs - (v - lo) / (hi - lo) * IHs;
-  }
-  const tick = v => gscStrip === "pos" ? String(v) : v + "%";
-  let g = lab;
-  [lo, hi].forEach(v => {
-    g += `<line x1="${ML}" y1="${Y(v).toFixed(1)}" x2="${W - MR}" y2="${Y(v).toFixed(1)}" stroke="var(--grid)"/>`;
-    g += `<text x="${ML - 6}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--muted)" ${mono}>${tick(v)}</text>`;
-  });
-  let d = "", pen = false;
-  for (let i = r0; i <= r1; i++) {
-    const v = series[i];
-    if (v == null) { pen = false; continue; }
-    d += (pen ? "L" : "M") + Xr(i).toFixed(1) + " " + Y(v).toFixed(1);
-    pen = true;
-  }
-  g += `<path d="${d}" fill="none" stroke="${gscStrip === "pos" ? "var(--ink-2)" : "var(--gc)"}" stroke-width="1.4" stroke-linejoin="round"/>`;
-  g += `<line class="xh" x1="-10" y1="${SMT}" x2="-10" y2="${SMT + IHs}" stroke="var(--muted)" stroke-width="1" opacity="0"/>`;
-  return `<svg viewBox="0 0 ${W} ${HS}" class="strip" role="img" aria-label="Search Console ${what} for ${st.name}">${g}</svg>`;
+  g += `<line class="xh" x1="-10" y1="${MT}" x2="-10" y2="${MT + ih}" stroke="var(--muted)" stroke-width="1" opacity="0"/>`;
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" data-w="${w}" data-mr="${mr}" role="img" aria-label="Search interest (${viewOf(st, sel).label}) vs site traffic for ${st.name}, ${rangeText()}">${g}</svg>`;
 }
 
 /* ---------- health math shared by cards + overview (one clock: WIN days) ---------- */
@@ -1183,10 +1373,7 @@ function buildCards() {
     return `<div class="card" data-si="${si}" data-msel="-1">
       <h2>${st.name} <span class="ab">${st.abbr}</span>${s ? "" : '<span class="notraffic">no site data in export</span>'}${msel}</h2>
       <div class="stats"><span class="modestats">${modeStatsHtml(st, null)}</span></div>
-      <div class="charts">
-        <div class="chart" data-r="full"></div>
-        <div class="chart" data-r="zoom"></div>
-      </div>
+      <div class="chart"></div>
       <details class="tbl"><summary>Data table</summary><div class="tblwrap"></div></details>
     </div>`;
   }).join("");
@@ -1243,20 +1430,20 @@ function updateModeStats() {
   });
 }
 
-function renderCard(card) {
+function renderCard(card, G = chartGeom()) {
   const st = DATA.states[+card.dataset.si];
   const sel = selOf(card, st);
-  card.querySelectorAll(".chart").forEach(chart => {
-    chart.innerHTML = `<div class="rlabel">${RANGE_LABEL[chart.dataset.r]}</div>` + renderChart(st, chart.dataset.r, sel)
-      + renderStrip(st, chart.dataset.r, sel);
-  });
+  card.querySelector(".chart").innerHTML = renderChart(st, sel, G);
   const fc = card.querySelector(".fscount");
   if (fc) fc.textContent = (st.fires || []).filter(isImpactful).length;
 }
 
+let renderedW = 0;
 function renderAll() {
   tip.style.display = "none";
-  document.querySelectorAll(".card[data-si]").forEach(renderCard);
+  const G = chartGeom();
+  renderedW = G.w;
+  document.querySelectorAll(".card[data-si]").forEach(card => renderCard(card, G));
 }
 
 function openState(key) {
@@ -1334,7 +1521,7 @@ function whyOf(h) {
   const g = h.g;
   if (!g || g.low || g.Dg == null || g.I == null) return `<span class="lbl">no Search Console signal</span>`;
   if (g.I / g.Dg < 0.6)
-    return `losing visibility <span class="lbl">· Google impressions ${liftFmt(g.I)} vs search ${liftFmt(g.Dg)}</span>`;
+    return `losing visibility <span class="lbl">· impressions ${liftFmt(g.I)} vs search ${liftFmt(g.Dg)}</span>`;
   if (g.C != null && g.I > 0 && g.C / g.I < 0.6)
     return `shown, not clicked <span class="lbl">· clicks ${liftFmt(g.C)} vs impressions ${liftFmt(g.I)}</span>`;
   if (g.C != null && h.D != null && g.C >= 0.8 * h.D)
@@ -1844,14 +2031,15 @@ const tip = document.getElementById("tip");
 function attachHover(card) {
   const st = DATA.states[+card.dataset.si];
   card.querySelectorAll(".chart").forEach(chart => chart.addEventListener("pointermove", e => {
-    const [r0, r1] = RANGES[chart.dataset.r];
+    const { r0, r1 } = range;
     const svg = chart.querySelector("svg");
     if (!svg) return;
+    const w = +svg.getAttribute("data-w"), mr = +svg.getAttribute("data-mr"), iw = w - ML - mr;
     const r = svg.getBoundingClientRect();
-    const fx = (e.clientX - r.left) / r.width * W;
-    if (fx < ML - 6 || fx > W - MR + 6) { hideTip(chart); return; }
-    const i = Math.max(r0, Math.min(r1, Math.round(r0 + (fx - ML) / IW * (r1 - r0))));
-    const xi = ML + ((i - r0) / (r1 - r0)) * IW;
+    const fx = (e.clientX - r.left) / r.width * w;
+    if (fx < ML - 6 || fx > w - mr + 6) { hideTip(chart); return; }
+    const i = Math.max(r0, Math.min(r1, Math.round(r0 + (fx - ML) / iw * (r1 - r0))));
+    const xi = ML + ((i - r0) / (r1 - r0)) * iw;
     chart.querySelectorAll(".xh").forEach(xh => {
       xh.setAttribute("x1", xi); xh.setAttribute("x2", xi); xh.setAttribute("opacity", "0.55");
     });
@@ -1882,9 +2070,15 @@ function attachHover(card) {
       }
     }
     const gs = GSC ? gscOf(st, sel) : null;
-    if (gs) rows += gs.i[i] == null ? muted("Search Console: not in yet (~2-day lag)")
-      : row(legendSwatch({ color: "var(--gi)" }), `GSC${sel ? ` "${esc(sel.city)}"` : ""}`,
-            `${fmt(gs.i[i])} impr · ${fmt(gs.c[i])} clicks · pos ${fposn(gs.p[i])}`);
+    if (gs && (visible.gi || visible.gpos || visible.gctr)) {
+      const who = sel ? ` "${esc(sel.city)}"` : "";
+      if (gs.i[i] == null) rows += muted("Search Console: not in yet (~2-day lag)");
+      else {
+        if (visible.gi) rows += row(legendSwatch({ color: "var(--gi)" }), `GSC${who} impressions`, `${fmt(gs.i[i])} · ${fmt(gs.c[i])} clicks`);
+        if (visible.gpos) rows += row(legendSwatch({ color: "var(--gp)", dash: "0.1 3.6", cap: true }), `GSC${who} avg position`, fposn(gs.p[i]));
+        if (visible.gctr) rows += row(legendSwatch({ color: "var(--gc)" }), `GSC${who} CTR`, gs.i[i] ? fpct(gs.c[i] / gs.i[i]) : "–");
+      }
+    }
     tip.innerHTML = `<div class="d">${st.name}${sel ? ` · ${sel.name} metro` : ""} · ${fdateY(DATA.dates[i])}</div>` + rows;
     tip.style.display = "block";
     const tw = tip.offsetWidth, th = tip.offsetHeight;
@@ -1914,6 +2108,11 @@ buildOverview();
 initMovers();
 buildTopQueries();
 renderAll();
+let resizeRaf = 0;
+addEventListener("resize", () => {
+  cancelAnimationFrame(resizeRaf);
+  resizeRaf = requestAnimationFrame(() => { if (chartGeom().w !== renderedW) renderAll(); });
+});
 </script>
 """
 
