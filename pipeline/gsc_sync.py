@@ -406,7 +406,7 @@ def export(con):
             continue
         label, state, fire_date = page_label(page)
         pc, pi, ppos = page_tot(page, *w1)
-        _, pi0, _ = page_tot(page, *w0)
+        pc0, pi0, ppos0 = page_tot(page, *w0)
         why = max(g["gap"], key=lambda k: g["gap"][k])
         tags = [why]
         if pi0 == 0:
@@ -414,8 +414,9 @@ def export(con):
         if fire_date and (end - fire_date).days > 90:
             tags.append("old page")
         rows.append({"page": page, "label": label, "state": state if state in known else None,
-                     "state_label": state_label(state), "i": pi, "i0": pi0, "c": pc,
-                     "pos": round(ppos, 1) if ppos is not None else None, "pot": round(wk, 1), "tags": tags,
+                     "state_label": state_label(state), "i": pi, "i0": pi0, "c": pc, "c0": pc0,
+                     "pos": round(ppos, 1) if ppos is not None else None,
+                     "pos0": round(ppos0, 1) if ppos0 is not None else None, "pot": round(wk, 1), "tags": tags,
                      "n": len(g["q"]), "queries": sorted(g["q"], key=lambda x: -x["pot"])[:6]})
     rows.sort(key=lambda r: -r["pot"])
     top = {"web": {"groups": rows[:TOP_N], "curve": {k: round(v, 4) for k, v in curve.items()},

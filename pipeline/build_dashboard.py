@@ -509,7 +509,10 @@ HTML = r"""<meta charset="utf-8">
   .mtab button.more { font: inherit; font-size: 11px; color: var(--muted); background: none; border: 0;
     padding: 0 2px; cursor: pointer; text-decoration: underline dotted; }
   .mtab button.more:hover { color: var(--ink); }
-  .tqtab td.stcell { white-space: normal; }
+  .tqtab td.stcell { white-space: normal; text-align: left; }
+  .tqtab th:last-child, .tqtab td.stcell { padding-left: 22px; }
+  .mtab.surge { min-width: 640px; }
+  .mtab.surge th, .mtab.surge td.mn { white-space: normal; line-height: 1.3; }
   #msurge, #tqlist { margin-top: 8px; overflow-x: auto; }
   .mempty { color: var(--muted); font-size: 12px; padding: 6px 2px; }
   .mcol .mempty { color: var(--muted); font-size: 12px; padding: 6px 2px; }
@@ -587,6 +590,7 @@ HTML = r"""<meta charset="utf-8">
   #tip .d { font-weight: 600; margin-bottom: 5px; }
   #tip .d .pill { font-size: 10.5px; padding: 0 7px; margin-left: 6px; vertical-align: 1px; }
   #tip .tnote { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  #tip .d .lbl { color: var(--muted); font-weight: 400; margin-left: 4px; }
   #tip .row { display: flex; align-items: center; gap: 7px; justify-content: space-between; color: var(--ink-2); padding: 1px 0; }
   #tip .row .v { font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); font-variant-numeric: tabular-nums; }
   #tip .row .n { display: inline-flex; align-items: center; gap: 6px; max-width: 300px; overflow-wrap: anywhere; }
@@ -654,11 +658,12 @@ HTML = r"""<meta charset="utf-8">
       <span class="mnote" id="tqnote"></span>
     </div>
     <div id="tqlist"></div>
-    <div class="qnote">One row per page on our site (usually one fire), ranked by <b>potential clicks</b>: how many more
-    clicks its queries would get at the click-through rate this site normally earns at that position — or, for queries
-    below page 1, at position 5. <b>page 2+</b> = we appear but below the first page · <b>weak snippet</b> = we rank but get
-    fewer clicks than usual for that position · <b>new demand</b> = these queries didn't exist two weeks earlier ·
-    <b>old page</b> = traffic landing on a fire more than 90 days old. Expand a row for its queries; click to open the state.</div>
+    <div class="qnote">One row per page on our site (usually one fire), ranked by <b>extra clicks / week</b>: the clicks
+    its queries would get at the click-through rate this site normally earns at their position (or at position 5 for
+    queries below page 1), minus the clicks they actually got. <b>page 2+</b> = most of the gap is queries ranking below
+    the first page · <b>weak snippet</b> = we rank on page 1 but get fewer clicks than usual for that position ·
+    <b>new demand</b> = the page had no impressions two weeks earlier · <b>old page</b> = traffic landing on a fire more
+    than 90 days old. Expand a row for its queries; click to open the state.</div>
   </section>
   <div class="grid" id="grid"></div>
 
@@ -1717,15 +1722,15 @@ function buildMovers() {
   const showTerm = kwFilter < 0;
   const v = x => x >= 10 ? Math.round(x) : x.toFixed(1);
   document.getElementById("msurge").innerHTML = rows.length
-    ? `<table class="mtab"><colgroup><col>${showTerm ? '<col style="width:22%">' : ""}<col style="width:120px"><col style="width:150px"><col style="width:112px"></colgroup>
+    ? `<table class="mtab surge"><colgroup><col>${showTerm ? '<col style="width:24%">' : ""}<col style="width:88px"><col style="width:120px"><col style="width:120px"></colgroup>
        <thead><tr><th class="l">metro</th>${showTerm ? '<th class="l">surging term</th>' : ""}<th>search vs last week</th>
-       <th>our visitors / day</th><th class="l">us</th></tr></thead><tbody>` +
+       <th>our visitors / day<br>last → this week</th><th class="l">status</th></tr></thead><tbody>` +
       rows.map(r => `<tr class="mrow" data-si="${r.si}" data-mi="${r.mi}" tabindex="0"
           data-tip="${esc(r.m.name)} · ${esc((r.m.kws || r.st.kws)[r.k])}: ${v(r.prev)} → ${v(r.now)} average this week (metro's own 0–100 index)">
         <td class="mn">${r.m.name}<span class="lbl"> · ${r.st.abbr}</span></td>
         ${showTerm ? `<td class="kw">${(r.m.kws || r.st.kws)[r.k]}</td>` : ""}
         <td class="up">×${r.x.toFixed(1)}</td>
-        <td>${v(r.tNow)} <span class="lbl">vs ${v(r.tPrev)} last week</span></td>
+        <td>${v(r.tPrev)} → ${v(r.tNow)}</td>
         <td class="stcell"><span class="pill ${r.captured ? "st-out" : "st-miss"}">${r.captured ? "capturing" : "not capturing"}</span></td></tr>`).join("") +
       `</tbody></table>`
     : `<div class="mempty">No metro's search jumped 1.5× or more this week with meaningful volume.</div>`;
@@ -1783,7 +1788,7 @@ function buildTopQueries() {
   };
   document.getElementById("tqlist").innerHTML = tq.groups.length
     ? `<table class="mtab tqtab"><colgroup><col style="width:24%"><col><col style="width:78px"><col style="width:112px"><col style="width:86px"><col style="width:190px"></colgroup>
-       <thead><tr><th class="l">page</th><th class="l">biggest query opportunity</th><th class="l">queries</th><th style="white-space:normal">page impressions ${WIN}d</th><th style="white-space:normal">potential clicks / wk</th><th class="l">why</th></tr></thead>` +
+       <thead><tr><th class="l">page</th><th class="l">biggest query opportunity</th><th class="l">queries</th><th style="white-space:normal">page impressions ${WIN}d</th><th style="white-space:normal">extra clicks / week</th><th class="l">reason</th></tr></thead>` +
       tq.groups.map((g, gi) => `<tbody class="tqg">
         <tr class="${known.has(g.state) ? "mrow tqrow" : "tqrow-x"}" data-key="${g.state || ""}" data-gi="${gi}" tabindex="0">
           <td class="mn">${esc(g.label)}${g.state_label ? `<span class="lbl"> · ${g.state_label}</span>` : ""}</td>
@@ -1815,13 +1820,15 @@ function buildTopQueries() {
       });
     }
     row.addEventListener("pointermove", e => {
-      tip.innerHTML = `<div class="d">${esc(g.label)} · /${esc(g.page)}</div>
-        <table class="tt"><tbody>
-        <tr><td class="n">page impressions · prior ${WIN} days</td><td>${fmt(g.i)} · ${fmt(g.i0)}</td></tr>
-        <tr><td class="n">clicks · CTR</td><td>${fmt(g.c)} · ${fpct(g.i ? g.c / g.i : null)}</td></tr>
-        <tr><td class="n">avg position</td><td>${fposn(g.pos)}</td></tr>
-        <tr><td class="n">queries with an opportunity</td><td>${fmt(g.n)}</td></tr>
-        </tbody></table>${known.has(g.state) ? "" : `<div class="row"><span class="n" style="color:var(--muted)">state not on this dashboard</span></div>`}`;
+      const prev = v => g.c0 == null ? "–" : v;
+      tip.innerHTML = `<div class="d">${esc(g.label)} <span class="lbl">/${esc(g.page)}</span></div>
+        <table class="tt"><thead><tr><th></th><th>last ${WIN}d</th><th>prior ${WIN}d</th></tr></thead><tbody>
+        <tr><td class="n">impressions</td><td>${fmt(g.i)}</td><td>${fmt(g.i0)}</td></tr>
+        <tr><td class="n">clicks</td><td>${fmt(g.c)}</td><td>${prev(fmt(g.c0))}</td></tr>
+        <tr><td class="n">CTR</td><td>${fpct(g.i ? g.c / g.i : null)}</td><td>${prev(fpct(g.i0 ? g.c0 / g.i0 : null))}</td></tr>
+        <tr><td class="n">avg position</td><td>${fposn(g.pos)}</td><td>${prev(fposn(g.pos0))}</td></tr>
+        </tbody></table>
+        <div class="tnote">${fmt(g.n)} search ${g.n === 1 ? "query lands" : "queries land"} on this page${known.has(g.state) ? "" : " · state not on this dashboard"}</div>`;
       tip.style.display = "block";
       let tx = e.clientX + 14, ty = e.clientY + 12;
       if (tx + tip.offsetWidth > innerWidth - 8) tx = e.clientX - tip.offsetWidth - 14;
