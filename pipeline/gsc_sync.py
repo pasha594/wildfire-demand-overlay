@@ -43,7 +43,10 @@ RETENTION_DAYS = 486                     # Search Console keeps ~16 months
 DEFAULT_DAYS = 7
 PAGE_SIZE = 25000
 EXPORT_START = "2026-02-26"              # dashboard window start
-TOP_N = 20
+TOP_N = 8                                # opportunity rows shown
+WIN = 14                                 # dashboard health window (days)
+TARGET_POS = 5                           # "if this page-2 query ranked here" benchmark
+BRAND_TERMS = ("wildfire explorer", "cornea")
 
 log = logging.getLogger("gsc_sync")
 
@@ -183,6 +186,41 @@ def load_json(name):
         return json.load(f)
 
 
+US_STATES = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA", "colorado": "CO",
+    "connecticut": "CT", "delaware": "DE", "florida": "FL", "georgia": "GA", "hawaii": "HI", "idaho": "ID",
+    "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS", "kentucky": "KY", "louisiana": "LA",
+    "maine": "ME", "maryland": "MD", "massachusetts": "MA", "michigan": "MI", "minnesota": "MN",
+    "mississippi": "MS", "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV",
+    "new-hampshire": "NH", "new-jersey": "NJ", "new-mexico": "NM", "new-york": "NY", "north-carolina": "NC",
+    "north-dakota": "ND", "ohio": "OH", "oklahoma": "OK", "oregon": "OR", "pennsylvania": "PA",
+    "rhode-island": "RI", "south-carolina": "SC", "south-dakota": "SD", "tennessee": "TN", "texas": "TX",
+    "utah": "UT", "vermont": "VT", "virginia": "VA", "washington": "WA", "west-virginia": "WV",
+    "wisconsin": "WI", "wyoming": "WY", "puerto-rico": "PR",
+}
+
+
+def state_label(slug):
+    return US_STATES.get(slug) if slug else None
+
+
+def page_label(path):
+    """page path -> (readable label, state slug, fire start date or None)."""
+    path = path.rstrip("/")
+    m = re.match(r"^state/([a-z-]+)", path)
+    if m:
+        return m.group(1).replace("-", " ").title() + " state page", m.group(1), None
+    m = re.match(r"^fire/([a-z-]+?)_(.+?)_(\d{4}-\d{2}-\d{2})", path)
+    if m:
+        name = m.group(2).replace("-", " ").strip().title()
+        if name.lower().endswith(" fire"):
+            name = name[:-5]
+        if not name.lower().endswith("complex"):
+            name += " fire"
+        return name, m.group(1), datetime.date.fromisoformat(m.group(3))
+    return "/" + path, None, None
+
+
 def classify(path, known):
     """page path -> dashboard state key, mirroring fetch_traffic.classify()."""
     path = path.rstrip("/")
@@ -280,41 +318,111 @@ def export(con):
                 ms[mkey] = mt
         out_states[s] = {"types": types, "metros": ms}
 
-    # top queries: last 7 complete days vs the 7 before, per query-capable type
+    # top search opportunities (web): last WIN complete days vs the WIN before, one row per
+    # landing page, ranked by potential clicks = sum over the page's queries of
+    # (impressions x expected CTR) - actual clicks, where expected CTR is this site's own
+    # CTR at that position (or at TARGET_POS for queries below page 1).
     end = datetime.date.fromisoformat(last_complete)
-    w1 = ((end - datetime.timedelta(days=6)).isoformat(), end.isoformat())
-    w0 = ((end - datetime.timedelta(days=13)).isoformat(), (end - datetime.timedelta(days=7)).isoformat())
-    top = {}
-    for t in SEARCH_TYPES:
-        if t in NO_QUERY_TYPES:
-            continue
-        cur = collections.defaultdict(lambda: {"c": 0, "i": 0, "pw": 0.0, "pages": collections.Counter()})
-        prev = collections.Counter()
-        for q, day, page, c, i, pos in con.execute(
-                "SELECT query, date, page, clicks, impressions, position FROM query_daily "
-                "WHERE search_type=? AND date BETWEEN ? AND ?", (t, w0[0], w1[1])):
-            if day >= w1[0]:
-                r = cur[q]
-                r["c"] += c
-                r["i"] += i
-                r["pw"] += (pos or 0) * i
-                r["pages"][page] += i
-            else:
-                prev[q] += i
-        rows = []
-        for q, r in cur.items():
-            if not r["i"]:
+    w1 = ((end - datetime.timedelta(days=WIN - 1)).isoformat(), end.isoformat())
+    w0 = ((end - datetime.timedelta(days=2 * WIN - 1)).isoformat(), (end - datetime.timedelta(days=WIN)).isoformat())
+    c28 = (end - datetime.timedelta(days=27)).isoformat()
+
+    rows28 = con.execute("SELECT query, clicks, impressions, position FROM query_daily "
+                         "WHERE search_type='web' AND date BETWEEN ? AND ?", (c28, end.isoformat())).fetchall()
+
+    def build_curve(skip):
+        c, i = collections.Counter(), collections.Counter()
+        for q, cl, im, pos in rows28:
+            if q in skip:
                 continue
-            page = r["pages"].most_common(1)[0][0]
-            rows.append({"q": q, "state": st_of(page), "page": page, "i": r["i"], "i0": prev.get(q, 0),
-                         "c": r["c"], "ctr": round(r["c"] / r["i"], 4), "pos": round(r["pw"] / r["i"], 1)})
-        if not rows:
+            k = min(20, max(1, int(round(pos or 20))))
+            c[k] += cl
+            i[k] += im
+        # isotonic (non-increasing) fit, impression-weighted: one noisy bucket is pooled with
+        # its neighbours instead of capping every position below it
+        blocks = []
+        for k in range(1, 21):
+            if i[k]:
+                blocks.append([c[k], i[k], [k]])
+                while len(blocks) > 1 and blocks[-2][0] / blocks[-2][1] < blocks[-1][0] / blocks[-1][1]:
+                    last = blocks.pop()
+                    blocks[-1][0] += last[0]; blocks[-1][1] += last[1]; blocks[-1][2] += last[2]
+        fit = {k: bc / bi for bc, bi, ks in blocks for k in ks}
+        out, prev_v = {}, max(fit.values(), default=0.3)
+        for k in range(1, 21):
+            out[k] = prev_v = min(fit.get(k, prev_v), prev_v)
+        return out
+
+    # likely-automated queries: many impressions, never a click, where real searchers at that
+    # position would have produced 10+ clicks (P(0 clicks) < 0.005%). Excluded everywhere.
+    curve = build_curve(set())
+    q28 = collections.defaultdict(lambda: [0, 0, 0.0])
+    for q, cl, im, pos in rows28:
+        a_ = q28[q]
+        a_[0] += cl; a_[1] += im; a_[2] += (pos or 0) * im
+    expected0 = lambda pos: curve[min(20, max(1, int(round(pos))))]
+    automated = {q for q, (cl, im, pw) in q28.items()
+                 if im and cl == 0 and im * expected0(pw / im) >= 10}
+    curve = build_curve(automated)
+    expected = lambda pos: curve[min(20, max(1, int(round(pos))))]
+
+    cur = collections.defaultdict(lambda: {"c": 0, "i": 0, "pw": 0.0, "pages": collections.Counter()})
+    for q, page, c, i, pos in con.execute(
+            "SELECT query, page, clicks, impressions, position FROM query_daily "
+            "WHERE search_type='web' AND date BETWEEN ? AND ?", w1):
+        r = cur[q]
+        r["c"] += c
+        r["i"] += i
+        r["pw"] += (pos or 0) * i
+        r["pages"][page] += i
+
+    groups = {}
+    for q, r in cur.items():
+        if not r["i"] or q in automated or any(b in q for b in BRAND_TERMS):
             continue
-        rising = sorted(rows, key=lambda r: r["i"] - r["i0"], reverse=True)[:TOP_N]
-        rising = [r for r in rising if r["i"] > r["i0"]]
-        unranked = sorted([r for r in rows if r["pos"] > 10 and r["i"] >= 20],
-                          key=lambda r: r["i"], reverse=True)[:TOP_N]
-        top[t] = {"rising": rising, "unranked": unranked}
+        page = r["pages"].most_common(1)[0][0]
+        if page == "":
+            continue                                   # homepage = navigational
+        pos = r["pw"] / r["i"]
+        off_page1 = pos > 10
+        exp_clicks = r["i"] * (expected(TARGET_POS) if off_page1 else expected(pos))
+        g = groups.setdefault(page, {"exp": 0.0, "c": 0, "gap": collections.Counter(), "q": []})
+        g["exp"] += exp_clicks
+        g["c"] += r["c"]
+        g["gap"]["page 2+" if off_page1 else "weak snippet"] += exp_clicks - r["c"]
+        g["q"].append({"q": q, "i": r["i"], "c": r["c"], "pos": round(pos, 1),
+                       "pot": round(max(0.0, exp_clicks - r["c"]) / (WIN / 7), 1)})
+
+    def page_tot(page, a_, b_):
+        t = con.execute("SELECT SUM(clicks), SUM(impressions), SUM(position * impressions) FROM page_daily "
+                        "WHERE search_type='web' AND page=? AND date BETWEEN ? AND ?", (page, a_, b_)).fetchone()
+        c_, i_, pw_ = (t[0] or 0), (t[1] or 0), (t[2] or 0.0)
+        return c_, i_, (pw_ / i_ if i_ else None)
+
+    rows = []
+    for page, g in groups.items():
+        wk = max(0.0, g["exp"] - g["c"]) / (WIN / 7)    # summed per page: chance can't inflate it
+        if wk < 3:
+            continue
+        label, state, fire_date = page_label(page)
+        pc, pi, ppos = page_tot(page, *w1)
+        _, pi0, _ = page_tot(page, *w0)
+        why = max(g["gap"], key=lambda k: g["gap"][k])
+        tags = [why]
+        if pi0 == 0:
+            tags.append("new demand")
+        if fire_date and (end - fire_date).days > 90:
+            tags.append("old page")
+        rows.append({"page": page, "label": label, "state": state if state in known else None,
+                     "state_label": state_label(state), "i": pi, "i0": pi0, "c": pc,
+                     "pos": round(ppos, 1) if ppos is not None else None, "pot": round(wk, 1), "tags": tags,
+                     "n": len(g["q"]), "queries": sorted(g["q"], key=lambda x: -x["pot"])[:6]})
+    rows.sort(key=lambda r: -r["pot"])
+    top = {"web": {"groups": rows[:TOP_N], "curve": {k: round(v, 4) for k, v in curve.items()},
+                   "automated": sorted(automated, key=lambda q: -q28[q][1])[:10],
+                   "automated_impr": sum(q28[q][1] for q in automated)}}
+    log.info("top opportunities: %d pages ranked; %d likely-automated queries excluded (%d impressions)",
+             len(rows), len(automated), top["web"]["automated_impr"])
 
     out = {
         "meta": {"property": PROPERTY, "page_filter": SITE_HOST,

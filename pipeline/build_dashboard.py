@@ -187,15 +187,52 @@ for key in all_keys:
 
 states_payload.sort(key=lambda s: s["name"])
 
+
+def null_dropouts(modes, what):
+    """Google Trends sometimes returns an all-zero day for many geos at once. A geo is
+    "steady" on day k if it was non-zero on at least 5 of the 7 days before. If 30% or
+    more of steady geos read all-zero on day k (normal days: 0-15%), the day is a
+    dropout and those steady geos' zeros become missing (None). Geos that are often
+    zero are never steady, so their genuine zeros are kept."""
+    modes = [m for m in modes if m and m.get("kwSeries")]
+    if not modes:
+        return []
+    n = len(dates)
+    nz = [[any((s[k] if len(s) > k else 0) or 0 for s in m["kwSeries"]) for k in range(n)] for m in modes]
+    flagged = []
+    for k in range(7, n):
+        steady = [g for g in range(len(modes)) if sum(nz[g][k - 7:k]) >= 5]
+        if len(steady) < 10:
+            continue
+        dead = [g for g in steady if not nz[g][k]]
+        if len(dead) >= 0.3 * len(steady):
+            flagged.append((k, dead, len(steady)))
+    for k, dead, _ in flagged:
+        for g in dead:
+            for s in modes[g]["kwSeries"]:
+                if len(s) > k:
+                    s[k] = None
+    if flagged:
+        print(f"note: {what} dropout days set to missing: "
+              + ", ".join(f"{dates[k]} ({len(d)}/{ns} steady geos all-zero)" for k, d, ns in flagged))
+    return [dates[k] for k, _, _ in flagged]
+
+
+dropout_days = null_dropouts([mp["mode"] for sp in states_payload for mp in sp["metros"]], "metro trends")
+dropout_days += null_dropouts([sp["modes"]["state"] for sp in states_payload], "state trends")
+
 # ---- Search Console (optional; produced locally by gsc_sync.py) ----
 gsc_raw = load_opt("gsc_daily.json")
 gsc_payload = None
 if gsc_raw:
     gidx = {d: k for k, d in enumerate(gsc_raw["meta"]["dates"])}
 
+    last_complete = gsc_raw["meta"]["last_complete_date"]
+
     def galign(t):
-        """{c,i,p} on the GSC date axis -> same on the dashboard axis; None where GSC has no day."""
-        pos = [gidx.get(d) for d in dates]
+        """{c,i,p} on the GSC date axis -> same on the dashboard axis; None where GSC has no
+        day, and for the partial days after the last complete one."""
+        pos = [gidx.get(d) if d <= last_complete else None for d in dates]
         return {f: [t[f][k] if k is not None else None for k in pos] for f in ("c", "i", "p")}
 
     in_window = lambda t: any((v or 0) > 0 for v in galign(t)["i"])
@@ -366,6 +403,20 @@ HTML = r"""<meta charset="utf-8">
   .qhead select { font: inherit; font-size: 12px; color: var(--ink-2); background: var(--chip-bg);
     border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; cursor: pointer; }
   #oscore { overflow-x: auto; }
+  .mtab.score { min-width: 640px; }
+  .mtab td.why { white-space: normal; }
+  .sline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: 12.5px; }
+  .sline .slabel { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: .04em; margin-right: 4px; }
+  details.sline > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 8px; width: 100%; }
+  details.sline > summary::-webkit-details-marker { display: none; }
+  details.sline > summary::before { content: "▸"; color: var(--muted); font-size: 10px; }
+  details.sline[open] > summary::before { content: "▾"; }
+  .schip { font: inherit; font-size: 12px; font-weight: 600; color: var(--ink); cursor: pointer;
+    background: var(--chip-bg); border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; }
+  .schip:hover { border-color: var(--muted); }
+  .schip .lbl { color: var(--muted); font-weight: 400; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; }
+  .s-out .schip { border-color: rgba(12,163,12,.45); }
   .ocol h3 {
     font-size: 11px; font-weight: 500; color: var(--muted); margin: 4px 0 4px;
     text-transform: uppercase; letter-spacing: .05em;
@@ -382,6 +433,23 @@ HTML = r"""<meta charset="utf-8">
   .quad svg { width: 100%; max-width: 470px; height: auto; }
   .quad .dot { cursor: pointer; }
   .quad .dot:hover circle { stroke: var(--ink); stroke-width: 1.5; }
+  details.pop { position: relative; }
+  details.pop > summary { list-style: none; cursor: pointer; }
+  details.pop > summary::-webkit-details-marker { display: none; }
+  details.pop .popbody {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+    background: var(--tooltip-bg); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.14); padding: 10px 12px; min-width: 240px;
+  }
+  details.pop-r .popbody { left: auto; right: 0; }
+  .popbody .prow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+  .popbody .prow input[type=range] { width: 96px; accent-color: var(--fire-mk); }
+  .popbody .prow b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; color: var(--ink); }
+  .popbody select, .impact select { font: inherit; font-size: 12px; color: var(--ink); background: transparent;
+    border: 1px solid var(--border); border-radius: 6px; padding: 1px 4px; cursor: pointer; }
+  .howto { color: var(--ink-2); font-size: 12px; line-height: 1.55; max-width: 96ch; margin: -8px 0 16px; }
+  .howto svg { vertical-align: -1px; }
   .impact select { font: inherit; font-size: 12px; color: var(--ink); background: transparent;
     border: 1px solid var(--border); border-radius: 6px; padding: 1px 4px; cursor: pointer; }
   .chart svg.strip { margin-top: 2px; }
@@ -433,6 +501,17 @@ HTML = r"""<meta charset="utf-8">
   .mtab tr.mrow:hover td { background: var(--chip-bg); }
   .mtab tr.mrow:focus-visible { outline: 2px solid var(--fm); outline-offset: -2px; }
   .mtab .up { color: var(--f); font-weight: 600; }
+  .mtab .up { color: var(--f); font-weight: 600; }
+  .mtab .dn { color: #d03b3b; font-weight: 600; }
+  .mtab .lbl { color: var(--muted); font-weight: 400; }
+  .mtab .pill { font-size: 10.5px; padding: 1px 7px; }
+  .mtab tr.sub td { border-top: 0; padding-top: 1px; padding-bottom: 1px; font-size: 11.5px; color: var(--ink-2); }
+  .mtab button.more { font: inherit; font-size: 11px; color: var(--muted); background: none; border: 0;
+    padding: 0 2px; cursor: pointer; text-decoration: underline dotted; }
+  .mtab button.more:hover { color: var(--ink); }
+  .tqtab td.stcell { white-space: normal; }
+  #msurge, #tqlist { margin-top: 8px; overflow-x: auto; }
+  .mempty { color: var(--muted); font-size: 12px; padding: 6px 2px; }
   .mcol .mempty { color: var(--muted); font-size: 12px; padding: 6px 2px; }
 
   .grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
@@ -485,6 +564,9 @@ HTML = r"""<meta charset="utf-8">
   .stats .lbl { color: var(--muted); }
   .stats .pages { cursor: help; text-decoration: underline dotted var(--axis); text-underline-offset: 3px; }
   .stats .modestats { display: contents; }
+  .stats .pill { font-size: 11px; }
+  .stats .up { color: var(--f); font-weight: 600; }
+  .stats .dn { color: #d03b3b; font-weight: 600; }
   .chart { position: relative; }
   .chart svg { display: block; width: 100%; height: auto; }
   details.tbl { margin: 2px 0 6px; }
@@ -543,106 +625,90 @@ HTML = r"""<meta charset="utf-8">
   Hover any chart for exact values; raw user counts are in the tooltip and tables.</p>
 
   <div class="controls" id="controls"></div>
+  <div class="howto" id="howto" hidden></div>
   <section class="overview" id="overview" hidden>
     <h2>Overview — SEO health</h2>
     <div class="osub" id="osub"></div>
     <div class="ocols">
-      <div class="ocol"><h3>Health scorecard · last 7 days · worst first</h3><div id="oscore"></div></div>
-      <div class="ocol quad"><div class="qhead"><h3 id="oqtitle">Lift vs lift · last 7 days</h3>
+      <div class="ocol"><h3>Where we're missing search demand</h3><div id="oscore"></div></div>
+      <div class="ocol quad"><div class="qhead"><h3 id="oqtitle">Compare two lifts</h3>
         <select id="qpreset" aria-label="Which two lifts to compare"></select></div><div id="oquad"></div></div>
     </div>
   </section>
   <section class="movers" id="movers" hidden>
     <div class="mhead">
-      <h2>Top Metros</h2>
-      <select id="mkw" aria-label="Search term for movers"></select>
-      <select id="mwin" aria-label="Trailing window for the high metric">
-        <option value="1">vs 1-day high</option>
-        <option value="7" selected>vs 7-day high</option>
-        <option value="14">vs 14-day high</option>
-        <option value="30">vs 30-day high</option>
-      </select>
+      <h2>Metros surging now</h2>
+      <select id="mkw" aria-label="Search term"></select>
       <span class="mnote" id="mnote"></span>
     </div>
-    <div class="mcols">
-      <div class="mcol"><h3>Biggest day-over-day jump</h3><div id="mdod"></div></div>
-      <div class="mcol"><h3 id="m7dh3">Closest to their 7-day high</h3><div id="m7d"></div></div>
-    </div>
+    <div id="msurge"></div>
+    <div class="qnote">Metros where a search term averaged at least 1.5× last week's level this week (and at least 5 on
+    the metro's own index) — and whether our visitors from there rose with it. Both weeks come from the most recent
+    stretch Google Trends reports consistently. Click a row to open that metro's chart.</div>
   </section>
   <section class="movers" id="tq" hidden>
     <div class="mhead">
-      <h2>Top Queries</h2>
-      <select id="tqtype" aria-label="Search type for top queries"></select>
+      <h2>Top search opportunities</h2>
       <span class="mnote" id="tqnote"></span>
     </div>
-    <div class="mcols">
-      <div class="mcol"><h3>Rising · impressions vs the prior 7 days</h3><div id="tqrise"></div></div>
-      <div class="mcol"><h3>Seen but not ranking · avg position worse than 10</h3><div id="tqunr"></div></div>
-    </div>
-    <div class="qnote">Real search queries from Search Console that led to impressions of our pages. <b>Rising</b> = biggest
-    increase in impressions vs the week before. <b>Seen but not ranking</b> = queries where we appeared, on average,
-    below the first page of results (position &gt; 10), sorted by how often — the demand we're visible for but not
-    winning. Click a row to open the state its top landing page belongs to (hover shows the page). Google withholds
-    rare queries, so these lists cover roughly half of all impressions.</div>
+    <div id="tqlist"></div>
+    <div class="qnote">One row per page on our site (usually one fire), ranked by <b>potential clicks</b>: how many more
+    clicks its queries would get at the click-through rate this site normally earns at that position — or, for queries
+    below page 1, at position 5. <b>page 2+</b> = we appear but below the first page · <b>weak snippet</b> = we rank but get
+    fewer clicks than usual for that position · <b>new demand</b> = these queries didn't exist two weeks earlier ·
+    <b>old page</b> = traffic landing on a fire more than 90 days old. Expand a row for its queries; click to open the state.</div>
   </section>
   <div class="grid" id="grid"></div>
 
   <footer class="notes">
     <p><b>Method.</b> Site traffic is pulled from the PostHog API at build time — the header shows when. State and
-    metro totals are true daily uniques (a person visiting several of a state's pages in one day counts once);
-    the per-page list in the "counting" tooltip counts a person once per page visited, so pages can sum to more than
-    the total. Trends data: Google Trends daily interest over the same window, measured <b>in-state</b> (queries made
-    from within the state itself, geo US-XX) or per metro (see Metro view). Keywords: wildfire {state},
-    fire {state}, fire {abbr}, and "fire near me" everywhere, plus "fire near {city}" (the metro's biggest city)
-    in metro view only. Each area's full keyword set fits in a single Google Trends request, so all of an area's
-    terms share one normalization — the best term-day in that area = 100, values never exceed 100, and terms are
-    directly comparable to each other within an area. Index values are still not comparable across areas.</p>
-    <p><b>Correlation methodology.</b> For each state and geography mode (and each metro), two daily series are compared
-    over the window: traffic u<sub>t</sub> = unique users summed across all of that state's pages on day t
-    (the state page plus every fire page), and search s<sub>t</sub> = the unweighted mean of that area's keyword
-    indices on day t (each keyword 0–100; because Google normalizes the set jointly, the mean is effectively
-    weighted toward the highest-volume keywords). <b>corr r</b> is the Pearson product-moment correlation between
-    u<sub>t</sub> and s<sub>t</sub> across all day-pairs — raw daily values, no smoothing (the 7-day toggle
-    affects display only, never r), no lag offset, no log transform. Read it as "do high-search days coincide with
-    high-traffic days": both series are spike-dominated, so r mostly reflects whether the major spikes land on the
-    same days. A low r despite similar shapes usually means traffic lagged search by a few days — use the zoom view
-    to eyeball lead/lag. <b>Traffic peak</b> = day of max u<sub>t</sub>; <b>search peak</b> = day of the single
-    highest keyword index across the set (that keyword shown in parentheses). r is descriptive, not a significance
-    test — both series are non-stationary, so no p-value is meaningful here.</p>
+    metro totals are true daily uniques (a person visiting several of a state's pages in one day counts once); the
+    per-page list (hover the organic number on a card) counts a person once per page visited, so pages can sum to more
+    than the total. Search demand is Google Trends daily interest, measured <b>in-state</b> (queries made from within
+    the state itself, geo US-XX) or per metro. Keywords: wildfire {state}, fire {state}, fire {abbr}, "fire near me",
+    and in metro view "fire near {city}" (the metro's biggest city). Each area's keywords come from one Google Trends
+    request, so they share one scale — the area's best term-day = 100 — and are directly comparable within an area,
+    but not across areas. When Google Trends returns zeros for many metros on the same day (unprocessed recent days),
+    those metro-days are treated as missing rather than as zero.</p>
+    <p><b>SEO health (Overview and card headers).</b> Everything that judges health uses the last 14 days.
+    <b>Search</b> = the average of an area's keyword indices over those days as a multiple of its typical (median) day;
+    <b>us</b> = the same for our organic visits (search-engine referrers: Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave).
+    Status comes from us ÷ search, whether search rose or fell: below 0.6× = missing demand (our traffic fell behind search),
+    above 1.25× = outperforming, otherwise tracking. <b>Est. missed visits/wk</b> = (search multiple − our multiple) × our
+    typical day × 7. <b>Likely why</b> reads Search Console over the same stretch: "losing visibility" = Google impressions
+    didn't keep up with search (a ranking or indexing gap); "shown, not clicked" = impressions rose but clicks didn't
+    (a title/snippet or position gap); "Google clicks kept pace" = the shortfall is outside Google search.
+    <b>Can't judge yet:</b> Google Trends reports low-volume days as zero except for the most recent ~14 days of each
+    request, so for states whose search history is mostly zero there is no reliable typical level — those states are
+    held back rather than given a misleading multiple. A 14-day window halves how often a status flips on noise compared
+    with 7 days, while a real surge still registers the day after it starts. The quadrant plots any two of these
+    multiples on log axes, capped at 24× (states past the cap are drawn scaled down along their own ray, so they stay on
+    the correct side of the diagonal).</p>
     <p><b>Zoom view.</b> The right-hand chart shows the same indexed series restricted to July 1 – end of window,
     with its y-axis rescaled to the maximum visible in that period; index values are unchanged from the full view.</p>
     <p><b>Metro view.</b> The dropdown on a state card narrows both series to one metro area: site traffic counts only
     visitors whose GeoIP location is within 50 miles of the metro's biggest city (still viewing that state's pages), and
     search interest is fetched for the metro's own Google Trends market (Nielsen DMA, e.g. geo US-OR-820 for Portland).
     A state's dropdown lists every DMA Google files under that state — cross-border markets (Denver appears under
-    Nebraska and Wyoming too) use that state's keywords, capturing spillover audiences. Metro search indices are
-    normalized within the metro, so compare shapes, not levels, against the state view.</p>
-    <p><b>Overview / SEO health.</b> Capture = daily uniques arriving from search engines (Google, Bing, DuckDuckGo,
-    Yahoo, Ecosia, Brave referrers; falls back to total traffic if the organic slice is empty); demand = the mean of the
-    state's in-state keyword indices. Both views run on the same 7-day clock. <b>Demand this week</b> = the last 7 full
-    days' average search index as a multiple of the state's typical (median) day; <b>capture this week</b> = the same for
-    organic uniques (baselines are floored so a near-zero median can't inflate the multiple; within one state's series,
-    index ratios approximate real search-volume ratios). <b>Response ratio</b> = capture lift ÷ demand lift: 1.0× = our
-    traffic multiplied exactly as much as search did; below 0.6× = missing demand; above 1.25× = outperforming;
-    "quiet week" = both sides near an ordinary week, nothing to judge; grey = too little volume. The quadrant plots the
-    same two lifts on log axes — below the diagonal, search surged more than we did. All of it is inferred from
-    timing agreement, not from rankings — Search Console data would measure the gap directly.</p>
-    <p><b>Search Console.</b> Clicks, impressions, CTR and average position come from the Google Search Console API
-    for the https://fires.cornea.is/ property, synced daily on the maintainer's machine (the last 7 days are re-fetched
-    every run, so Google's revisions and missed days are picked up). State series use page-level totals, which are
-    complete; Google withholds rare queries whenever query text is requested (about half of impressions here), so the
-    query-based views — metro slices and Top Queries — cover only the queries Google discloses. A metro view counts
-    queries that mention the metro's biggest city and landed on that state's pages. CTR is recomputed from summed
-    clicks and impressions; average position is impression-weighted (1 = the top result). Web, Image, Video, News tab,
-    Discover and Google News are separate search types; Discover and Google News report no query text or position.
-    Data lags about two days, and the most recent day or two are partial until Google finalizes them.</p>
-    <p><b>Top Metros.</b> Ranks all fetched metros by recent search momentum, per term or best term per metro.
-    "Biggest day-over-day jump" = the change in a term's index between the last two full days (Google's final day is
-    partial and excluded). "Closest to their N-day high" = the trailing N-day average as a share of that metro's best
-    N-day average anywhere in the data window, where N is the 7/14/30-day range picker (100% = the term is at its
-    N-day high right now). Both metrics are computed on each
-    metro's own 0–100 index, so they measure momentum relative to that metro's own history — not absolute search
-    volume across metros. Click a row to jump to that metro's chart.</p>
+    Nebraska and Wyoming too) use that state's keywords, capturing spillover audiences.</p>
+    <p><b>Search Console.</b> Impressions, clicks, CTR and average position come from the Google Search Console API
+    for the https://fires.cornea.is/ property (web search; image, video and news are under 1% of web), synced daily on
+    the maintainer's machine — the last 7 days are re-fetched every run, so Google's revisions and missed days are picked
+    up. State series use page-level totals, which are complete; Google withholds rare queries whenever query text is
+    requested (about half of impressions here), so query-based views — metro slices and Top search opportunities — cover
+    only the queries Google discloses. CTR is recomputed from summed clicks and impressions; average position is
+    impression-weighted (1 = the top result). Data lags about two days.</p>
+    <p><b>Top search opportunities.</b> Queries from the last 14 complete Search Console days, grouped by the page they
+    land on (brand and homepage searches excluded). <b>Potential clicks</b> = for each page, the clicks its queries would
+    have earned at this site's usual click-through rate for their position (for queries below page 1, at position 5),
+    minus the clicks they actually got; shown per week, pages under 3/week left out. The usual click-through rate by
+    position is fitted from this site's last 28 days. Queries that drew thousands of impressions but never a single
+    click — where real searchers would have produced 10 or more — are treated as automated traffic and excluded.
+    Page impressions and their trend are the page's complete Search Console totals.</p>
+    <p><b>Metros surging now.</b> For each metro, the term whose average this week is highest relative to last week,
+    counting only terms averaging at least 5 on the metro's own 0–100 index; shown when this week is 1.5× last week or
+    more (each market listed once). Both weeks come from the most recent stretch that Google Trends reports consistently.
+    <b>Capturing</b> = our visitors from that metro this week averaged at least 1.5× last week's.</p>
     <p><b>Fire milestones.</b> Yellow diamonds straddling the baseline mark wildfire start dates in that state, sourced from the
     fire API (fire-api-dev.web.app): wildfires only (prescribed burns excluded), &gt;100 acres final size, started within
     the window. A small number above a triangle counts multiple starts that day; hover the chart to see fire names,
@@ -675,13 +741,14 @@ const KW_META = [
   { tpl: "fire near", varr: "me",   color: "var(--fn)", dash: null },
   { tpl: "fire near", varr: "city", color: "var(--fn)", dash: "6 4" },  /* metro view only */
 ];
-const visible = { traffic: true, k0: true, k1: true, k2: true, k3: true, k4: true, fires: true, gi: true, gc: true };
+/* "wildfire {state}" (zero on ~95% of days) and "fire near me" start hidden under "more terms" */
+const visible = { traffic: true, k0: false, k1: true, k2: true, k3: false, k4: true, fires: true, gi: true };
 let smooth = false;
 let y25 = false;
 let mode = "state";
 const GSC = DATA.gsc;
 const GSC_LABEL = { web: "Web", image: "Image", video: "Video", news: "News tab", discover: "Discover", googleNews: "Google News" };
-let gscType = "web";
+const gscType = "web";   /* image/video/news are <1% of web impressions */
 let gscStrip = "pos";   /* "pos" | "ctr" | "off" */
 const MODE_LABEL = { state: "in-state", national: "national" };
 const MODE_GEO = { state: "geo US-XX (in-state)", national: "geo US (national)" };
@@ -744,17 +811,6 @@ function gscOf(st, sel) {
   const src = sel ? sel.gsc : st.gsc;
   return (src && src[gscType]) || null;
 }
-/* 7 complete days ending at `end`: totals + recomputed CTR + impression-weighted position */
-function gsc7(gs, end) {
-  if (!gs || end == null) return null;
-  let c = 0, i = 0, pw = 0, pi = 0, days = 0;
-  for (let k = Math.max(0, end - 6); k <= end; k++) {
-    if (gs.i[k] == null) continue;
-    days++; c += gs.c[k]; i += gs.i[k];
-    if (gs.p[k] != null) { pw += gs.p[k] * gs.i[k]; pi += gs.i[k]; }
-  }
-  return days ? { c, i, ctr: i ? c / i : null, pos: pi ? pw / pi : null } : null;
-}
 const fpct = v => v == null ? "–" : (v * 100).toFixed(v < 0.1 ? 1 : 0) + "%";
 const fposn = v => v == null ? "–" : v.toFixed(1);
 
@@ -769,77 +825,68 @@ function legendSwatch(meta) {
   return `<svg width="22" height="12" aria-hidden="true"><line x1="1" y1="6" x2="21" y2="6" stroke="${meta.color}" stroke-width="2.4"${meta.dash ? ` stroke-dasharray="${meta.dash}"` : ""}/></svg>`;
 }
 let stateFilter = "-1";
+function chip(k, sw, label) {
+  const on = k.split(",").every(x => visible[x]);
+  return `<button class="lg${on ? "" : " off"}" data-k="${k}" aria-pressed="${on}">${sw}<span class="sw">${label}</span></button>`;
+}
 function buildControls() {
   const c = document.getElementById("controls");
+  const both = `<svg width="22" height="12" aria-hidden="true"><line x1="1" y1="3.5" x2="21" y2="3.5" stroke="var(--f)" stroke-width="2"/><line x1="1" y1="8.5" x2="21" y2="8.5" stroke="var(--f)" stroke-width="2" stroke-dasharray="4 3"/></svg>`;
   let html = `<select class="statef" id="statef" aria-label="State filter"><option value="-1">All states</option>` +
     DATA.states.map(st => `<option value="${st.key}">${st.name}</option>`).join("") + `</select>`;
-  html += DATA.hasNatl ? `<span class="seg" role="group" aria-label="Trends geography">
-    <button data-m="state" class="on" aria-pressed="true">in-state</button>
-    <button data-m="national" aria-pressed="false">national</button></span>` : "";
-  html += `<button class="lg" data-k="traffic" aria-pressed="true">${legendSwatch("traffic")}<span class="sw">site traffic</span></button>`;
-  KW_META.forEach((m, i) => {
-    const lbl = m.varr === "me" ? "fire near me"
-      : m.varr === "city" ? `fire near <span style="color:var(--muted)">{city} · metro view</span>`
-      : `${m.tpl} <span style="color:var(--muted)">{${m.varr === "name" ? "state" : "abbr"}}</span>`;
-    html += `<button class="lg" data-k="k${i}" aria-pressed="true">${legendSwatch(m)}<span class="sw">${lbl}</span></button>`;
-  });
-  html += `<button class="lg" data-k="fires" aria-pressed="true">${legendSwatch("fires")}<span class="sw">fire starts <span style="color:var(--muted)">&gt;100 ac</span></span></button>`;
-  if (GSC) {
-    html += `<button class="lg" data-k="gi" aria-pressed="true">${legendSwatch({ color: "var(--gi)" })}<span class="sw">GSC impressions</span></button>`;
-    html += `<button class="lg" data-k="gc" aria-pressed="true">${legendSwatch({ color: "var(--gc)" })}<span class="sw">GSC clicks</span></button>`;
-    html += `<span class="impact">Search Console
-      <select id="gtype" aria-label="Search Console search type">${GSC.types.map(t => `<option value="${t}">${GSC_LABEL[t]}</option>`).join("")}</select>
-      strip <select id="gstrip" aria-label="Metric shown under each chart"><option value="pos">avg position</option><option value="ctr">CTR</option><option value="off">off</option></select></span>`;
-  }
-  html += `<span class="impact" title="A fire is impactful when at least this many people (2020 Census) live within this distance of its start point, measured from the fire's approximate edge">
-    ${legendSwatch("fires")} impactful ≥
-    <input type="range" id="ipop" min="0" max="${POP_STEPS.length-1}" step="1" value="${POP_STEPS.indexOf(impact.pop)}" aria-label="Impactful population threshold">
-    <b id="ipopv">2k</b> ppl within
-    <input type="range" id="irad" min="0" max="${RING_STEPS.length-1}" step="1" value="${RING_STEPS.indexOf(impact.ring)}" aria-label="Impactful radius">
-    <b id="iradv">5 mi</b></span>`;
+  html += chip("traffic", legendSwatch("traffic"), "our traffic");
+  html += chip("k1,k2", both, `fire <span style="color:var(--muted)">{state / abbr}</span>`);
+  html += chip("fires", legendSwatch("fires"), "fire starts");
+  if (GSC) html += chip("gi", legendSwatch({ color: "var(--gi)" }), "GSC impressions");
+  html += `<details class="pop"><summary class="lg">more terms ▾</summary><div class="popbody">
+      ${chip("k0", legendSwatch(KW_META[0]), `wildfire <span style="color:var(--muted)">{state}</span>`)}
+      ${chip("k3", legendSwatch(KW_META[3]), "fire near me")}
+      ${chip("k4", legendSwatch(KW_META[4]), `fire near <span style="color:var(--muted)">{city} · metro view</span>`)}
+    </div></details>`;
   html += `<span class="gap"></span>`;
-  if (DATA.has25) html += `<label class="smooth"><input type="checkbox" id="y25t"> 2025 trends</label>`;
   html += `<label class="smooth"><input type="checkbox" id="sm"> 7-day smooth</label>`;
-  html += `<div class="axis-note">${DATA.hasNatl ? "Trends geography: <b>in-state</b> = searches from within the state, <b>national</b> = all US. " : "State charts show in-state search interest (searches made from within the state); pick a metro on a card for metro-level data. "}
-    Click a legend chip to show/hide that series everywhere. Solid = full state name, dashed = two-letter abbreviation. y-axis: index, 100 = peak in window.
-    Fire markers: ${legendSwatch("fires")} = impactful under the current sliders, ${legendSwatch("fires_h")} = not.
-    ${GSC ? `Search Console lines (impressions, clicks) are indexed to their own peak like traffic; the strip under each chart shows average position (1 = top result) or CTR. Search Console lags ~2 days, so its lines end early and start where syncing began (${fdate(GSC.coveredFrom || DATA.dates[0])}). In a metro view they cover queries that mention the metro's biggest city.` : ""}</div>`;
+  html += `<details class="pop pop-r"><summary class="lg">⚙ settings</summary><div class="popbody">
+      <div class="prow" title="A fire is impactful when at least this many people (2020 Census) live within this distance of its start point, measured from the fire's approximate edge">
+        ${legendSwatch("fires")} impactful fire ≥
+        <input type="range" id="ipop" min="0" max="${POP_STEPS.length - 1}" step="1" value="${POP_STEPS.indexOf(impact.pop)}" aria-label="Impactful population threshold">
+        <b id="ipopv">2k</b> people within
+        <input type="range" id="irad" min="0" max="${RING_STEPS.length - 1}" step="1" value="${RING_STEPS.indexOf(impact.ring)}" aria-label="Impactful radius">
+        <b id="iradv">5 mi</b></div>
+      ${GSC ? `<div class="prow">strip under each chart
+        <select id="gstrip" aria-label="Metric shown under each chart"><option value="pos">Search Console avg position</option><option value="ctr">Search Console CTR</option><option value="off">off</option></select></div>` : ""}
+    </div></details>`;
+  html += `<button class="lg" id="howtoBtn" aria-expanded="false">ⓘ how to read</button>`;
   c.innerHTML = html;
+
+  document.getElementById("howto").innerHTML = `Every line is indexed so shapes line up: 100 = that series' peak in the window.
+    Search terms are in-state Google Trends (searches made from within the state); pick a metro on a card for metro-level data.
+    The green chip draws "fire {state}" solid and the two-letter abbreviation dashed. Search Console impressions (pink) are indexed
+    the same way; the strip under each chart shows average position (1 = the top result) or CTR, and Search Console lags about two days.
+    In a metro view, Search Console covers queries that mention the metro's biggest city. Fire markers: ${legendSwatch("fires")} = impactful
+    under the current settings, ${legendSwatch("fires_h")} = not. Full definitions are in the notes at the bottom of the page.`;
+  document.getElementById("howtoBtn").addEventListener("click", e => {
+    const h = document.getElementById("howto");
+    h.hidden = !h.hidden;
+    e.currentTarget.setAttribute("aria-expanded", String(!h.hidden));
+  });
+  document.addEventListener("click", e => {
+    document.querySelectorAll("details.pop[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
+  });
   document.getElementById("statef").addEventListener("change", e => {
     stateFilter = e.target.value;
     applyStateFilter();
   });
-  c.querySelectorAll(".seg button").forEach(btn => btn.addEventListener("click", () => {
-    if (mode === btn.dataset.m) return;
-    mode = btn.dataset.m;
-    c.querySelectorAll(".seg button").forEach(b => {
-      const on = b.dataset.m === mode;
-      b.classList.toggle("on", on);
-      b.setAttribute("aria-pressed", String(on));
-    });
-    document.querySelectorAll(".tblwrap").forEach(w => { delete w.dataset.built; w.innerHTML = ""; });
-    updateMeta();
-    updateModeStats();
-    renderAll();
-  }));
-  c.querySelectorAll(".lg").forEach(btn => btn.addEventListener("click", () => {
-    const k = btn.dataset.k;
-    visible[k] = !visible[k];
-    btn.classList.toggle("off", !visible[k]);
-    btn.setAttribute("aria-pressed", String(visible[k]));
+  c.querySelectorAll(".lg[data-k]").forEach(btn => btn.addEventListener("click", () => {
+    const ks = btn.dataset.k.split(",");
+    const on = !ks.every(k => visible[k]);
+    ks.forEach(k => { visible[k] = on; });
+    btn.classList.toggle("off", !on);
+    btn.setAttribute("aria-pressed", String(on));
     renderAll();
   }));
   document.getElementById("sm").addEventListener("change", e => { smooth = e.target.checked; renderAll(); });
-  const gt = document.getElementById("gtype"), gsSel = document.getElementById("gstrip");
-  if (gt) gt.addEventListener("change", e => {
-    gscType = e.target.value;
-    document.querySelectorAll(".tblwrap").forEach(w => { delete w.dataset.built; w.innerHTML = ""; });
-    updateModeStats();
-    renderAll();
-  });
+  const gsSel = document.getElementById("gstrip");
   if (gsSel) gsSel.addEventListener("change", e => { gscStrip = e.target.value; renderAll(); });
-  const y25t = document.getElementById("y25t");
-  if (y25t) y25t.addEventListener("change", e => { y25 = e.target.checked; renderAll(); });
   let raf = 0;
   const queueRender = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; renderAll(); }); };
   document.getElementById("ipop").addEventListener("input", e => {
@@ -903,11 +950,11 @@ function renderChart(st, rkey, sel) {
   let rawMax = 0;
   const scan = s => { for (let i = r0; i <= r1; i++) if (s[i] > rawMax) rawMax = s[i]; };
   if (visible.traffic && hasTraffic) scan(disp(trafIdx));
-  if (kwS) kwS.forEach((s, i) => { if (visible["k"+i] && s.length) scan(disp(s)); });
+  const dispN = s => smooth ? smooth7n(s) : s;
+  if (kwS) kwS.forEach((s, i) => { if (visible["k"+i] && s.length) scan(dispN(s)); });
   if (k25) k25.forEach((s, i) => { if (visible["k"+i] && s.length) scan(disp(s)); });
   const gs = gscOf(st, sel);
-  const gLines = gs ? [["gi", idxOf(gs.i), "var(--gi)"], ["gc", idxOf(gs.c), "var(--gc)"]]
-    .filter(([k]) => visible[k]).map(([k, s, col]) => [k, smooth ? smooth7n(s) : s, col]) : [];
+  const gLines = gs && visible.gi ? [["gi", dispN(idxOf(gs.i)), "var(--gi)"]] : [];
   gLines.forEach(([, s]) => scan(s));
   if (rkey === "full") rawMax = Math.max(rawMax, 100);
   const { step, ymax } = niceAxis(rawMax);
@@ -916,6 +963,16 @@ function renderChart(st, rkey, sel) {
   function path(series) {
     let d = "";
     for (let i = r0; i <= r1; i++) d += (i > r0 ? "L" : "M") + Xr(i).toFixed(1) + " " + Y(series[i]).toFixed(1);
+    return d;
+  }
+  /* gaps where a value is missing (null) instead of drawing it as zero */
+  function pathN(series) {
+    let d = "", pen = false;
+    for (let i = r0; i <= r1; i++) {
+      if (series[i] == null) { pen = false; continue; }
+      d += (pen ? "L" : "M") + Xr(i).toFixed(1) + " " + Y(series[i]).toFixed(1);
+      pen = true;
+    }
     return d;
   }
 
@@ -950,7 +1007,7 @@ function renderChart(st, rkey, sel) {
   if (kwS) kwS.forEach((s0, i) => {
     if (!visible["k"+i] || !s0.length) return;
     const m = KW_META[i];
-    g += `<path d="${path(disp(s0))}" fill="none" stroke="${m.color}" stroke-width="1.6"${m.dash ? ` stroke-dasharray="${m.dash}"` : ""} stroke-linejoin="round" opacity="0.95"/>`;
+    g += `<path d="${pathN(dispN(s0))}" fill="none" stroke="${m.color}" stroke-width="1.6"${m.dash ? ` stroke-dasharray="${m.dash}"` : ""} stroke-linejoin="round" opacity="0.95"/>`;
   });
 
   gLines.forEach(([k, s, col]) => {
@@ -1028,46 +1085,97 @@ function renderStrip(st, rkey, sel) {
   return `<svg viewBox="0 0 ${W} ${HS}" class="strip" role="img" aria-label="Search Console ${what} for ${st.name}">${g}</svg>`;
 }
 
+/* ---------- health math shared by cards + overview (one clock: WIN days) ---------- */
+const WIN = 14;
+/* mean of the last `win` values ending at endI, skipping missing (null) days */
+function rollN(s, endI, win) {
+  let sum = 0, n = 0;
+  for (let i = Math.max(0, endI - win + 1); i <= endI; i++) if (s[i] != null) { sum += s[i]; n++; }
+  return n ? sum / n : null;
+}
+function meanSeries(kwS) {
+  return DATA.dates.map((_, i) => {
+    let sum = 0, n = 0;
+    kwS.forEach(k => { if (k.length > i && k[i] != null) { sum += k[i]; n++; } });
+    return n ? sum / n : null;
+  });
+}
+function medianOf(arr, end) {
+  const a = arr.slice(0, end + 1).filter(v => v != null).sort((x, y) => x - y);
+  return a.length ? a[Math.floor(a.length / 2)] : 0;
+}
+/* lift = mean of the last WIN days vs the series' typical (median) day; baselines floored
+   so a near-zero median can't manufacture a huge multiple */
+function liftPair(S, T, end) {
+  const smax = Math.max(0, ...S.filter(v => v != null));
+  const baseS = Math.max(medianOf(S, end), 0.05 * smax, 0.5);
+  const baseT = Math.max(medianOf(T, end), 1);
+  const s = rollN(S, end, WIN), t = rollN(T, end, WIN);
+  return { D: s == null ? null : s / baseS, C: t == null ? null : t / baseT, baseT };
+}
+/* GSC totals over `win` days ending at `end` */
+function gscWin(gs, end, win = WIN) {
+  if (!gs || end == null || end - win + 1 < 0) return null;
+  let c = 0, i = 0, pw = 0, pi = 0, days = 0;
+  for (let k = end - win + 1; k <= end; k++) {
+    if (gs.i[k] == null) continue;
+    days++; c += gs.c[k]; i += gs.i[k];
+    if (gs.p[k] != null) { pw += gs.p[k] * gs.i[k]; pi += gs.i[k]; }
+  }
+  return days ? { c, i, ctr: i ? c / i : null, pos: pi ? pw / pi : null } : null;
+}
+const liftFmt = v => v == null ? "–" : (v >= 10 ? v.toFixed(0) : v.toFixed(1)) + "×";
+function chg(now, prev) {
+  if (!prev || !now) return "";
+  const r = now / prev;
+  return r >= 1.05 ? `<span class="up">↑${liftFmt(r)}</span>` : r <= 0.95 ? `<span class="dn">↓${liftFmt(r)}</span>` : `<span class="lbl">flat</span>`;
+}
+
 /* ---------- cards ---------- */
 function modeStatsHtml(st, sel) {
-  const m = sel ? sel.mode : st.modes[mode];
-  const where = sel ? `${sel.name} metro` : MODE_LABEL[mode];
-  if (!m) return `<span class="lbl">no ${where} trends data</span>`;
+  const end = N - 2;
   let h = "";
-  if (sel) {
-    const mu = sel.traffic.reduce((a, b) => a + b, 0);
-    h += `<span><span class="lbl">metro users</span> <b>${fmt(mu)}</b></span>`;
+  if (!sel) {
+    const hl = healthOf(st);
+    if (hl) h += `<span class="pill ${STATUS[hl.status].cls}">${STATUS[hl.status].label}</span>` + (hl.sparse
+      ? `<span class="lbl">search too sparse in Google Trends to judge</span>`
+      : `<span><span class="lbl">search</span> <b>${liftFmt(hl.D)}</b> <span class="lbl">→ us</span> <b>${liftFmt(hl.C)}</b> <span class="lbl">vs typical, ${WIN}d</span></span>`);
+    const T = st.organic && st.organic.some(v => v > 0) ? st.organic : st.traffic;
+    if (T) h += `<span class="pages"><span class="lbl">organic ${WIN}d</span> <b>${fmt(rollN(T, end, WIN) * WIN)}</b></span>`;
+  } else {
+    const S = sel.mode && sel.mode.kwSeries ? meanSeries(sel.mode.kwSeries) : null;
+    if (S && sel.traffic) {
+      const lp = liftPair(S, sel.traffic, end);
+      h += sparseSearch(S) ? `<span class="lbl">metro search too sparse to judge</span>`
+        : `<span><span class="lbl">search</span> <b>${liftFmt(lp.D)}</b> <span class="lbl">→ our visitors</span> <b>${liftFmt(lp.C)}</b> <span class="lbl">vs typical, ${WIN}d</span></span>`;
+    } else if (!S) h += `<span class="lbl">no metro search data</span>`;
+    if (sel.traffic) h += `<span><span class="lbl">metro visitors ${WIN}d</span> <b>${fmt(rollN(sel.traffic, end, WIN) * WIN)}</b></span>`;
   }
-  if (m.searchPeakDate)
-    h += `<span><span class="lbl">search peak</span> <b>${fdate(m.searchPeakDate)}</b> <span class="lbl">(${m.searchPeakKw})</span></span>`;
-  else
-    h += `<span><span class="lbl">search peak</span> <b>–</b></span>`;
-  h += `<span><span class="lbl">corr r</span> <b>${m.r === null ? "–" : m.r.toFixed(2)}</b></span>`;
-  if (sel) h += `<span class="lbl">trends geo: metro DMA</span>`;
-  const g7 = GSC ? gsc7(gscOf(st, sel), GSC_LAST) : null;
-  if (g7) h += `<span><span class="lbl">GSC ${GSC_LABEL[gscType].toLowerCase()}, 7d to ${fdate(DATA.dates[GSC_LAST])}${sel ? ` · "${sel.city}" queries` : ""}</span>
-    <b>${fmt(g7.i)}</b> <span class="lbl">impr ·</span> <b>${fmt(g7.c)}</b> <span class="lbl">clicks ·</span> <b>${fpct(g7.ctr)}</b> <span class="lbl">CTR · pos</span> <b>${fposn(g7.pos)}</b></span>`;
+  if (!sel && st.fires && st.fires.length)
+    h += `<span><b>${st.fires.length}</b> <span class="lbl">fires ·</span> <b class="fscount">${st.fires.filter(isImpactful).length}</b> <span class="lbl">impactful</span></span>`;
+  if (GSC && GSC_LAST != null) {
+    const gs = gscOf(st, sel);
+    const now = gscWin(gs, GSC_LAST), prev = gscWin(gs, GSC_LAST - WIN);
+    if (now && (!sel || now.i >= 20)) {
+      const dpos = now.pos != null && prev && prev.pos != null ? prev.pos - now.pos : null;
+      h += `<span title="Search Console, web, ${WIN} days to ${fdate(DATA.dates[GSC_LAST])} vs the ${WIN} before · CTR ${fpct(now.ctr)}">
+        <span class="lbl">GSC ${WIN}d${sel ? ` "${esc(sel.city)}"` : ""}</span> <b>${fmt(now.i)}</b> <span class="lbl">impr</span> ${chg(now.i, prev && prev.i)}
+        <span class="lbl">· ${fmt(now.c)} clicks · pos</span> <b>${fposn(now.pos)}</b>${dpos == null || Math.abs(dpos) < 0.1 ? "" : dpos > 0 ? ` <span class="up">↑${dpos.toFixed(1)}</span>` : ` <span class="dn">↓${(-dpos).toFixed(1)}</span>`}</span>`;
+    }
+  }
   return h;
 }
 function buildCards() {
   const grid = document.getElementById("grid");
   grid.innerHTML = DATA.states.map((st, si) => {
     const s = st.stats;
-    const fixed = s
-      ? `<span><span class="lbl">users in window</span> <b>${fmt(s.total)}</b></span>
-         <span><span class="lbl">traffic peak</span> <b>${fdate(s.peakTrafficDate)}</b></span>
-         <span class="pages"><span class="lbl">counting</span> <b>${st.pagesLabel}</b></span>`
-      : "";
-    const firestat = st.fires && st.fires.length
-      ? `<span><span class="lbl">fires</span> <b>${st.fires.length}</b> <span class="lbl">· impactful</span> <b class="fscount"></b></span>`
-      : "";
     const msel = st.metros && st.metros.length
       ? `<select class="msel" aria-label="Area for ${st.name}"><option value="-1">All of ${st.name}</option>` +
         st.metros.map((m, mi) => `<option value="${mi}">${m.name} metro</option>`).join("") + `</select>`
       : "";
     return `<div class="card" data-si="${si}" data-msel="-1">
       <h2>${st.name} <span class="ab">${st.abbr}</span>${s ? "" : '<span class="notraffic">no site data in export</span>'}${msel}</h2>
-      <div class="stats">${fixed}${firestat}<span class="modestats">${modeStatsHtml(st, null)}</span></div>
+      <div class="stats"><span class="modestats">${modeStatsHtml(st, null)}</span></div>
       <div class="charts">
         <div class="chart" data-r="full"></div>
         <div class="chart" data-r="zoom"></div>
@@ -1089,18 +1197,19 @@ function buildCards() {
       for (let i = 0; i < N; i++) {
         const gd = !gs ? "" : gs.i[i] == null ? `<td>–</td><td>–</td><td>–</td><td>–</td>`
           : `<td>${gs.i[i]}</td><td>${gs.c[i]}</td><td>${gs.i[i] ? fpct(gs.c[i] / gs.i[i]) : "–"}</td><td>${fposn(gs.p[i])}</td>`;
-        h += `<tr><td>${DATA.dates[i]}</td><td>${st.traffic ? st.traffic[i] : "–"}</td>${kwS.map(s => `<td>${s.length ? s[i] : "–"}</td>`).join("")}${gd}</tr>`;
+        h += `<tr><td>${DATA.dates[i]}</td><td>${st.traffic ? st.traffic[i] : "–"}</td>${kwS.map(s => `<td>${s.length && s[i] != null ? s[i] : "–"}</td>`).join("")}${gd}</tr>`;
       }
       wrap.innerHTML = h + "</tbody></table>";
     });
-    const pg = card.querySelector(".pages");
-    if (pg) {
-      pg.addEventListener("pointermove", e => {
+    const statsEl = card.querySelector(".stats");
+    if (statsEl) {
+      statsEl.addEventListener("pointermove", e => {
+        if (!e.target.closest(".pages")) { tip.style.display = "none"; return; }
         const det = st.pagesDetail || [];
         let rows = det.slice(0, 14).map(pd =>
           `<div class="row"><span class="n">${pd[0]}</span><span class="v">${fmt(pd[1])} users</span></div>`).join("");
         if (det.length > 14) rows += `<div class="row"><span class="n" style="color:var(--muted)">+${det.length - 14} more pages</span></div>`;
-        tip.innerHTML = `<div class="d">${st.name} · pages counted</div>` + rows;
+        tip.innerHTML = `<div class="d">${st.name} · pages counted${st.stats ? ` · ${fmt(st.stats.total)} users since ${fdate(DATA.dates[0])}` : ""}</div>` + rows;
         tip.style.display = "block";
         const tw = tip.offsetWidth, th = tip.offsetHeight;
         let tx = e.clientX + 14, ty = e.clientY + 12;
@@ -1108,7 +1217,7 @@ function buildCards() {
         if (ty + th > innerHeight - 8) ty = e.clientY - th - 12;
         tip.style.left = tx + "px"; tip.style.top = ty + "px";
       });
-      pg.addEventListener("pointerleave", () => { tip.style.display = "none"; });
+      statsEl.addEventListener("pointerleave", () => { tip.style.display = "none"; });
     }
     const ms = card.querySelector(".msel");
     if (ms) ms.addEventListener("change", () => {
@@ -1158,146 +1267,181 @@ const STATUS = {
   out:   { label: "outperforming", cls: "st-out",   color: "#0ca30c" },
   track: { label: "tracking",      cls: "st-track", color: "#898781" },
   miss:  { label: "missing demand", cls: "st-miss", color: "#d03b3b" },
-  quiet: { label: "quiet week",    cls: "st-low",   color: "#898781" },
   low:   { label: "low signal",    cls: "st-low",   color: "#898781" },
 };
 
-function healthOf(st) {
-  const kwS = st.modes.state && st.modes.state.kwSeries;
-  const T = st.organic && st.organic.some(v => v > 0) ? st.organic : st.traffic;
-  if (!kwS || !T) return null;
-  const lastFull = N - 2;
-  /* S = mean of the state's keyword indices per day */
-  const S = [];
-  for (let i = 0; i <= lastFull; i++) {
-    let s = 0, n = 0;
-    kwS.forEach(k => { if (k.length > i) { s += k[i]; n++; } });
-    S.push(n ? s / n : 0);
-  }
-  const median = arr => {
-    const a = [...arr.slice(0, lastFull + 1)].sort((x, y) => x - y);
-    return a[Math.floor(a.length / 2)];
-  };
-  /* lift = mean of the last 7 full days vs the series' typical (median) day,
-     with floors so a near-zero baseline can't explode the ratio */
-  const baseS = Math.max(median(S), 0.05 * Math.max(...S), 0.5);
-  const baseT = Math.max(median(T), 1);
-  const D = rollN(S, lastFull, 7) / baseS;   /* demand lift */
-  const C = rollN(T, lastFull, 7) / baseT;   /* capture lift */
-  const ratio = D > 0 ? C / D : null;
-  const totalT = T.reduce((a, b) => a + b, 0);
-  const t7 = Math.round(rollN(T, lastFull, 7) * 7);
-  const status = statusOf(D, C, totalT < 300);
-  /* Search Console (web), on its own clock: the 7 complete days ending GSC_LAST.
-     Baseline = its typical (median) synced day, so lifts firm up as history accumulates. */
-  let g = null;
-  const gw = st.gsc && st.gsc.web;
-  if (GSC && gw && GSC_LAST != null) {
-    const k0 = gw.i.findIndex(v => v != null);
-    if (k0 >= 0 && k0 <= GSC_LAST) {
-      const med = arr => {
-        const a = arr.slice(k0, GSC_LAST + 1).filter(v => v != null).sort((x, y) => x - y);
-        return a.length ? a[Math.floor(a.length / 2)] : 0;
-      };
-      const mean7 = arr => {
-        let sum = 0, n = 0;
-        for (let k = Math.max(k0, GSC_LAST - 6); k <= GSC_LAST; k++) if (arr[k] != null) { sum += arr[k]; n++; }
-        return n ? sum / n : 0;
-      };
-      const g7 = gsc7(gw, GSC_LAST);
-      const totalI = gw.i.reduce((a, v) => a + (v || 0), 0);
-      g = { I: mean7(gw.i) / Math.max(med(gw.i), 1), C: mean7(gw.c) / Math.max(med(gw.c), 1),
-            ctr: g7 && g7.ctr, pos: g7 && g7.pos, i7: g7 ? g7.i : 0, c7: g7 ? g7.c : 0,
-            Dg: rollN(S, Math.min(GSC_LAST, lastFull), 7) / baseS,
-            low: totalI < 300, days: GSC_LAST - k0 + 1 };
-    }
-  }
-  return { st, D, C, ratio, status, totalT, t7, organic: T === st.organic, g };
-}
-
-/* one rule for every lift-vs-lift pair: y/x below 0.6 = missing, above 1.25 = outperforming */
+/* one symmetric rule for every lift-vs-lift pair: us÷search below 0.6 = missing demand,
+   above 1.25 = outperforming, otherwise tracking. It applies whether search rose or fell —
+   traffic falling much faster than steady search is a loss too. */
 function statusOf(x, y, low) {
-  if (low || !(x > 0)) return "low";
-  if (x < 1.2 && y < 1.2) return "quiet";
+  if (low || x == null || y == null || !(x > 0)) return "low";
   const r = y / x;
   return r < 0.6 ? "miss" : r > 1.25 ? "out" : "track";
 }
 
-/* quadrant presets: which two lifts to plot */
+/* Google Trends returns small values only for the most recent ~14 days of each fetch and
+   reports older low-volume days as 0. A series that was mostly zero before that tail has
+   no usable "typical day", so its lift can't be judged. */
+const FRESH0 = N - 15;
+function sparseSearch(S) {
+  const v = S.slice(0, FRESH0).filter(x => x != null);
+  return !v.length || v.filter(x => x > 0).length / v.length < 0.5;
+}
+const _health = new Map();
+function healthOf(st) {
+  if (_health.has(st.key)) return _health.get(st.key);
+  const kwS = st.modes.state && st.modes.state.kwSeries;
+  const T = st.organic && st.organic.some(v => v > 0) ? st.organic : st.traffic;
+  let h = null;
+  if (kwS && T) {
+    const end = N - 2;
+    const S = meanSeries(kwS);
+    const { D, C, baseT } = liftPair(S, T, end);
+    const totalT = T.reduce((a, b) => a + (b || 0), 0);
+    /* rough visits/week we'd have had if our traffic had risen as much as search did */
+    const missed = D != null && C != null && D > C ? (D - C) * baseT * 7 : 0;
+    let g = null;
+    const gw = st.gsc && st.gsc.web;
+    if (GSC && gw && GSC_LAST != null && gw.i.some(v => v != null)) {
+      /* GSC side on its own clock (it lags ~2 days): WIN days ending GSC_LAST, demand re-measured on that window */
+      const smax = Math.max(0, ...S.filter(v => v != null));
+      const baseS = Math.max(medianOf(S, end), 0.05 * smax, 0.5);
+      const sw = rollN(S, Math.min(GSC_LAST, end), WIN);
+      const iw = rollN(gw.i, GSC_LAST, WIN), cw = rollN(gw.c, GSC_LAST, WIN);
+      const now = gscWin(gw, GSC_LAST);
+      g = { I: iw == null ? null : iw / Math.max(medianOf(gw.i, GSC_LAST), 1),
+            C: cw == null ? null : cw / Math.max(medianOf(gw.c, GSC_LAST), 1),
+            Dg: sw == null ? null : sw / baseS, ctr: now && now.ctr, pos: now && now.pos,
+            low: gw.i.reduce((a, v) => a + (v || 0), 0) < 300 };
+    }
+    const sparse = sparseSearch(S);
+    h = { st, D, C, ratio: D > 0 && C != null ? C / D : null, status: statusOf(D, C, totalT < 300 || sparse),
+          sparse, totalT, t14: Math.round((rollN(T, end, WIN) || 0) * WIN), missed: sparse ? 0 : missed, g };
+  }
+  _health.set(st.key, h);
+  return h;
+}
+
+/* the likely reason, read off Search Console (impressions = were we shown; clicks = were we chosen) */
+function whyOf(h) {
+  const g = h.g;
+  if (!g || g.low || g.Dg == null || g.I == null) return `<span class="lbl">no Search Console signal</span>`;
+  if (g.I / g.Dg < 0.6)
+    return `losing visibility <span class="lbl">· Google impressions ${liftFmt(g.I)} vs search ${liftFmt(g.Dg)}</span>`;
+  if (g.C != null && g.I > 0 && g.C / g.I < 0.6)
+    return `shown, not clicked <span class="lbl">· clicks ${liftFmt(g.C)} vs impressions ${liftFmt(g.I)}</span>`;
+  if (g.C != null && h.D != null && g.C >= 0.8 * h.D)
+    return `Google clicks kept pace <span class="lbl">(${liftFmt(g.C)}) · gap is outside Google search</span>`;
+  return `visibility and clicks both slipped <span class="lbl">· impressions ${liftFmt(g.I)}, clicks ${liftFmt(g.C)}</span>`;
+}
+
 const QPRESETS = {
-  dc: { label: "search demand → our traffic", x: "search demand (Trends)", y: "our organic traffic (PostHog)",
-        pick: h => ({ x: h.D, y: h.C, low: h.status === "low" }) },
   dv: { label: "search demand → our visibility", x: "search demand (Trends)", y: "our impressions (Search Console)",
-        pick: h => h.g && ({ x: h.g.Dg, y: h.g.I, low: h.g.low }) },
+        pick: h => h.g && ({ x: h.g.Dg, y: h.g.I, low: h.g.low || h.sparse }) },
+  dc: { label: "search demand → our traffic", x: "search demand (Trends)", y: "our organic traffic",
+        pick: h => ({ x: h.D, y: h.C, low: h.status === "low" }) },
   vc: { label: "our visibility → our clicks", x: "our impressions (Search Console)", y: "our clicks (Search Console)",
         pick: h => h.g && ({ x: h.g.I, y: h.g.C, low: h.g.low }) },
 };
-let qpreset = "dc";
+let qpreset = GSC ? "dv" : "dc";
+
+function stateChip(h, val) {
+  return `<button class="schip orow" data-key="${h.st.key}">${h.st.abbr}<span class="lbl"> ${val}</span></button>`;
+}
 
 function buildOverview() {
   const sec = document.getElementById("overview");
   const healths = DATA.states.map(healthOf);
   if (!healths.some(Boolean)) { sec.hidden = true; return; }
   sec.hidden = false;
-  const lastFull = N - 2;
-  const anyOrganic = healths.some(h => h && h.organic);
-  const gDays = Math.max(0, ...healths.filter(h => h && h.g).map(h => h.g.days));
+  const end = N - 2;
   document.getElementById("osub").textContent =
-    `last 7 full days (through ${fdate(DATA.dates[lastFull])}) · lift = this week vs the state's typical (median) day · capture = ${anyOrganic ? "search-engine-referred (organic)" : "total"} daily uniques`
-    + (GSC && GSC_LAST != null ? ` · Search Console columns: web, 7 days to ${fdate(DATA.dates[GSC_LAST])}, baseline = ${gDays} synced days${gDays < 28 ? " (short — lifts firm up after a longer backfill)" : ""}` : "");
+    `last ${WIN} days (to ${fdate(DATA.dates[end])}) vs each state's typical day · our traffic = organic visits`
+    + (GSC && GSC_LAST != null ? ` · Search Console to ${fdate(DATA.dates[GSC_LAST])}` : "");
 
-  /* 1 · scorecard */
-  const order = { miss: 0, track: 1, out: 2, quiet: 3, low: 4 };
-  const rows = healths.filter(Boolean)
-    .sort((a, b) => order[a.status] - order[b.status] || (a.ratio ?? 9) - (b.ratio ?? 9));
-  const lift = v => v == null ? "–" : (v >= 10 ? v.toFixed(0) : v.toFixed(1)) + "×";
-  const hasG = GSC && rows.some(h => h.g);
-  const gCols = hasG ? `<col style="width:74px"><col style="width:74px"><col style="width:58px"><col style="width:52px">` : "";
-  const gHead = hasG ? `<th style="white-space:normal">GSC impr lift</th><th style="white-space:normal">GSC clicks lift</th><th style="white-space:normal">GSC CTR 7d</th><th style="white-space:normal">GSC avg pos</th>` : "";
-  const gCells = h => !hasG ? "" : !h.g ? `<td>–</td><td>–</td><td>–</td><td>–</td>`
-    : `<td>${lift(h.g.I)}</td><td>${lift(h.g.C)}</td><td>${fpct(h.g.ctr)}</td><td>${fposn(h.g.pos)}</td>`;
-  document.getElementById("oscore").innerHTML =
-    `<table class="mtab" style="min-width:${hasG ? 900 : 620}px"><colgroup><col><col style="width:132px"><col style="width:78px"><col style="width:78px"><col style="width:76px"><col style="width:64px">${gCols}</colgroup>
-     <thead><tr><th class="l">state</th><th class="l">status</th><th style="white-space:normal">demand this week</th><th style="white-space:normal">capture this week</th><th style="white-space:normal">response ratio</th><th style="white-space:normal">organic 7d</th>${gHead}</tr></thead><tbody>` +
-    rows.map(h => `<tr class="orow mrow" data-key="${h.st.key}" tabindex="0">
-      <td class="mn">${h.st.name}</td>
-      <td class="stcell"><span class="pill ${STATUS[h.status].cls}">${STATUS[h.status].label}</span></td>
-      <td>${lift(h.D)}</td>
-      <td>${lift(h.C)}</td>
-      <td class="${h.ratio !== null && h.ratio < 0.6 && h.status === "miss" ? "bad" : ""}">${h.ratio === null ? "–" : h.ratio.toFixed(2) + "×"}</td>
-      <td>${fmt(h.t7)}</td>${gCells(h)}</tr>`).join("") +
-    `</tbody></table>`;
+  const hs = healths.filter(Boolean);
+  const by = st => hs.filter(h => h.status === st);
+  const miss = by("miss").sort((a, b) => b.missed - a.missed);
+  const hasG = GSC && hs.some(h => h.g);
+
+  let html = miss.length
+    ? `<table class="mtab score"><colgroup><col style="width:130px"><col style="width:128px"><col style="width:130px"><col style="width:96px"><col></colgroup>
+       <thead><tr><th class="l">state</th><th class="l">status</th><th>search → us</th><th style="white-space:normal">est. missed visits / wk</th>
+       <th class="l">${hasG ? "likely why (Search Console)" : ""}</th></tr></thead><tbody>` +
+      miss.map(h => `<tr class="orow mrow" data-key="${h.st.key}" tabindex="0">
+        <td class="mn">${h.st.name}</td>
+        <td class="stcell"><span class="pill ${STATUS[h.status].cls}">${STATUS[h.status].label}</span></td>
+        <td>${liftFmt(h.D)} → ${liftFmt(h.C)}</td>
+        <td class="bad">${fmt(h.missed)}</td>
+        <td class="kw why">${hasG ? whyOf(h) : ""}</td></tr>`).join("") + `</tbody></table>`
+    : `<div class="mempty">No state is missing demand over the last ${WIN} days.</div>`;
+
+  const line = (label, list, val, cls) => list.length
+    ? `<div class="sline ${cls || ""}"><span class="slabel">${label}</span>${list.map(h => stateChip(h, val(h))).join("")}</div>` : "";
+  html += line("outperforming", by("out").sort((a, b) => b.ratio - a.ratio), h => `${liftFmt(h.D)}→${liftFmt(h.C)}`, "s-out");
+  html += line("tracking demand", by("track"), h => `${liftFmt(h.D)}→${liftFmt(h.C)}`);
+  const low = by("low");
+  if (low.length)
+    html += `<details class="sline squiet"><summary><span class="slabel">can't judge yet</span>
+      <span class="lbl">${low.length} states — Google Trends reports too few searches here to set a typical level</span></summary>
+      ${low.map(h => stateChip(h, h.sparse ? "sparse search" : "low traffic")).join("")}</details>`;
+  document.getElementById("oscore").innerHTML = html;
+
   const qsel = document.getElementById("qpreset");
   if (!qsel.options.length) {
     qsel.innerHTML = Object.entries(QPRESETS).filter(([k]) => k === "dc" || hasG)
       .map(([k, v]) => `<option value="${k}">${v.label}</option>`).join("");
+    qsel.value = qpreset;
     qsel.addEventListener("change", e => { qpreset = e.target.value; renderQuad(healths); });
   }
   renderQuad(healths);
+
   sec.querySelectorAll("#oscore .orow").forEach(el => {
+    const h = healthOf(DATA.states.find(x => x.key === el.dataset.key));
     el.addEventListener("click", () => openState(el.dataset.key));
     el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openState(el.dataset.key); } });
+    el.addEventListener("pointermove", e => {
+      const g = h.g;
+      tip.innerHTML = `<div class="d">${h.st.name} · last ${WIN} days vs typical</div>
+        <table class="tt"><tbody>
+        <tr><td class="n">search demand</td><td>${liftFmt(h.D)}</td></tr>
+        <tr><td class="n">our organic traffic</td><td>${liftFmt(h.C)} · ${fmt(h.t14)} visits</td></tr>
+        <tr><td class="n">response ratio</td><td>${h.ratio == null ? "–" : h.ratio.toFixed(2) + "×"}</td></tr>
+        ${g ? `<tr><td class="n">GSC impressions</td><td>${liftFmt(g.I)}</td></tr>
+        <tr><td class="n">GSC clicks</td><td>${liftFmt(g.C)}</td></tr>
+        <tr><td class="n">GSC CTR · avg position</td><td>${fpct(g.ctr)} · ${fposn(g.pos)}</td></tr>` : ""}
+        </tbody></table>`;
+      tip.style.display = "block";
+      let tx = e.clientX + 14, ty = e.clientY + 12;
+      if (tx + tip.offsetWidth > innerWidth - 8) tx = e.clientX - tip.offsetWidth - 14;
+      if (ty + tip.offsetHeight > innerHeight - 8) ty = e.clientY - tip.offsetHeight - 12;
+      tip.style.left = tx + "px"; tip.style.top = ty + "px";
+    });
+    el.addEventListener("pointerleave", () => { tip.style.display = "none"; });
   });
 }
 
 function renderQuad(healths) {
   const P = QPRESETS[qpreset];
-
-  /* 2 · quadrant: lift vs lift, log scale */
   const QW = 420, QH = 330, QL = 48, QR = 46, QT = 14, QB = 40;
   const mono = `font-family="IBM Plex Mono, monospace"`;
   const pts = healths.filter(Boolean).map(h => {
     const v = P.pick(h);
-    if (!v) return null;
+    if (!v || v.x == null || v.y == null) return null;
     return { h, x: v.x, y: v.y, ratio: v.x > 0 ? v.y / v.x : null, status: statusOf(v.x, v.y, v.low) };
   }).filter(p => p && p.status !== "low");
   const allLifts = pts.flatMap(p => [p.x, p.y]).filter(v => v > 0);
-  const lo = Math.min(0.4, ...allLifts) * 0.85, hi = Math.max(3, ...allLifts) * 1.2;
-  const LX = v => QL + (Math.log(Math.max(v, lo)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) * (QW - QL - QR);
-  const LY = v => (QH - QB) - (Math.log(Math.max(v, lo)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) * (QH - QB - QT);
+  /* cap the axis so one extreme state (e.g. 100×+) can't squash everyone else into a corner */
+  const CAP = 24;
+  const lo = Math.max(0.1, Math.min(0.4, ...allLifts) * 0.85), hi = Math.min(CAP, Math.max(3, ...allLifts) * 1.2);
+  const cl = v => Math.min(Math.max(v, lo), hi);
+  /* a point past the cap is scaled toward the origin along its own ray, so it keeps its
+     us÷search ratio (its side of the diagonal) instead of being pinned to a corner */
+  const onRay = (x, y) => { const k = Math.max(x, y) > hi ? hi / Math.max(x, y) : 1; return [x * k, y * k]; };
+  const LX = v => QL + (Math.log(cl(v)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) * (QW - QL - QR);
+  const LY = v => (QH - QB) - (Math.log(cl(v)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) * (QH - QB - QT);
   let g = "";
-  const ticks = [0.25, 0.5, 1, 2, 4, 8, 16, 32, 64].filter(t => t >= lo && t <= hi);
-  ticks.forEach(t => {
+  [0.25, 0.5, 1, 2, 4, 8, 16].filter(t => t >= lo && t <= hi).forEach(t => {
     const em = t === 1;
     g += `<line x1="${LX(t)}" y1="${LY(lo)}" x2="${LX(t)}" y2="${QT}" stroke="${em ? "var(--axis)" : "var(--grid)"}"/>`;
     g += `<line x1="${QL}" y1="${LY(t)}" x2="${QW - QR}" y2="${LY(t)}" stroke="${em ? "var(--axis)" : "var(--grid)"}"/>`;
@@ -1305,40 +1449,47 @@ function renderQuad(healths) {
     g += `<text x="${QL - 6}" y="${LY(t) + 3}" text-anchor="end" font-size="9.5" fill="var(--muted)" ${mono}>${t}×</text>`;
   });
   g += `<line x1="${LX(lo)}" y1="${LY(lo)}" x2="${LX(hi)}" y2="${LY(hi)}" stroke="var(--muted)" stroke-dasharray="5 4" opacity="0.7"/>`;
-  g += `<text x="${QW - QR}" y="${QH - QB - 8}" text-anchor="end" font-size="10" fill="#d03b3b" ${mono}>↓ under-responding</text>`;
+  g += `<text x="${QW - QR}" y="${QH - QB - 8}" text-anchor="end" font-size="10" fill="#d03b3b" ${mono}>↓ falling behind</text>`;
   g += `<text x="${QL + 6}" y="${QT + 10}" font-size="10" fill="#0ca30c" ${mono}>↑ outperforming</text>`;
   g += `<text x="${(QL + QW - QR) / 2}" y="${QH - 6}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono}>${P.x} · × typical</text>`;
   g += `<text x="12" y="${(QT + QH - QB) / 2}" text-anchor="middle" font-size="10.5" fill="var(--muted)" ${mono} transform="rotate(-90 12 ${(QT + QH - QB) / 2})">${P.y} · × typical</text>`;
 
-  /* dots, labels placed greedily so they never overlap */
+  /* red dots always get a label; the rest are placed greedily so labels never overlap */
   const placed = [];
   [...pts].sort((a, b) => ({ miss: 0, out: 1, track: 2, quiet: 3 })[a.status] - ({ miss: 0, out: 1, track: 2, quiet: 3 })[b.status] || b.x - a.x)
     .forEach(pt => {
-    const h = pt.h;
-    const cx = LX(pt.x), cy = LY(pt.y);
-    let lbl = "";
-    const w = h.st.abbr.length * 6.5 + 4, bx = cx + 7, by = cy - 9;
-    if (!placed.some(p => bx < p.bx + p.w && bx + w > p.bx && by < p.by + 11 && by + 11 > p.by)) {
-      placed.push({ bx, by, w });
-      lbl = `<text x="${(cx + 7).toFixed(1)}" y="${(cy + 3.5).toFixed(1)}" font-size="9.5" fill="var(--ink-2)" ${mono}>${h.st.abbr}</text>`;
-    }
-    g += `<g class="dot orow" data-key="${h.st.key}" data-tip="${esc(h.st.name)} · ${esc(P.x)} ${pt.x.toFixed(1)}× typical · ${esc(P.y)} ${pt.y.toFixed(1)}× typical · ratio ${pt.ratio.toFixed(2)}× · ${STATUS[pt.status].label}">
-      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="${STATUS[pt.status].color}" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"/>${lbl}</g>`;
-  });
+      const h = pt.h;
+      const [rx, ry] = onRay(pt.x, pt.y);
+      const cx = LX(rx), cy = LY(ry);
+      const off = pt.x > hi || pt.y > hi;
+      const text = off ? `${h.st.abbr} ${liftFmt(pt.x)}→${liftFmt(pt.y)}` : h.st.abbr;
+      const w = text.length * 6.2 + 4;
+      let bx = cx + 7;
+      if (bx + w > QW - 2) bx = cx - 7 - w;
+      const by = cy - 9;
+      let lbl = "";
+      if (pt.status === "miss" || !placed.some(p => bx < p.bx + p.w && bx + w > p.bx && by < p.by + 11 && by + 11 > p.by)) {
+        placed.push({ bx, by, w });
+        lbl = `<text x="${bx.toFixed(1)}" y="${(cy + 3.5).toFixed(1)}" font-size="9.5" fill="${pt.status === "miss" ? "#d03b3b" : "var(--ink-2)"}" ${mono}>${text}</text>`;
+      }
+      g += `<g class="dot orow" data-key="${h.st.key}" data-tip="${esc(h.st.name)} · ${esc(P.x)} ${pt.x.toFixed(1)}× typical · ${esc(P.y)} ${pt.y.toFixed(1)}× typical · ${STATUS[pt.status].label}">
+        <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="${STATUS[pt.status].color}" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"/>${lbl}</g>`;
+    });
+  const gEnd = GSC_LAST != null ? fdate(DATA.dates[GSC_LAST]) : "–";
   document.getElementById("oquad").innerHTML =
-    `<svg viewBox="0 0 ${QW} ${QH}" role="img" aria-label="Demand lift vs capture lift by state, last 7 days">${g}</svg>
+    `<svg viewBox="0 0 ${QW} ${QH}" role="img" aria-label="${P.label}, by state, last ${WIN} days">${g}</svg>
     <div class="qnote">${{
-      dc: `Each dot: how many times above its typical (median) day a state's search demand ran this week (x) vs how many
-        times above typical our organic traffic ran (y) — log scale. On the dashed diagonal = traffic multiplied exactly as
-        much as search did. Below it = search surged more than we did (e.g. demand 20×, traffic 1.5×). Same 7-day clock and
-        colors as the scorecard.`,
-      dv: `Did Google show us more as searching rose? x = search demand lift, y = our Search Console impressions lift, both
-        over the 7 complete days to ${GSC_LAST != null ? fdate(DATA.dates[GSC_LAST]) : "–"}. Below the diagonal = demand grew
-        but our visibility didn't keep up — a ranking or indexing gap, not a click-through gap.`,
-      vc: `When we were shown, did people click? x = impressions lift, y = clicks lift (Search Console, same 7 days). Below
-        the diagonal = we were seen more but clicked proportionally less — a title/snippet or position problem.`,
-    }[qpreset]} The 1× lines mark "an ordinary week". Colors = this chart's own ratio (below 0.6× red, above 1.25×
-    green). Hover for exact numbers; click to open the state.</div>`;
+      dv: `<b>Did Google show us more as searching rose?</b> x = search demand, y = how often Google showed our pages
+        (Search Console impressions), each as a multiple of its typical day over the ${WIN} days to ${gEnd}. Below the
+        diagonal = searching grew but our visibility didn't keep up — a ranking or indexing gap.`,
+      dc: `<b>Did our traffic rise with search demand?</b> x = search demand, y = our organic traffic, each as a multiple
+        of its typical day over the last ${WIN} days. Below the diagonal = searching grew more than our traffic did.`,
+      vc: `<b>When Google showed us, did people click?</b> x = impressions, y = clicks (Search Console, ${WIN} days to
+        ${gEnd}). Below the diagonal = we were seen more but chosen proportionally less — a title, snippet or position problem.`,
+    }[qpreset]} The 1× lines mark an ordinary stretch; colors come from this chart's own ratio. A state past ${CAP}×
+    is drawn scaled down along its own line from the origin (so it stays on the correct side of the diagonal) and
+    labelled with both values. States whose search is too sparse to judge are left off. Hover a dot for exact values;
+    click to open the state.</div>`;
   document.querySelectorAll("#oquad .dot").forEach(d => {
     d.addEventListener("pointermove", e => {
       tip.innerHTML = `<div class="d" style="margin:0">${d.dataset.tip}</div>`;
@@ -1377,7 +1528,7 @@ function topTermToday(m) {
   const i = N - 2;
   let best = null;
   m.mode.kwSeries.forEach((s, k) => {
-    if (!s.length || s.length <= i) return;
+    if (!s.length || s.length <= i || s[i] == null) return;
     if (!best || s[i] > best.v) best = { k, v: s[i] };
   });
   return best && best.v > 0 ? best : null;
@@ -1466,49 +1617,29 @@ function renderMap(st, map) {
     if (!m) return;
     p.addEventListener("pointermove", e => {
       const i = lastFull;
-      const dd = (s, off) => s.length > i && i - off >= 0 ? s[i] - s[i - off] : null;
+      const d7 = s => (s.length > i && i - 7 >= 0 && s[i] != null && s[i - 7] != null) ? s[i] - s[i - 7] : null;
       const cell = d => {
-        if (d === null) return `<td class="zero">–</td>`;
+        if (d == null) return `<td class="zero">–</td>`;
         const v = Math.round(d * 10) / 10;
         return `<td class="${v > 0 ? "pos" : v === 0 ? "zero" : ""}">${v > 0 ? "+" : ""}${v}</td>`;
       };
-      const num = v => Math.round(v * 10) / 10;
-      const term = (name, sw, s) =>
-        `<tr><td class="n"><span class="sw">${sw}</span>${name}</td><td>${num(s[i])}</td>${cell(dd(s, 1))}${cell(dd(s, 7))}</tr>`;
-      let body = term("traffic", legendSwatch("traffic"), m.traffic);
-      if (m.mode && m.mode.kwSeries) {
-        const ranked = m.mode.kwSeries
-          .map((s, k) => ({ s, k }))
-          .filter(x => x.s.length)
-          .sort((a, b) => b.s[i] - a.s[i]);
-        ranked.forEach(x => { body += term((m.kws || st.kws)[x.k], legendSwatch(KW_META[x.k]), x.s); });
-      } else {
-        body += `<tr><td class="n" colspan="4" style="color:var(--muted)">trends not fetched yet</td></tr>`;
+      const vis7 = Math.round((rollN(m.traffic, i, 7) || 0) * 7);
+      let body = `<tr><td class="n"><span class="sw">${legendSwatch("traffic")}</span>our visitors, last 7 days</td><td>${fmt(vis7)}</td><td></td></tr>`;
+      const kwS = m.mode && m.mode.kwSeries;
+      if (!kwS) body += `<tr><td class="n" colspan="3" style="color:var(--muted)">no search data for this metro</td></tr>`;
+      else {
+        const live = kwS.map((s, k) => ({ s, k })).filter(x => x.s.length > i && x.s[i] > 0).sort((a, b) => b.s[i] - a.s[i]);
+        if (!live.length)
+          body += `<tr><td class="n" colspan="3" style="color:var(--muted)">${kwS.every(s => s[i] == null) ? "search data missing for this day" : "no search term registering"}</td></tr>`;
+        live.forEach(x => {
+          body += `<tr><td class="n"><span class="sw">${legendSwatch(KW_META[x.k])}</span>${(m.kws || st.kws)[x.k]}</td><td>${Math.round(x.s[i] * 10) / 10}</td>${cell(d7(x.s))}</tr>`;
+        });
       }
-      if (GSC) {
-        const mg = m.gsc && m.gsc[gscType];
-        body += `<tr><td class="n" colspan="4" style="padding-top:7px;color:var(--muted)">Search Console · ${GSC_LABEL[gscType]} · queries mentioning "${esc(m.city)}"${GSC_LAST != null ? " · " + fdate(DATA.dates[GSC_LAST]) : ""}</td></tr>`;
-        if (mg && GSC_LAST != null && mg.i[GSC_LAST] != null) {
-          const j = GSC_LAST;
-          const ctrA = mg.c.map((c, k) => (mg.i[k] ? c / mg.i[k] * 100 : null));
-          const gd = (arr, off) => j - off >= 0 && arr[j] != null && arr[j - off] != null ? arr[j] - arr[j - off] : null;
-          const gcell = (d, better) => {
-            if (d == null) return `<td class="zero">–</td>`;
-            const v = Math.round(d * 10) / 10;
-            return `<td class="${v === 0 ? "zero" : (better ? v < 0 : v > 0) ? "pos" : ""}">${v > 0 ? "+" : ""}${v}</td>`;
-          };
-          const grow = (name, sw, arr, fv, lowerIsBetter) =>
-            `<tr><td class="n"><span class="sw">${sw}</span>${name}</td><td>${arr[j] == null ? "–" : fv(arr[j])}</td>${gcell(gd(arr, 1), lowerIsBetter)}${gcell(gd(arr, 7), lowerIsBetter)}</tr>`;
-          body += grow("impressions", legendSwatch({ color: "var(--gi)" }), mg.i, v => v, false);
-          body += grow("clicks", legendSwatch({ color: "var(--gc)" }), mg.c, v => v, false);
-          body += grow("CTR %", "", ctrA, v => v.toFixed(1), false);
-          body += grow("avg position", "", mg.p, v => v.toFixed(1), true);
-        } else {
-          body += `<tr><td class="n" colspan="4" style="color:var(--muted)">no "${esc(m.city)}" queries on ${GSC_LAST != null ? fdate(DATA.dates[GSC_LAST]) : "the latest day"}</td></tr>`;
-        }
-      }
+      const g7 = GSC ? gscWin(m.gsc && m.gsc[gscType], GSC_LAST, 7) : null;
+      if (g7 && g7.i > 0)
+        body += `<tr><td class="n" colspan="3" style="padding-top:6px"><span class="sw">${legendSwatch({ color: "var(--gi)" })}</span>GSC "${esc(m.city)}" queries, 7 days: <b>${fmt(g7.i)}</b> impr · <b>${fmt(g7.c)}</b> clicks</td></tr>`;
       tip.innerHTML = `<div class="d">${m.name} metro</div>
-        <table class="tt"><thead><tr><th>series</th><th>${fdate(DATA.dates[i])}</th><th>Δ 1d</th><th>Δ 7d</th></tr></thead>
+        <table class="tt"><thead><tr><th>series</th><th>${fdate(DATA.dates[i])}</th><th>Δ 7d</th></tr></thead>
         <tbody>${body}</tbody></table>`;
       tip.style.display = "block";
       const tw = tip.offsetWidth, th = tip.offsetHeight;
@@ -1540,81 +1671,81 @@ function allMetros() {
   return out;
 }
 
-let moverWin = 7;
-function rollN(s, endI, win) {
-  let sum = 0, n = 0;
-  for (let i = Math.max(0, endI - win + 1); i <= endI; i++) { sum += s[i]; n++; }
-  return sum / n;
-}
-
+/* surging = this week's search at least 1.5× last week's, both weeks inside the most recent
+   ~14 days that Google Trends reports consistently; the term must average 5+ this week */
+const SURGE_WIN = 7, SURGE_FLOOR = 5, SURGE_MIN = 1.5;
 function buildMovers() {
   const metros = allMetros();
   const sec = document.getElementById("movers");
   if (!metros.length) { sec.hidden = true; return; }
   sec.hidden = false;
-  const lastFull = N - 2;                       /* Google's final day is partial */
-  const kwFilter = +document.getElementById("mkw").value;  /* -1 = any term */
-  document.getElementById("m7dh3").textContent = `Closest to their ${moverWin}-day high`;
+  const end = N - 2, prevEnd = end - SURGE_WIN;
+  const kwFilter = +document.getElementById("mkw").value;
   document.getElementById("mnote").textContent =
-    `latest full day: ${fdate(DATA.dates[lastFull])} · values are each metro's own 0–100 search index`;
-
-  const dod = [], high = [];
+    `${fdate(DATA.dates[end - SURGE_WIN + 1])} – ${fdate(DATA.dates[end])} vs the week before`;
+  const cands = [];
   metros.forEach(e => {
-    let bestD = null, bestH = null;
+    let best = null;
     e.m.mode.kwSeries.forEach((s, k) => {
-      if (kwFilter >= 0 && k !== kwFilter) return;
-      if (!s.length || s.length <= lastFull) return;
-      const delta = s[lastFull] - s[lastFull - 1];
-      if (!bestD || delta > bestD.delta)
-        bestD = { ...e, k, delta, from: s[lastFull - 1], to: s[lastFull] };
-      const trailing = rollN(s, lastFull, moverWin);
-      let peak = 0;
-      for (let i = moverWin - 1; i <= lastFull; i++) peak = Math.max(peak, rollN(s, i, moverWin));
-      if (peak > 0) {
-        const ratio = trailing / peak;
-        if (!bestH || ratio > bestH.ratio || (ratio === bestH.ratio && trailing > bestH.trailing))
-          bestH = { ...e, k, ratio, trailing, peak };
-      }
+      if ((kwFilter >= 0 && k !== kwFilter) || !s.length) return;
+      const now = rollN(s, end, SURGE_WIN), prev = rollN(s, prevEnd, SURGE_WIN);
+      if (now == null || prev == null || now < SURGE_FLOOR) return;
+      const x = now / Math.max(prev, 1);
+      if (!best || x > best.x) best = { ...e, k, x, now, prev };
     });
-    if (bestD && bestD.delta > 0) dod.push(bestD);
-    if (bestH) high.push(bestH);
+    if (best && best.x >= SURGE_MIN) cands.push(best);
   });
-  dod.sort((a, b) => b.delta - a.delta);
-  high.sort((a, b) => b.ratio - a.ratio || b.trailing - a.trailing);
-
-  const lead = (e, i) =>
-    `<td class="rk">${i + 1}</td><td class="mn">${e.m.name}</td><td class="ab">${e.st.abbr}</td>
-     <td class="kw">${(e.m.kws || e.st.kws)[e.k]}</td>`;
-  const rowOpen = e => `<tr class="mrow" data-si="${e.si}" data-mi="${e.mi}" tabindex="0">`;
-  document.getElementById("mdod").innerHTML = dod.length
-    ? `<table class="mtab"><colgroup><col style="width:20px"><col><col style="width:26px"><col style="width:34%"><col style="width:46px"><col style="width:50px"><col style="width:46px"></colgroup>
-       <thead><tr><th class="l">#</th><th class="l">metro</th><th class="l"></th><th class="l">term</th><th>prev</th><th>today</th><th>Δ 1d</th></tr></thead><tbody>` +
-      dod.slice(0, 5).map((e, i) => `${rowOpen(e)}${lead(e, i)}<td>${Math.round(e.from)}</td><td>${Math.round(e.to)}</td><td class="up">+${Math.round(e.delta)}</td></tr>`).join("") +
+  /* a market listed under several states (e.g. Reno under CA and NV) appears once, at its best */
+  const seen = new Map();
+  cands.sort((a, b) => b.x - a.x).forEach(r => { if (!seen.has(r.m.name)) seen.set(r.m.name, r); });
+  const rows = [...seen.values()].slice(0, 8);
+  rows.forEach(r => {
+    const T = r.m.traffic || [];
+    r.tNow = rollN(T, end, SURGE_WIN) || 0;
+    r.tPrev = rollN(T, prevEnd, SURGE_WIN) || 0;
+    r.captured = r.tNow >= 1 && r.tNow >= 1.5 * Math.max(r.tPrev, 0.5);
+  });
+  const showTerm = kwFilter < 0;
+  const v = x => x >= 10 ? Math.round(x) : x.toFixed(1);
+  document.getElementById("msurge").innerHTML = rows.length
+    ? `<table class="mtab"><colgroup><col>${showTerm ? '<col style="width:22%">' : ""}<col style="width:120px"><col style="width:150px"><col style="width:112px"></colgroup>
+       <thead><tr><th class="l">metro</th>${showTerm ? '<th class="l">surging term</th>' : ""}<th>search vs last week</th>
+       <th>our visitors / day</th><th class="l">us</th></tr></thead><tbody>` +
+      rows.map(r => `<tr class="mrow" data-si="${r.si}" data-mi="${r.mi}" tabindex="0"
+          data-tip="${esc(r.m.name)} · ${esc((r.m.kws || r.st.kws)[r.k])}: ${v(r.prev)} → ${v(r.now)} average this week (metro's own 0–100 index)">
+        <td class="mn">${r.m.name}<span class="lbl"> · ${r.st.abbr}</span></td>
+        ${showTerm ? `<td class="kw">${(r.m.kws || r.st.kws)[r.k]}</td>` : ""}
+        <td class="up">×${r.x.toFixed(1)}</td>
+        <td>${v(r.tNow)} <span class="lbl">vs ${v(r.tPrev)} last week</span></td>
+        <td class="stcell"><span class="pill ${r.captured ? "st-out" : "st-miss"}">${r.captured ? "capturing" : "not capturing"}</span></td></tr>`).join("") +
       `</tbody></table>`
-    : `<div class="mempty">no term rose day-over-day</div>`;
-  document.getElementById("m7d").innerHTML = high.length
-    ? `<table class="mtab"><colgroup><col style="width:20px"><col><col style="width:26px"><col style="width:34%"><col style="width:56px"><col style="width:84px"></colgroup>
-       <thead><tr><th class="l">#</th><th class="l">metro</th><th class="l"></th><th class="l">term</th><th>${moverWin}d avg</th><th style="white-space:normal">% of window peak</th></tr></thead><tbody>` +
-      high.slice(0, 15).map((e, i) => `${rowOpen(e)}${lead(e, i)}<td>${e.trailing.toFixed(0)}</td><td class="up">${Math.round(e.ratio * 100)}%</td></tr>`).join("") +
-      `</tbody></table>`
-    : `<div class="mempty">no metro trends data yet</div>`;
+    : `<div class="mempty">No metro's search jumped 1.5× or more this week with meaningful volume.</div>`;
 
-  sec.querySelectorAll(".mrow").forEach(btn => btn.addEventListener("keydown", e => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); btn.click(); }
-  }));
-  sec.querySelectorAll(".mrow").forEach(btn => btn.addEventListener("click", () => {
-    const st = DATA.states[+btn.dataset.si];
-    if (stateFilter !== "-1" && st && stateFilter !== st.key) {
-      stateFilter = st.key;
-      document.getElementById("statef").value = st.key;
-      applyStateFilter();
-    }
-    const card = document.querySelector(`.card[data-si="${btn.dataset.si}"]`);
-    if (!card) return;
-    const ms = card.querySelector(".msel");
-    if (ms) { ms.value = btn.dataset.mi; ms.dispatchEvent(new Event("change")); }
-    card.scrollIntoView({ behavior: "smooth", block: "start" });
-  }));
+  sec.querySelectorAll(".mrow").forEach(row => {
+    const go = () => {
+      const st = DATA.states[+row.dataset.si];
+      if (stateFilter !== "-1" && st && stateFilter !== st.key) {
+        stateFilter = st.key;
+        document.getElementById("statef").value = st.key;
+        applyStateFilter();
+      }
+      const card = document.querySelector(`.card[data-si="${row.dataset.si}"]`);
+      if (!card) return;
+      const ms = card.querySelector(".msel");
+      if (ms) { ms.value = row.dataset.mi; ms.dispatchEvent(new Event("change")); }
+      card.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    row.addEventListener("click", go);
+    row.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    row.addEventListener("pointermove", e => {
+      tip.innerHTML = `<div class="d" style="margin:0">${row.dataset.tip}</div>`;
+      tip.style.display = "block";
+      let tx = e.clientX + 14, ty = e.clientY + 12;
+      if (tx + tip.offsetWidth > innerWidth - 8) tx = e.clientX - tip.offsetWidth - 14;
+      tip.style.left = tx + "px"; tip.style.top = ty + "px";
+    });
+    row.addEventListener("pointerleave", () => { tip.style.display = "none"; });
+  });
 }
 
 function initMovers() {
@@ -1622,47 +1753,73 @@ function initMovers() {
   sel.innerHTML = `<option value="-1">any term</option>` +
     KW_TPL_LABEL.map((l, k) => `<option value="${k}">${l}</option>`).join("");
   sel.addEventListener("change", buildMovers);
-  document.getElementById("mwin").addEventListener("change", e => {
-    moverWin = +e.target.value;
-    buildMovers();
-  });
   buildMovers();
 }
 
-/* ---------- top queries (Search Console) ---------- */
+/* ---------- top search opportunities (Search Console) ---------- */
 function buildTopQueries() {
   const sec = document.getElementById("tq");
-  if (!GSC || !GSC.topQueries || !Object.keys(GSC.topQueries).length) { sec.hidden = true; return; }
+  const tq = GSC && GSC.topQueries && GSC.topQueries.web;
+  if (!tq || !tq.groups) { sec.hidden = true; return; }
   sec.hidden = false;
-  const sel = document.getElementById("tqtype");
-  if (!sel.options.length) {
-    sel.innerHTML = Object.keys(GSC.topQueries).map(t => `<option value="${t}">${GSC_LABEL[t]}</option>`).join("");
-    sel.addEventListener("change", buildTopQueries);
-  }
-  const t = sel.value, tq = GSC.topQueries[t];
   document.getElementById("tqnote").textContent =
-    `${fdate(GSC.topWindow[0])} – ${fdate(GSC.topWindow[1])} (last 7 complete days) vs ${fdate(GSC.prevWindow[0])} – ${fdate(GSC.prevWindow[1])} · ${GSC_LABEL[t]} search`;
+    `web search · ${fdate(GSC.topWindow[0])} – ${fdate(GSC.topWindow[1])} vs the ${WIN} days before`;
   const known = new Set(DATA.states.map(x => x.key));
-  const abbr = k => { const x = DATA.states.find(z => z.key === k); return x ? x.abbr : "–"; };
-  const open = r => known.has(r.state)
-    ? `<tr class="mrow tqrow" data-key="${r.state}" tabindex="0" title="${esc(r.page)}">`
-    : `<tr title="${esc(r.page)}">`;
-  const lead = (r, i) => `<td class="rk">${i + 1}</td><td class="kw" style="color:var(--ink)">${esc(r.q)}</td><td class="ab">${abbr(r.state)}</td>`;
-  const tail = r => `<td>${fmt(r.c)}</td><td>${fpct(r.ctr)}</td><td>${fposn(r.pos)}</td>`;
-  const cols = extra => `<colgroup><col style="width:22px"><col><col style="width:28px">${extra}<col style="width:50px"><col style="width:50px"><col style="width:42px"></colgroup>`;
-  document.getElementById("tqrise").innerHTML = tq.rising.length
-    ? `<table class="mtab">${cols('<col style="width:58px"><col style="width:62px">')}
-       <thead><tr><th class="l">#</th><th class="l">query</th><th class="l"></th><th>impr 7d</th><th>Δ vs prior</th><th>clicks</th><th>CTR</th><th>pos</th></tr></thead><tbody>` +
-      tq.rising.map((r, i) => `${open(r)}${lead(r, i)}<td>${fmt(r.i)}</td><td class="up">+${fmt(r.i - r.i0)}</td>${tail(r)}</tr>`).join("") + `</tbody></table>`
-    : `<div class="mempty">no query gained impressions this week</div>`;
-  document.getElementById("tqunr").innerHTML = tq.unranked.length
-    ? `<table class="mtab">${cols('<col style="width:58px">')}
-       <thead><tr><th class="l">#</th><th class="l">query</th><th class="l"></th><th>impr 7d</th><th>clicks</th><th>CTR</th><th>pos</th></tr></thead><tbody>` +
-      tq.unranked.map((r, i) => `${open(r)}${lead(r, i)}<td>${fmt(r.i)}</td>${tail(r)}</tr>`).join("") + `</tbody></table>`
-    : `<div class="mempty">no query with 20+ impressions ranked below position 10 this week</div>`;
-  sec.querySelectorAll(".tqrow").forEach(el => {
-    el.addEventListener("click", () => openState(el.dataset.key));
-    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openState(el.dataset.key); } });
+  const TAG = { "page 2+": "st-miss", "weak snippet": "st-low", "new demand": "st-track", "old page": "st-low" };
+  const trend = g => {
+    const r = g.i0 ? g.i / g.i0 : Infinity;
+    if (r >= 20) return `<span class="pill st-track">new</span>`;
+    if (r >= 2) return `<span class="up">×${r.toFixed(r >= 10 ? 0 : 1)}</span>`;
+    return `<span class="${r >= 1 ? "up" : "dn"}">${r >= 1 ? "+" : ""}${Math.round((r - 1) * 100)}%</span>`;
+  };
+  document.getElementById("tqlist").innerHTML = tq.groups.length
+    ? `<table class="mtab tqtab"><colgroup><col style="width:24%"><col><col style="width:78px"><col style="width:112px"><col style="width:86px"><col style="width:190px"></colgroup>
+       <thead><tr><th class="l">page</th><th class="l">biggest query opportunity</th><th class="l">queries</th><th style="white-space:normal">page impressions ${WIN}d</th><th style="white-space:normal">potential clicks / wk</th><th class="l">why</th></tr></thead>` +
+      tq.groups.map((g, gi) => `<tbody class="tqg">
+        <tr class="${known.has(g.state) ? "mrow tqrow" : "tqrow-x"}" data-key="${g.state || ""}" data-gi="${gi}" tabindex="0">
+          <td class="mn">${esc(g.label)}${g.state_label ? `<span class="lbl"> · ${g.state_label}</span>` : ""}</td>
+          <td class="kw" title="${esc(g.queries[0].q)} — ${fmt(g.queries[0].i)} impressions at position ${fposn(g.queries[0].pos)}, ${fmt(g.queries[0].c)} clicks">${esc(g.queries[0].q)}</td>
+          <td class="l">${g.n > 1 ? `<button class="more" data-gi="${gi}" aria-expanded="false">${fmt(g.n)} ▸</button>` : "1"}</td>
+          <td>${fmt(g.i)} ${trend(g)}</td>
+          <td class="up">${fmt(g.pot)}</td>
+          <td class="stcell">${g.tags.map(t => `<span class="pill ${TAG[t] || "st-low"}">${t}</span>`).join(" ")}</td></tr>
+        ${g.queries.map(q => `<tr class="sub" data-gi="${gi}" hidden><td></td><td class="kw" title="${esc(q.q)}">${esc(q.q)}</td>
+          <td></td><td>${fmt(q.i)} <span class="lbl">impr · ${fmt(q.c)} clk</span></td><td>${q.pot >= 1 ? fmt(q.pot) : "–"}</td><td class="lbl">pos ${fposn(q.pos)}</td></tr>`).join("")}
+        ${g.n > g.queries.length ? `<tr class="sub" data-gi="${gi}" hidden><td></td><td class="lbl" colspan="5">+${fmt(g.n - g.queries.length)} smaller queries</td></tr>` : ""}
+        </tbody>`).join("") + `</table>`
+    : `<div class="mempty">No page has a meaningful click opportunity right now.</div>`;
+
+  const tbl = document.getElementById("tqlist");
+  tbl.querySelectorAll("button.more").forEach(btn => btn.addEventListener("click", e => {
+    e.stopPropagation();
+    const open = btn.getAttribute("aria-expanded") !== "true";
+    btn.setAttribute("aria-expanded", String(open));
+    btn.textContent = `${fmt(tq.groups[+btn.dataset.gi].n)} ${open ? "▾" : "▸"}`;
+    tbl.querySelectorAll(`tr.sub[data-gi="${btn.dataset.gi}"]`).forEach(r => { r.hidden = !open; });
+  }));
+  tbl.querySelectorAll("tr.tqrow, tr.tqrow-x").forEach(row => {
+    const g = tq.groups[+row.dataset.gi];
+    if (row.classList.contains("tqrow")) {
+      row.addEventListener("click", e => { if (!e.target.closest("button")) openState(row.dataset.key); });
+      row.addEventListener("keydown", e => {
+        if (e.key === "Enter" && !e.target.closest("button")) { e.preventDefault(); openState(row.dataset.key); }
+      });
+    }
+    row.addEventListener("pointermove", e => {
+      tip.innerHTML = `<div class="d">${esc(g.label)} · /${esc(g.page)}</div>
+        <table class="tt"><tbody>
+        <tr><td class="n">page impressions · prior ${WIN} days</td><td>${fmt(g.i)} · ${fmt(g.i0)}</td></tr>
+        <tr><td class="n">clicks · CTR</td><td>${fmt(g.c)} · ${fpct(g.i ? g.c / g.i : null)}</td></tr>
+        <tr><td class="n">avg position</td><td>${fposn(g.pos)}</td></tr>
+        <tr><td class="n">queries with an opportunity</td><td>${fmt(g.n)}</td></tr>
+        </tbody></table>${known.has(g.state) ? "" : `<div class="row"><span class="n" style="color:var(--muted)">state not on this dashboard</span></div>`}`;
+      tip.style.display = "block";
+      let tx = e.clientX + 14, ty = e.clientY + 12;
+      if (tx + tip.offsetWidth > innerWidth - 8) tx = e.clientX - tip.offsetWidth - 14;
+      if (ty + tip.offsetHeight > innerHeight - 8) ty = e.clientY - tip.offsetHeight - 12;
+      tip.style.left = tx + "px"; tip.style.top = ty + "px";
+    });
+    row.addEventListener("pointerleave", () => { tip.style.display = "none"; });
   });
 }
 
@@ -1683,35 +1840,36 @@ function attachHover(card) {
       xh.setAttribute("x1", xi); xh.setAttribute("x2", xi); xh.setAttribute("opacity", "0.55");
     });
     const sel = selOf(card, st);
-    const { traf, kwS, kws, k25, label } = viewOf(st, sel);
+    const { traf, kwS, kws } = viewOf(st, sel);
+    const row = (sw, name, v) => `<div class="row"><span class="n">${sw} ${name}</span><span class="v">${v}</span></div>`;
+    const muted = t => `<div class="row"><span class="n" style="color:var(--muted)">${t}</span></div>`;
     let rows = "";
-    if (visible.traffic && traf)
-      rows += `<div class="row"><span class="n">${legendSwatch("traffic")} traffic</span><span class="v">${traf[i]} users</span></div>`;
-    if (kwS) kwS.forEach((s, k) => {
-      if (!visible["k"+k] || !s.length) return;
-      const v25 = k25 && k25[k] && k25[k].length ? `<span style="color:var(--muted)"> · ’25 ${k25[k][i]}</span>` : "";
-      rows += `<div class="row"><span class="n">${legendSwatch(KW_META[k])} ${kws[k]}</span><span class="v">${s[i]}${v25}</span></div>`;
-    });
+    if (visible.traffic && traf) rows += row(legendSwatch("traffic"), "our traffic", `${traf[i]} visits`);
+    if (kwS) {
+      const on = kwS.map((s, k) => k).filter(k => visible["k" + k] && kwS[k].length);
+      const missing = on.every(k => kwS[k][i] == null);
+      const pos = on.filter(k => kwS[k][i] > 0).sort((a, b) => kwS[b][i] - kwS[a][i]);
+      const zero = on.filter(k => kwS[k][i] === 0);
+      pos.forEach(k => { rows += row(legendSwatch(KW_META[k]), kws[k], kwS[k][i]); });
+      if (missing && on.length) rows += muted("search data missing for this day");
+      else if (zero.length) rows += muted(`0: ${zero.map(k => kws[k]).join(", ")}`);
+    }
     if (visible.fires) {
-      const todays = fireMap(st)[i] || [];
-      todays.slice(0, 6).forEach(f => {
-        const imp = isImpactful(f);
+      const todays = [...(fireMap(st)[i] || [])].sort((a, b) => isImpactful(b) - isImpactful(a));
+      todays.slice(0, 3).forEach(f => {
         const pop = f.p ? `${fmt(f.p[impact.ring])} ppl ≤${impact.ring}mi` : "pop n/a";
-        rows += `<div class="row"><span class="n">${legendSwatch(imp ? "fires" : "fires_h")} ${f.t} started</span><span class="v">${f.a ? fmt(f.a) + " ac" : ""} · ${pop}</span></div>`;
+        rows += row(legendSwatch(isImpactful(f) ? "fires" : "fires_h"), `${f.t} started`, `${f.a ? fmt(f.a) + " ac" : ""} · ${pop}`);
       });
-      if (todays.length > 6) rows += `<div class="row"><span class="n" style="color:var(--muted)">+${todays.length - 6} more fires</span></div>`;
+      if (todays.length > 3) {
+        const rest = todays.slice(3);
+        rows += muted(`+${rest.length} more fires (${rest.filter(isImpactful).length} impactful)`);
+      }
     }
     const gs = GSC ? gscOf(st, sel) : null;
-    if (gs && (visible.gi || visible.gc || gscStrip !== "off")) {
-      rows += `<div class="row" style="margin-top:4px"><span class="n" style="color:var(--muted)">Search Console · ${GSC_LABEL[gscType]}${sel ? ` · "${sel.city}" queries` : ""}</span></div>`;
-      if (gs.i[i] == null)
-        rows += `<div class="row"><span class="n" style="color:var(--muted)">not available for this day (lags ~2 days)</span></div>`;
-      else
-        rows += `<div class="row"><span class="n">${legendSwatch({ color: "var(--gi)" })} impressions</span><span class="v">${gs.i[i]}</span></div>
-          <div class="row"><span class="n">${legendSwatch({ color: "var(--gc)" })} clicks</span><span class="v">${gs.c[i]}</span></div>
-          <div class="row"><span class="n">CTR · avg position</span><span class="v">${gs.i[i] ? fpct(gs.c[i] / gs.i[i]) : "–"} · ${fposn(gs.p[i])}</span></div>`;
-    }
-    tip.innerHTML = `<div class="d">${st.name} · ${fdateY(DATA.dates[i])} · ${label}</div>` + rows;
+    if (gs) rows += gs.i[i] == null ? muted("Search Console: not in yet (~2-day lag)")
+      : row(legendSwatch({ color: "var(--gi)" }), `GSC${sel ? ` "${esc(sel.city)}"` : ""}`,
+            `${fmt(gs.i[i])} impr · ${fmt(gs.c[i])} clicks · pos ${fposn(gs.p[i])}`);
+    tip.innerHTML = `<div class="d">${st.name}${sel ? ` · ${sel.name} metro` : ""} · ${fdateY(DATA.dates[i])}</div>` + rows;
     tip.style.display = "block";
     const tw = tip.offsetWidth, th = tip.offsetHeight;
     let tx = e.clientX + 14, ty = e.clientY + 12;
