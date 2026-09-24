@@ -405,7 +405,7 @@
     <h2>Overview — SEO health</h2>
     <div class="osub" id="osub"></div>
     <div class="ocols">
-      <div class="ocol"><h3>Where we're missing search demand</h3><div id="oscore"></div></div>
+      <div class="ocol"><h3>Search demand vs our clicks, by state</h3><div id="oscore"></div></div>
       <div class="ocol quad"><div class="qhead"><h3 id="oqtitle">Compare two lifts</h3>
         <select id="qpreset" aria-label="Which two lifts to compare"></select></div><div id="oquad"></div></div>
     </div>
@@ -1308,30 +1308,31 @@ function buildOverview() {
   sec.hidden = false;
   const end = N - 2;
   document.getElementById("osub").textContent =
-    `last ${WIN} days (to ${fdate(DATA.dates[end])}) vs each state's typical day · our traffic = organic visits`
+    `last ${WIN} days (to ${fdate(DATA.dates[end])}) vs each state's typical day · clicks = organic visits from search engines`
     + (GSC && GSC_LAST != null ? ` · Search Console to ${fdate(DATA.dates[GSC_LAST])}` : "");
 
   const hs = healths.filter(Boolean);
   const by = st => hs.filter(h => h.status === st);
   const miss = by("miss").sort((a, b) => b.missed - a.missed);
   const hasG = GSC && hs.some(h => h.g);
+  /* one table: states behind demand first (biggest shortfall on top), then ahead of it, then in line */
+  const rows = [...miss, ...by("out").sort((a, b) => b.ratio - a.ratio), ...by("track").sort((a, b) => b.ratio - a.ratio)];
+  /* for states that aren't behind there's no gap to explain: just describe what Search Console saw */
+  const gscRead = h => !h.g || h.g.low || h.g.I == null ? `<span class="lbl">no Search Console signal</span>`
+    : `<span class="lbl">shown ${liftFmt(h.g.I)} as often as usual${h.g.C != null ? `, clicked ${liftFmt(h.g.C)} as often` : ""}</span>`;
 
-  let html = miss.length
+  let html = rows.length
     ? `<table class="mtab score"><colgroup><col style="width:130px"><col style="width:128px"><col style="width:130px"><col style="width:96px"><col></colgroup>
        <thead><tr><th class="l">state</th><th class="l">status</th><th title="Each as a multiple of a typical day over the last 14 days. Clicks = our organic visits from search engines (PostHog), which track Google's Search Console clicks within a few percent.">search → clicks</th><th style="white-space:normal">est. missed visits / week</th>
        <th class="l why">${hasG ? "why · our read of Search Console" : ""}</th></tr></thead><tbody>` +
-      miss.map(h => `<tr class="orow mrow" data-key="${h.st.key}" tabindex="0">
+      rows.map(h => `<tr class="orow mrow" data-key="${h.st.key}" tabindex="0">
         <td class="mn">${h.st.name}</td>
         <td class="stcell"><span class="pill ${STATUS[h.status].cls}">${STATUS[h.status].label}</span></td>
         <td>${liftFmt(h.D)} → ${liftFmt(h.C)}</td>
-        <td class="bad">${fmt(h.missed)}</td>
-        <td class="kw why">${hasG ? whyOf(h) : ""}</td></tr>`).join("") + `</tbody></table>`
-    : `<div class="mempty">No state is missing demand over the last ${WIN} days.</div>`;
+        ${h.status === "miss" ? `<td class="bad">${fmt(h.missed)}</td>` : `<td class="lbl">–</td>`}
+        <td class="kw why">${!hasG ? "" : h.status === "miss" ? whyOf(h) : gscRead(h)}</td></tr>`).join("") + `</tbody></table>`
+    : `<div class="mempty">No state has enough search and traffic over the last ${WIN} days to judge.</div>`;
 
-  const line = (label, list, val, cls) => list.length
-    ? `<div class="sline ${cls || ""}"><span class="slabel">${label}</span>${list.map(h => stateChip(h, val(h))).join("")}</div>` : "";
-  html += line("outperforming", by("out").sort((a, b) => b.ratio - a.ratio), h => `${liftFmt(h.D)}→${liftFmt(h.C)}`, "s-out");
-  html += line("tracking demand", by("track"), h => `${liftFmt(h.D)}→${liftFmt(h.C)}`);
   const low = by("low");
   if (low.length)
     html += `<details class="sline squiet"><summary><span class="slabel">can't judge yet</span>
