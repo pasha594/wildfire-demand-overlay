@@ -811,6 +811,9 @@ const POP_STEPS = [100, 250, 500, 750, 1000, 1500, 2000, 3000, 5000, 7500, 10000
 const RING_STEPS = ["2", "3", "5", "7.5", "10", "15", "20"];
 const impact = { pop: 2000, ring: "5" };
 const isImpactful = f => !!(f.p && f.p[impact.ring] >= impact.pop);
+/* fires.json also carries active fires under 100ac (new starts are unsized at 0ac);
+   charts and counts keep the historical >100ac cut, only map markers show them all */
+const chartFires = st => (st.fires || []).filter(f => (f.a || 0) > 100);
 const fdate = d => { const [y,m,dd] = d.split("-"); return new Date(+y, m-1, +dd).toLocaleDateString(undefined, {month:"short", day:"numeric"}); };
 const fdateY = d => { const [y,m,dd] = d.split("-"); return new Date(+y, m-1, +dd).toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"}); };
 const kwOf = st => (st.modes[mode] && st.modes[mode].kwSeries) || null;
@@ -1063,7 +1066,7 @@ const GSC_LAST = !GSC ? null
 function fireMap(st) {
   if (!st._fmap) {
     st._fmap = {};
-    (st.fires || []).forEach(f => {
+    chartFires(st).forEach(f => {
       const i = DIDX[f.d];
       if (i !== undefined) (st._fmap[i] = st._fmap[i] || []).push(f);
     });
@@ -1362,8 +1365,8 @@ function modeStatsHtml(st, sel) {
     } else if (!S) h += `<span class="lbl">no metro search data</span>`;
     if (sel.traffic) h += `<span><span class="lbl">metro visitors ${WIN}d</span> <b>${fmt(rollN(sel.traffic, end, WIN) * WIN)}</b></span>`;
   }
-  if (!sel && st.fires && st.fires.length)
-    h += `<span><b>${st.fires.length}</b> <span class="lbl">fires ·</span> <b class="fscount">${st.fires.filter(isImpactful).length}</b> <span class="lbl">impactful</span></span>`;
+  if (!sel && chartFires(st).length)
+    h += `<span><b>${chartFires(st).length}</b> <span class="lbl">fires ·</span> <b class="fscount">${chartFires(st).filter(isImpactful).length}</b> <span class="lbl">impactful</span></span>`;
   if (GSC && GSC_LAST != null) {
     const gs = gscOf(st, sel);
     const now = gscWin(gs, GSC_LAST), prev = gscWin(gs, GSC_LAST - WIN);
@@ -1450,7 +1453,7 @@ function renderCard(card, G = chartGeom()) {
   const sel = selOf(card, st);
   card.querySelector(".chart").innerHTML = renderChart(st, sel, G);
   const fc = card.querySelector(".fscount");
-  if (fc) fc.textContent = (st.fires || []).filter(isImpactful).length;
+  if (fc) fc.textContent = chartFires(st).filter(isImpactful).length;
 }
 
 let renderedW = 0;
