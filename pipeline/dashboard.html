@@ -477,7 +477,8 @@
     The trailing week keeps the line continuous and steady; it moves when a ranking holds for days, not on one-day
     blips. It can sit below the average line when our strongest rankings are all on low-volume queries, and the smoothing
     toggle doesn't change it. Google withholds rare queries, so it only sees the queries Search Console reports.</p>
-    <p><b>Metro view.</b> The dropdown on a state card narrows both series to one metro area: site traffic counts only
+    <p><b>Metro view.</b> The dropdown on a state card narrows the chart to one metro area (fire diamonds too: only fires
+    that started inside the metro's counties in that state): site traffic counts only
     visitors whose GeoIP location is within 50 miles of the metro's biggest city (still viewing that state's pages), and
     search interest is fetched for the metro's own Google Trends market (Nielsen DMA, e.g. geo US-OR-820 for Portland).
     A state's dropdown lists every DMA Google files under that state — cross-border markets (Denver appears under
@@ -802,15 +803,43 @@ DATA.dates.forEach((d, i) => DIDX[d] = i);
 const GSC_LAST = !GSC ? null
   : DIDX[GSC.lastComplete] !== undefined ? DIDX[GSC.lastComplete]
   : GSC.lastComplete > DATA.dates[N - 1] ? N - 1 : null;
-function fireMap(st) {
-  if (!st._fmap) {
-    st._fmap = {};
-    chartFires(st).forEach(f => {
+/* which metro a fire is in: its start point, projected like the metro map's fire markers, tested
+   against each metro's outline on that map (the DMA's counties clipped to the state; even-odd rule) */
+function metroOfFire(st, f) {
+  if (f._mk !== undefined) return f._mk;
+  f._mk = null;
+  const map = DATA.maps && DATA.maps[st.key];
+  if (!map || f.lat === undefined) return null;
+  if (!map._rings) map._rings = Object.entries(map.metros).map(([k, d]) =>
+    [k, d.split("Z").filter(Boolean).map(r => r.replace(/^M/, "").split("L").map(pt => pt.split(" ").map(Number)))]);
+  const x = (f.lon - map.proj.minx) * map.proj.kx, y = (map.proj.maxy - f.lat) * map.proj.ky;
+  for (const [k, rings] of map._rings) {
+    let inside = false;
+    for (const ring of rings)
+      for (let a = 0, b = ring.length - 1; a < ring.length; b = a++) {
+        const [xa, ya] = ring[a], [xb, yb] = ring[b];
+        if ((ya > y) !== (yb > y) && x < (xb - xa) * (y - ya) / (yb - ya) + xa) inside = !inside;
+      }
+    if (inside) { f._mk = k; break; }
+  }
+  return f._mk;
+}
+/* fires for a card's view: the whole state, or in a metro view only fires inside that metro */
+function viewFires(st, sel) {
+  const all = chartFires(st);
+  return sel ? all.filter(f => metroOfFire(st, f) === sel.key) : all;
+}
+function fireMap(st, sel) {
+  const key = sel ? sel.key : "*";
+  st._fmap = st._fmap || {};
+  if (!st._fmap[key]) {
+    const m = st._fmap[key] = {};
+    viewFires(st, sel).forEach(f => {
       const i = DIDX[f.d];
-      if (i !== undefined) (st._fmap[i] = st._fmap[i] || []).push(f);
+      if (i !== undefined) (m[i] = m[i] || []).push(f);
     });
   }
-  return st._fmap;
+  return st._fmap[key];
 }
 
 /* one date range for every state chart, set from the bar at the top */
@@ -1016,7 +1045,7 @@ function renderChart(st, sel, G) {
   });
 
   if (visible.fires) {
-    const fm = fireMap(st), y0 = Y(0);
+    const fm = fireMap(st, sel), y0 = Y(0);
     let lastCount = -1e9;
     for (const di in fm) {
       const i = +di;
@@ -1104,8 +1133,11 @@ function modeStatsHtml(st, sel) {
     } else if (!S) h += `<span class="lbl">no metro search data</span>`;
     if (sel.traffic) h += `<span><span class="lbl">metro visitors ${WIN}d</span> <b>${fmt(rollN(sel.traffic, end, WIN) * WIN)}</b></span>`;
   }
-  if (!sel && chartFires(st).length)
-    h += `<span><b>${chartFires(st).length}</b> <span class="lbl">fires ·</span> <b class="fscount">${chartFires(st).filter(isImpactful).length}</b> <span class="lbl">impactful</span></span>`;
+  const vf = viewFires(st, sel);
+  if (vf.length)
+    h += `<span><b>${vf.length}</b> <span class="lbl">fires${sel ? " in this metro" : ""} ·</span> <b class="fscount">${vf.filter(isImpactful).length}</b> <span class="lbl">impactful</span></span>`;
+  else if (sel && chartFires(st).length)
+    h += `<span class="lbl">no fires over 100 acres in this metro</span>`;
   if (GSC && GSC_LAST != null) {
     const gs = gscOf(st, sel);
     const now = gscWin(gs, GSC_LAST), prev = gscWin(gs, GSC_LAST - WIN);
@@ -1192,7 +1224,7 @@ function renderCard(card, G = chartGeom()) {
   const sel = selOf(card, st);
   card.querySelector(".chart").innerHTML = renderChart(st, sel, G);
   const fc = card.querySelector(".fscount");
-  if (fc) fc.textContent = chartFires(st).filter(isImpactful).length;
+  if (fc) fc.textContent = viewFires(st, sel).filter(isImpactful).length;
 }
 
 let renderedW = 0;
@@ -1818,7 +1850,7 @@ function attachHover(card) {
       else if (zero.length) rows += muted(`0: ${zero.map(k => kws[k]).join(", ")}`);
     }
     if (visible.fires) {
-      const todays = [...(fireMap(st)[i] || [])].sort((a, b) => isImpactful(b) - isImpactful(a));
+      const todays = [...(fireMap(st, sel)[i] || [])].sort((a, b) => isImpactful(b) - isImpactful(a));
       todays.slice(0, 3).forEach(f => {
         const pop = f.p ? `${fmt(f.p[impact.ring])} ppl ≤${impact.ring}mi` : "pop n/a";
         rows += row(legendSwatch(isImpactful(f) ? "fires" : "fires_h"), `${f.t} started`, `${f.a ? fmt(f.a) + " ac" : ""} · ${pop}`);
