@@ -46,6 +46,7 @@ EXPORT_START = "2026-02-26"              # dashboard window start
 TOP_N = 8                                # opportunity rows shown
 WIN = 14                                 # dashboard health window (days)
 TARGET_POS = 5                           # "if this page-2 query ranked here" benchmark
+BEST_MIN_IMPR = 20                       # "best position": only queries with this many impressions that day
 BRAND_TERMS = ("wildfire explorer", "cornea")
 
 log = logging.getLogger("gsc_sync")
@@ -250,7 +251,7 @@ def export(con):
     N = len(dates)
 
     def blank():
-        return {"c": [0] * N, "i": [0] * N, "pw": [0.0] * N}
+        return {"c": [0] * N, "i": [0] * N, "pw": [0.0] * N, "b": [None] * N, "bq": [None] * N, "bi": [None] * N}
 
     state_cache = {}
     def st_of(p):
@@ -298,25 +299,6 @@ def export(con):
             covered.add(d.isoformat())
             d += datetime.timedelta(days=1)
     cov = [dates[k] in covered for k in range(N)]
-
-    def finish(b):
-        """-> compact {c, i, p}; p = impression-weighted avg position. None = day not fetched
-        (c/i/p) or no impressions that day (p only)."""
-        if not any(b["i"]) and not any(b["c"]):
-            return None
-        return {"c": [b["c"][k] if cov[k] else None for k in range(N)],
-                "i": [b["i"][k] if cov[k] else None for k in range(N)],
-                "p": [round(b["pw"][k] / b["i"][k], 1) if cov[k] and b["i"][k] else None for k in range(N)]}
-
-    out_states = {}
-    for s in sorted(states):
-        types = {t: v for t in SEARCH_TYPES if (v := finish(states[s][t]))}
-        ms = {}
-        for mkey, per_t in metros.get(s, {}).items():
-            mt = {t: v for t in SEARCH_TYPES if (v := finish(per_t[t]))}
-            if mt:
-                ms[mkey] = mt
-        out_states[s] = {"types": types, "metros": ms}
 
     # top search opportunities (web): last WIN complete days vs the WIN before, one row per
     # landing page, ranked by potential clicks = sum over the page's queries of
@@ -425,6 +407,64 @@ def export(con):
     log.info("top opportunities: %d pages ranked; %d likely-automated queries excluded (%d impressions)",
              len(rows), len(automated), top["web"]["automated_impr"])
 
+    # best position: per day, the best average position among queries with >= BEST_MIN_IMPR impressions
+    # on the area's pages (a query on several of its pages = impression-weighted across them). A query
+    # needs that many impressions site-wide first, so SQL narrows 1.7M rows to the candidates.
+    # Brand queries (always ~#1) and likely-automated queries (same test as above, over the whole export
+    # window) are left out, so the line tracks real searches we compete for.
+    skip = set()
+    for q, cl, im, pw in con.execute("SELECT query, SUM(clicks), SUM(impressions), SUM(position * impressions) "
+                                     "FROM query_daily WHERE search_type='web' AND date >= ? GROUP BY query",
+                                     (EXPORT_START,)):
+        if (im and cl == 0 and im * expected0(pw / im) >= 10) or any(t_ in q for t_ in BRAND_TERMS):
+            skip.add(q)
+    agg = collections.defaultdict(lambda: [0, 0.0])          # (type, state, metro|None, k, query) -> [impr, pos*impr]
+    for t, day, q, page, i, pos in con.execute(
+            "SELECT q.search_type, q.date, q.query, q.page, q.impressions, q.position FROM query_daily q "
+            "JOIN (SELECT search_type, date, query FROM query_daily WHERE date >= ? "
+            "      GROUP BY 1, 2, 3 HAVING SUM(impressions) >= ?) c USING (search_type, date, query)",
+            (EXPORT_START, BEST_MIN_IMPR)):
+        s_, k = st_of(page), di.get(day)
+        if not s_ or k is None or not i or q in skip:
+            continue
+        keys = [None] + [mkey for mkey, rx in city_rx.get(s_, []) if rx.search(q)]
+        for mkey in keys:
+            a_ = agg[(t, s_, mkey, k, q)]
+            a_[0] += i
+            a_[1] += (pos or 0) * i
+    for (t, s_, mkey, k, q), (i, pw) in agg.items():
+        if i < BEST_MIN_IMPR:
+            continue
+        b = states[s_][t] if mkey is None else metros[s_][mkey][t]
+        pos = pw / i
+        if b["b"][k] is None or pos < b["b"][k] or (pos == b["b"][k] and i > b["bi"][k]):
+            b["b"][k], b["bq"][k], b["bi"][k] = pos, q, i
+
+    def finish(b):
+        """-> compact {c, i, p}; p = impression-weighted avg position. None = day not fetched
+        (c/i/p) or no impressions that day (p only)."""
+        if not any(b["i"]) and not any(b["c"]):
+            return None
+        out = {"c": [b["c"][k] if cov[k] else None for k in range(N)],
+               "i": [b["i"][k] if cov[k] else None for k in range(N)],
+               "p": [round(b["pw"][k] / b["i"][k], 1) if cov[k] and b["i"][k] else None for k in range(N)]}
+        if any(v is not None for v in b["b"]):
+            out["b"] = [round(b["b"][k], 1) if cov[k] and b["b"][k] is not None else None for k in range(N)]
+            out["bq"] = [b["bq"][k] if cov[k] else None for k in range(N)]
+            out["bi"] = [b["bi"][k] if cov[k] else None for k in range(N)]
+        return out
+
+    out_states = {}
+    for s in sorted(states):
+        types = {t: v for t in SEARCH_TYPES if (v := finish(states[s][t]))}
+        ms = {}
+        for mkey, per_t in metros.get(s, {}).items():
+            mt = {t: v for t in SEARCH_TYPES if (v := finish(per_t[t]))}
+            if mt:
+                ms[mkey] = mt
+        out_states[s] = {"types": types, "metros": ms}
+
+
     out = {
         "meta": {"property": PROPERTY, "page_filter": SITE_HOST,
                  "exported_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%MZ"),
@@ -432,6 +472,7 @@ def export(con):
                  "top_window": [w1[0], w1[1]], "prev_window": [w0[0], w0[1]],
                  "types": [t for t in SEARCH_TYPES if finish(site[t])],
                  "covered_from": min((d for d in dates if d in covered), default=None),
+                 "best_min_impr": BEST_MIN_IMPR,
                  "dates": dates},
         "site": {t: v for t in SEARCH_TYPES if (v := finish(site[t]))},
         "states": out_states,

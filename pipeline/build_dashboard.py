@@ -233,7 +233,7 @@ if gsc_raw:
         """{c,i,p} on the GSC date axis -> same on the dashboard axis; None where GSC has no
         day, and for the partial days after the last complete one."""
         pos = [gidx.get(d) if d <= last_complete else None for d in dates]
-        return {f: [t[f][k] if k is not None else None for k in pos] for f in ("c", "i", "p")}
+        return {f: [t[f][k] if k is not None else None for k in pos] for f in ("c", "i", "p", "b", "bq", "bi") if f in t}
 
     in_window = lambda t: any((v or 0) > 0 for v in galign(t)["i"])
     for sp in states_payload:
@@ -249,6 +249,7 @@ if gsc_raw:
     gsc_payload = {
         "property": gm["property"], "pageFilter": gm["page_filter"], "exportedAt": gm["exported_at"],
         "lastDate": gm["last_date"], "lastComplete": gm["last_complete_date"], "coveredFrom": gm.get("covered_from"),
+        "bestMin": gm.get("best_min_impr", 20),
         "types": [t for t in gm["types"] if any(t in (sp.get("gsc") or {}) for sp in states_payload)],
         "topWindow": gm["top_window"], "prevWindow": gm["prev_window"],
         "topQueries": gsc_raw["top_queries"],
@@ -733,8 +734,12 @@ HTML = r"""<meta charset="utf-8">
     values don't change when you pick dates: traffic and Search Console impressions stay indexed to their own peak over
     the whole window, and the search terms share one Google Trends scale per area (100 = the busiest term-day). Search
     Console average position and CTR are plotted on the right-hand axis in their own units, sharing the left axis'
-    gridlines; position is inverted (1 = top result at the top). With 7-day smoothing on, both are impression-weighted
-    over the 7 days.</p>
+    gridlines; position is inverted (1 = top result at the top). With 7-day smoothing on, average position and CTR are
+    impression-weighted over the 7 days. <b>Best position</b> is, for each day, the best average position among queries
+    that brought the state's pages (or, in a metro view, its city queries) at least 20 impressions that day; brand queries
+    and likely-automated queries are left out, and the hover names the query. It can sit below the average line when our
+    strongest rankings are all on low-volume queries. With smoothing on it is the 7-day mean of the daily bests. Google
+    withholds rare queries, so it only sees the queries Search Console reports.</p>
     <p><b>Metro view.</b> The dropdown on a state card narrows both series to one metro area: site traffic counts only
     visitors whose GeoIP location is within 50 miles of the metro's biggest city (still viewing that state's pages), and
     search interest is fetched for the metro's own Google Trends market (Nielsen DMA, e.g. geo US-OR-820 for Portland).
@@ -791,7 +796,7 @@ const KW_META = [
   { tpl: "fire near", varr: "city", color: "var(--fn)", dash: "6 4" },  /* metro view only */
 ];
 /* "wildfire {state}" (zero on ~95% of days) and "fire near me" start hidden under "more terms" */
-const visible = { traffic: true, k0: false, k1: true, k2: true, k3: false, k4: true, fires: true, gi: true, gpos: true, gctr: false };
+const visible = { traffic: true, k0: false, k1: true, k2: true, k3: false, k4: true, fires: true, gi: true, gpos: true, gbest: true, gctr: false };
 let smooth = false;
 let y25 = false;
 let mode = "state";
@@ -873,9 +878,9 @@ function legendSwatch(meta) {
   return `<svg width="22" height="12" aria-hidden="true"><line x1="2" y1="6" x2="20" y2="6" stroke="${meta.color}" stroke-width="2.4"${meta.dash ? ` stroke-dasharray="${meta.dash}"` : ""}${meta.cap ? ` stroke-linecap="round"` : ""}/></svg>`;
 }
 let stateFilter = "-1";
-function chip(k, sw, label) {
+function chip(k, sw, label, title) {
   const on = k.split(",").every(x => visible[x]);
-  return `<button class="lg${on ? "" : " off"}" data-k="${k}" aria-pressed="${on}">${sw}<span class="sw">${label}</span></button>`;
+  return `<button class="lg${on ? "" : " off"}" data-k="${k}" aria-pressed="${on}"${title ? ` title="${title}"` : ""}>${sw}<span class="sw">${label}</span></button>`;
 }
 function buildControls() {
   const c = document.getElementById("controls");
@@ -907,8 +912,11 @@ function buildControls() {
   html += chip("fires", legendSwatch("fires"), "fire starts");
   if (GSC) {
     html += chip("gi", legendSwatch({ color: "var(--gi)" }), "GSC impressions");
-    html += chip("gpos", legendSwatch({ color: "var(--gp)", dash: "0.1 3.6", cap: true }), `GSC avg position <span style="color:var(--muted)">· right axis</span>`);
-    html += chip("gctr", legendSwatch({ color: "var(--gc)" }), `GSC CTR <span style="color:var(--muted)">· right axis</span>`);
+    html += chip("gpos", legendSwatch({ color: "var(--gp)", dash: "0.1 3.6", cap: true }), "GSC avg position",
+      "Right-hand axis. Average position over all our impressions (1 = top result)");
+    html += chip("gbest", legendSwatch({ color: "var(--gp)", dash: "5 3" }), "GSC best position",
+      `Right-hand axis. Each day, the best average position among queries with at least ${GSC.bestMin} impressions (brand and likely-automated queries left out). Hover a day for the query.`);
+    html += chip("gctr", legendSwatch({ color: "var(--gc)" }), "GSC CTR", "Right-hand axis. Clicks ÷ impressions");
   }
   html += `<details class="pop"><summary class="lg">more terms ▾</summary><div class="popbody">
       ${chip("k0", legendSwatch(KW_META[0]), `wildfire <span style="color:var(--muted)">{state}</span>`)}
@@ -920,8 +928,9 @@ function buildControls() {
   document.getElementById("howto").innerHTML = `Every line is indexed so shapes line up: 100 = that series' peak in the window.
     Search terms are in-state Google Trends (searches made from within the state); pick a metro on a card for metro-level data.
     The green chip draws "fire {state}" solid and the two-letter abbreviation dashed. Search Console impressions (pink) are indexed
-    the same way. Search Console average position (dotted) and CTR (blue) are drawn in their own units on the right-hand axis;
-    position is inverted so 1, the top result, sits at the top. Search Console lags about two days.
+    the same way. Search Console average position (dotted), best position (dashed) and CTR (blue) are drawn in their own units
+    on the right-hand axis; position is inverted so 1, the top result, sits at the top. Best position is that day's best average
+    position among queries with at least ${GSC ? GSC.bestMin : 20} impressions; hover a day to see the query. Search Console lags about two days.
     The date button at the top sets the window every state chart shows.
     In a metro view, Search Console covers queries that mention the metro's biggest city. Fire markers: ${legendSwatch("fires")} = impactful
     under the current settings, ${legendSwatch("fires_h")} = not. Full definitions are in the notes at the bottom of the page.`;
@@ -1076,7 +1085,7 @@ setRange("90");
 const rangeText = () => `${fdate(DATA.dates[range.r0])} – ${fdate(DATA.dates[range.r1])}`;
 
 /* right-hand axes: Search Console avg position and CTR in their own units */
-const rightAxes = () => GSC ? ["gpos", "gctr"].filter(k => visible[k]) : [];
+const rightAxes = () => !GSC ? [] : [visible.gpos || visible.gbest ? "gpos" : null, visible.gctr ? "gctr" : null].filter(Boolean);
 /* every card is the same width, so one geometry serves all charts (and keeps their x-axes aligned) */
 function chartGeom() {
   const grid = document.getElementById("grid");
@@ -1100,6 +1109,11 @@ function gscRatio(gs, kind) {
     return den ? (kind === "ctr" ? num / den * 100 : num / den) : null;
   });
 }
+const RLINE = {
+  avg: `stroke="var(--gp)" stroke-width="1.6" stroke-dasharray="0.1 3.2" stroke-linecap="round"`,
+  best: `stroke="var(--gp)" stroke-width="1.4" stroke-dasharray="5 3"`,
+  ctr: `stroke="var(--gc)" stroke-width="1.5" opacity="0.95"`,
+};
 const stepUp = (raw, steps) => steps.find(s => s >= raw - 1e-9) || steps[steps.length - 1] * Math.ceil(raw / steps[steps.length - 1]);
 
 function niceAxis(rawMax) {
@@ -1163,9 +1177,10 @@ function renderChart(st, sel, G) {
 
   /* right axes share the left axis' gridlines: same number of steps, their own nice step size */
   const rAxes = rightAxes().map((k, ai) => {
-    const series = gs ? gscRatio(gs, k === "gpos" ? "pos" : "ctr") : null;
-    const vals = series ? series.slice(r0, r1 + 1).filter(v => v != null) : [];
-    const ax = { k, series, x: w - mr + 8 + ai * RAX, has: vals.length > 0 };
+    const lines = !gs ? [] : k === "gctr" ? [["ctr", gscRatio(gs, "ctr")]]
+      : [visible.gpos && ["avg", gscRatio(gs, "pos")], visible.gbest && gs.b && ["best", smooth ? smooth7n(gs.b) : gs.b]].filter(Boolean);
+    const vals = lines.flatMap(([, s]) => s.slice(r0, r1 + 1).filter(v => v != null));
+    const ax = { k, lines, x: w - mr + 8 + ai * RAX, has: vals.length > 0 };
     if (k === "gpos") {      /* inverted: 1 = top result at the top */
       const hi = vals.length ? Math.max(...vals) : 1;
       ax.step = stepUp(Math.max(0, hi - 1) / nGrid, [1, 2, 3, 4, 5, 10, 15, 20, 25, 50, 100]);
@@ -1249,14 +1264,13 @@ function renderChart(st, sel, G) {
   });
   rAxes.forEach(ax => {
     if (!ax.has) return;
-    /* a day with no neighbours has no line segment: draw it as a dot */
-    for (let i = r0; i <= r1; i++)
-      if (ax.series[i] != null && (i === r0 || ax.series[i - 1] == null) && (i === r1 || ax.series[i + 1] == null))
-        g += `<circle cx="${Xr(i).toFixed(1)}" cy="${ax.Y(ax.series[i]).toFixed(1)}" r="1.8" fill="${ax.color}"/>`;
-    const d = pathOf(ax.series, ax.Y);
-    g += ax.k === "gpos"
-      ? `<path d="${d}" fill="none" stroke="var(--gp)" stroke-width="1.6" stroke-dasharray="0.1 3.2" stroke-linecap="round" stroke-linejoin="round"/>`
-      : `<path d="${d}" fill="none" stroke="var(--gc)" stroke-width="1.5" stroke-linejoin="round" opacity="0.95"/>`;
+    ax.lines.forEach(([kind, series]) => {
+      /* a day with no neighbours has no line segment: draw it as a dot */
+      for (let i = r0; i <= r1; i++)
+        if (series[i] != null && (i === r0 || series[i - 1] == null) && (i === r1 || series[i + 1] == null))
+          g += `<circle cx="${Xr(i).toFixed(1)}" cy="${ax.Y(series[i]).toFixed(1)}" r="1.8" fill="${ax.color}"/>`;
+      g += `<path d="${pathOf(series, ax.Y)}" fill="none" ${RLINE[kind]} stroke-linejoin="round"/>`;
+    });
   });
 
   if (visible.fires) {
@@ -1386,11 +1400,12 @@ function buildCards() {
       wrap.dataset.built = "1";
       const kwS = kwOf(st) || st.kws.map(() => []);
       const gs = GSC ? gscOf(st, null) : null;
-      const gh = gs ? `<th>GSC impr</th><th>GSC clicks</th><th>GSC CTR</th><th>GSC pos</th>` : "";
+      const gh = gs ? `<th>GSC impr</th><th>GSC clicks</th><th>GSC CTR</th><th>GSC pos</th><th>GSC best pos</th><th style="text-align:left">best query</th>` : "";
       let h = `<table><thead><tr><th>Date</th><th>Users</th>${st.kws.map(k => `<th>${k} (${MODE_LABEL[mode]})</th>`).join("")}${gh}</tr></thead><tbody>`;
       for (let i = 0; i < N; i++) {
-        const gd = !gs ? "" : gs.i[i] == null ? `<td>–</td><td>–</td><td>–</td><td>–</td>`
-          : `<td>${gs.i[i]}</td><td>${gs.c[i]}</td><td>${gs.i[i] ? fpct(gs.c[i] / gs.i[i]) : "–"}</td><td>${fposn(gs.p[i])}</td>`;
+        const best = gs && gs.b && gs.b[i] != null ? `<td>${fposn(gs.b[i])}</td><td style="text-align:left">${esc(gs.bq[i])}</td>` : `<td>–</td><td>–</td>`;
+        const gd = !gs ? "" : gs.i[i] == null ? `<td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td>`
+          : `<td>${gs.i[i]}</td><td>${gs.c[i]}</td><td>${gs.i[i] ? fpct(gs.c[i] / gs.i[i]) : "–"}</td><td>${fposn(gs.p[i])}</td>` + best;
         h += `<tr><td>${DATA.dates[i]}</td><td>${st.traffic ? st.traffic[i] : "–"}</td>${kwS.map(s => `<td>${s.length && s[i] != null ? s[i] : "–"}</td>`).join("")}${gd}</tr>`;
       }
       wrap.innerHTML = h + "</tbody></table>";
@@ -2070,12 +2085,18 @@ function attachHover(card) {
       }
     }
     const gs = GSC ? gscOf(st, sel) : null;
-    if (gs && (visible.gi || visible.gpos || visible.gctr)) {
+    if (gs && (visible.gi || visible.gpos || visible.gbest || visible.gctr)) {
       const who = sel ? ` "${esc(sel.city)}"` : "";
       if (gs.i[i] == null) rows += muted("Search Console: not in yet (~2-day lag)");
       else {
         if (visible.gi) rows += row(legendSwatch({ color: "var(--gi)" }), `GSC${who} impressions`, `${fmt(gs.i[i])} · ${fmt(gs.c[i])} clicks`);
         if (visible.gpos) rows += row(legendSwatch({ color: "var(--gp)", dash: "0.1 3.6", cap: true }), `GSC${who} avg position`, fposn(gs.p[i]));
+        if (visible.gbest) {
+          const b = gs.b ? gs.b[i] : null;
+          rows += row(legendSwatch({ color: "var(--gp)", dash: "5 3" }), `GSC${who} best position`, fposn(b));
+          rows += muted(b == null ? `no query reached ${GSC.bestMin} impressions`
+            : `“${esc(gs.bq[i])}” · ${fmt(gs.bi[i])} impressions`);
+        }
         if (visible.gctr) rows += row(legendSwatch({ color: "var(--gc)" }), `GSC${who} CTR`, gs.i[i] ? fpct(gs.c[i] / gs.i[i]) : "–");
       }
     }
