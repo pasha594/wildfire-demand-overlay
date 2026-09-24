@@ -717,8 +717,9 @@ HTML = r"""<meta charset="utf-8">
     those metro-days are treated as missing rather than as zero.</p>
     <p><b>SEO health (Overview and card headers).</b> Everything that judges health uses the last 14 days.
     <b>Search</b> = the average of an area's keyword indices over those days as a multiple of its typical (median) day;
-    <b>us</b> = the same for our organic visits (search-engine referrers: Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave).
-    Status comes from us ÷ search, whether search rose or fell: below 0.6× = missing demand (our traffic fell behind search),
+    <b>clicks</b> (in the table; "us" on the cards) = the same for our organic visits, i.e. visitors arriving from a search
+    engine (Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave), counted by PostHog; they track Search Console clicks within a few percent.
+    Status comes from clicks ÷ search, whether search rose or fell: below 0.6× = missing demand (our traffic fell behind search),
     above 1.25× = outperforming, otherwise tracking. <b>Est. missed visits/wk</b> = (search multiple − our multiple) × our
     typical day × 7. <b>Why</b> is this dashboard's own reading of Search Console over the same stretch (Google doesn't
     supply these labels); every multiple is "× a typical day": "losing visibility" = Google showed our pages much less
@@ -1584,7 +1585,7 @@ function buildOverview() {
 
   let html = miss.length
     ? `<table class="mtab score"><colgroup><col style="width:130px"><col style="width:128px"><col style="width:130px"><col style="width:96px"><col></colgroup>
-       <thead><tr><th class="l">state</th><th class="l">status</th><th>search → us</th><th style="white-space:normal">est. missed visits / week</th>
+       <thead><tr><th class="l">state</th><th class="l">status</th><th title="Each as a multiple of a typical day over the last 14 days. Clicks = our organic visits from search engines (PostHog), which track Google's Search Console clicks within a few percent.">search → clicks</th><th style="white-space:normal">est. missed visits / week</th>
        <th class="l why">${hasG ? "why · our read of Search Console" : ""}</th></tr></thead><tbody>` +
       miss.map(h => `<tr class="orow mrow" data-key="${h.st.key}" tabindex="0">
         <td class="mn">${h.st.name}</td>
