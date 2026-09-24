@@ -249,7 +249,7 @@ if gsc_raw:
     gsc_payload = {
         "property": gm["property"], "pageFilter": gm["page_filter"], "exportedAt": gm["exported_at"],
         "lastDate": gm["last_date"], "lastComplete": gm["last_complete_date"], "coveredFrom": gm.get("covered_from"),
-        "bestMin": gm.get("best_min_impr", 20),
+        "bestMin": gm.get("best_min_impr", 20), "bestDays": gm.get("best_days", 1),
         "types": [t for t in gm["types"] if any(t in (sp.get("gsc") or {}) for sp in states_payload)],
         "topWindow": gm["top_window"], "prevWindow": gm["prev_window"],
         "topQueries": gsc_raw["top_queries"],
@@ -735,11 +735,12 @@ HTML = r"""<meta charset="utf-8">
     the whole window, and the search terms share one Google Trends scale per area (100 = the busiest term-day). Search
     Console average position and CTR are plotted on the right-hand axis in their own units, sharing the left axis'
     gridlines; position is inverted (1 = top result at the top). With 7-day smoothing on, average position and CTR are
-    impression-weighted over the 7 days. <b>Best position</b> is, for each day, the best average position among queries
-    that brought the state's pages (or, in a metro view, its city queries) at least 20 impressions that day; brand queries
-    and likely-automated queries are left out, and the hover names the query. It can sit below the average line when our
-    strongest rankings are all on low-volume queries. With smoothing on it is the 7-day mean of the daily bests. Google
-    withholds rare queries, so it only sees the queries Search Console reports.</p>
+    impression-weighted over the 7 days. <b>Best position</b> is, for each day, our best average position over the 7 days
+    ending that day, among queries that brought the state's pages (or, in a metro view, its city queries) at least 20
+    impressions in those 7 days; brand queries and likely-automated queries are left out, and the hover names the query.
+    The trailing week keeps the line continuous and steady; it moves when a ranking holds for days, not on one-day
+    blips. It can sit below the average line when our strongest rankings are all on low-volume queries, and the smoothing
+    toggle doesn't change it. Google withholds rare queries, so it only sees the queries Search Console reports.</p>
     <p><b>Metro view.</b> The dropdown on a state card narrows both series to one metro area: site traffic counts only
     visitors whose GeoIP location is within 50 miles of the metro's biggest city (still viewing that state's pages), and
     search interest is fetched for the metro's own Google Trends market (Nielsen DMA, e.g. geo US-OR-820 for Portland).
@@ -918,7 +919,7 @@ function buildControls() {
     html += chip("gpos", legendSwatch({ color: "var(--gp)", dash: "0.1 3.6", cap: true }), "GSC avg position",
       "Right-hand axis. Average position over all our impressions (1 = top result)");
     html += chip("gbest", legendSwatch({ color: "var(--gp)", dash: "5 3" }), "GSC best position",
-      `Right-hand axis. Each day, the best average position among queries with at least ${GSC.bestMin} impressions (brand and likely-automated queries left out). Hover a day for the query.`);
+      `Right-hand axis. Our best average position over the ${GSC.bestDays} days ending each day, among queries with at least ${GSC.bestMin} impressions in those days (brand and likely-automated queries left out). Hover a day for the query.`);
     html += chip("gctr", legendSwatch({ color: "var(--gc)" }), "GSC CTR", "Right-hand axis. Clicks ÷ impressions");
   }
   html += `<details class="pop"><summary class="lg">more terms ▾</summary><div class="popbody">
@@ -932,8 +933,9 @@ function buildControls() {
     Search terms are in-state Google Trends (searches made from within the state); pick a metro on a card for metro-level data.
     The green chip draws "fire {state}" solid and the two-letter abbreviation dashed. Search Console impressions (pink) are indexed
     the same way. Search Console average position (dotted), best position (dashed) and CTR (blue) are drawn in their own units
-    on the right-hand axis; position is inverted so 1, the top result, sits at the top. Best position is that day's best average
-    position among queries with at least ${GSC ? GSC.bestMin : 20} impressions; hover a day to see the query. Search Console lags about two days.
+    on the right-hand axis; position is inverted so 1, the top result, sits at the top. Best position is our best average
+    position over the ${GSC ? GSC.bestDays : 7} days ending that day, among queries with at least ${GSC ? GSC.bestMin : 20} impressions in those days;
+    hover a day to see the query. Search Console lags about two days.
     The date button at the top sets the window every state chart shows.
     In a metro view, Search Console covers queries that mention the metro's biggest city. Fire markers: ${legendSwatch("fires")} = impactful
     under the current settings, ${legendSwatch("fires_h")} = not. Full definitions are in the notes at the bottom of the page.`;
@@ -1181,7 +1183,7 @@ function renderChart(st, sel, G) {
   /* right axes share the left axis' gridlines: same number of steps, their own nice step size */
   const rAxes = rightAxes().map((k, ai) => {
     const lines = !gs ? [] : k === "gctr" ? [["ctr", gscRatio(gs, "ctr")]]
-      : [visible.gpos && ["avg", gscRatio(gs, "pos")], visible.gbest && gs.b && ["best", smooth ? smooth7n(gs.b) : gs.b]].filter(Boolean);
+      : [visible.gpos && ["avg", gscRatio(gs, "pos")], visible.gbest && gs.b && ["best", gs.b]   /* already a trailing 7-day measure: not smoothed again */].filter(Boolean);
     const vals = lines.flatMap(([, s]) => s.slice(r0, r1 + 1).filter(v => v != null));
     const ax = { k, lines, x: w - mr + 8 + ai * RAX, has: vals.length > 0 };
     if (k === "gpos") {      /* inverted: 1 = top result at the top */
@@ -1403,7 +1405,7 @@ function buildCards() {
       wrap.dataset.built = "1";
       const kwS = kwOf(st) || st.kws.map(() => []);
       const gs = GSC ? gscOf(st, null) : null;
-      const gh = gs ? `<th>GSC impr</th><th>GSC clicks</th><th>GSC CTR</th><th>GSC pos</th><th>GSC best pos</th><th style="text-align:left">best query</th>` : "";
+      const gh = gs ? `<th>GSC impr</th><th>GSC clicks</th><th>GSC CTR</th><th>GSC pos</th><th>GSC best pos ${GSC.bestDays}d</th><th style="text-align:left">best query</th>` : "";
       let h = `<table><thead><tr><th>Date</th><th>Users</th>${st.kws.map(k => `<th>${k} (${MODE_LABEL[mode]})</th>`).join("")}${gh}</tr></thead><tbody>`;
       for (let i = 0; i < N; i++) {
         const best = gs && gs.b && gs.b[i] != null ? `<td>${fposn(gs.b[i])}</td><td style="text-align:left">${esc(gs.bq[i])}</td>` : `<td>–</td><td>–</td>`;
@@ -2096,9 +2098,9 @@ function attachHover(card) {
         if (visible.gpos) rows += row(legendSwatch({ color: "var(--gp)", dash: "0.1 3.6", cap: true }), `GSC${who} avg position`, fposn(gs.p[i]));
         if (visible.gbest) {
           const b = gs.b ? gs.b[i] : null;
-          rows += row(legendSwatch({ color: "var(--gp)", dash: "5 3" }), `GSC${who} best position`, fposn(b));
-          rows += muted(b == null ? `no query reached ${GSC.bestMin} impressions`
-            : `“${esc(gs.bq[i])}” · ${fmt(gs.bi[i])} impressions`);
+          rows += row(legendSwatch({ color: "var(--gp)", dash: "5 3" }), `GSC${who} best position, ${GSC.bestDays}d`, fposn(b));
+          rows += muted(b == null ? `no query reached ${GSC.bestMin} impressions in the ${GSC.bestDays} days to here`
+            : `“${esc(gs.bq[i])}” · ${fmt(gs.bi[i])} impressions over ${GSC.bestDays} days`);
         }
         if (visible.gctr) rows += row(legendSwatch({ color: "var(--gc)" }), `GSC${who} CTR`, gs.i[i] ? fpct(gs.c[i] / gs.i[i]) : "–");
       }

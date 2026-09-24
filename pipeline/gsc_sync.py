@@ -46,7 +46,8 @@ EXPORT_START = "2026-02-26"              # dashboard window start
 TOP_N = 8                                # opportunity rows shown
 WIN = 14                                 # dashboard health window (days)
 TARGET_POS = 5                           # "if this page-2 query ranked here" benchmark
-BEST_MIN_IMPR = 20                       # "best position": only queries with this many impressions that day
+BEST_MIN_IMPR = 20                       # "best position": only queries with this many impressions in the window
+BEST_DAYS = 7                            # "best position": trailing window, days
 BRAND_TERMS = ("wildfire explorer", "cornea")
 
 log = logging.getLogger("gsc_sync")
@@ -407,38 +408,50 @@ def export(con):
     log.info("top opportunities: %d pages ranked; %d likely-automated queries excluded (%d impressions)",
              len(rows), len(automated), top["web"]["automated_impr"])
 
-    # best position: per day, the best average position among queries with >= BEST_MIN_IMPR impressions
-    # on the area's pages (a query on several of its pages = impression-weighted across them). A query
-    # needs that many impressions site-wide first, so SQL narrows 1.7M rows to the candidates.
-    # Brand queries (always ~#1) and likely-automated queries (same test as above, over the whole export
-    # window) are left out, so the line tracks real searches we compete for.
-    skip = set()
-    for q, cl, im, pw in con.execute("SELECT query, SUM(clicks), SUM(impressions), SUM(position * impressions) "
-                                     "FROM query_daily WHERE search_type='web' AND date >= ? GROUP BY query",
-                                     (EXPORT_START,)):
-        if (im and cl == 0 and im * expected0(pw / im) >= 10) or any(t_ in q for t_ in BRAND_TERMS):
-            skip.add(q)
-    agg = collections.defaultdict(lambda: [0, 0.0])          # (type, state, metro|None, k, query) -> [impr, pos*impr]
+    # best position: for each day, the best average position over the BEST_DAYS days ending that day, among
+    # queries with >= BEST_MIN_IMPR impressions on the area's pages in those days (a query on several of its
+    # pages = impression-weighted across them). The trailing window keeps the line continuous instead of
+    # gapping on thin days and hopping between one-day queries. Brand queries (always ~#1) and
+    # likely-automated queries (same test as above, over the whole export window) are left out, so the line
+    # tracks real searches we compete for.
+    cand = set()                                             # (type, query) worth scanning
+    for t, q, cl, im, pw in con.execute(
+            "SELECT search_type, query, SUM(clicks), SUM(impressions), SUM(position * impressions) "
+            "FROM query_daily WHERE date >= ? GROUP BY 1, 2", (EXPORT_START,)):
+        robot = t == "web" and im and cl == 0 and im * expected0(pw / im) >= 10
+        if im >= BEST_MIN_IMPR and not robot and not any(b_ in q for b_ in BRAND_TERMS):
+            cand.add((t, q))
+    daily = collections.defaultdict(dict)                   # (type, state, metro|None, query) -> {k: [impr, pos*impr]}
     for t, day, q, page, i, pos in con.execute(
-            "SELECT q.search_type, q.date, q.query, q.page, q.impressions, q.position FROM query_daily q "
-            "JOIN (SELECT search_type, date, query FROM query_daily WHERE date >= ? "
-            "      GROUP BY 1, 2, 3 HAVING SUM(impressions) >= ?) c USING (search_type, date, query)",
-            (EXPORT_START, BEST_MIN_IMPR)):
-        s_, k = st_of(page), di.get(day)
-        if not s_ or k is None or not i or q in skip:
+            "SELECT search_type, date, query, page, impressions, position FROM query_daily WHERE date >= ?",
+            (EXPORT_START,)):
+        if not i or (t, q) not in cand:
             continue
-        keys = [None] + [mkey for mkey, rx in city_rx.get(s_, []) if rx.search(q)]
-        for mkey in keys:
-            a_ = agg[(t, s_, mkey, k, q)]
+        s_, k = st_of(page), di.get(day)
+        if not s_ or k is None:
+            continue
+        for mkey in [None] + [mk for mk, rx in city_rx.get(s_, []) if rx.search(q)]:
+            a_ = daily[(t, s_, mkey, q)].setdefault(k, [0, 0.0])
             a_[0] += i
             a_[1] += (pos or 0) * i
-    for (t, s_, mkey, k, q), (i, pw) in agg.items():
-        if i < BEST_MIN_IMPR:
+    for (t, s_, mkey, q), byday in daily.items():
+        if sum(v[0] for v in byday.values()) < BEST_MIN_IMPR:
             continue
         b = states[s_][t] if mkey is None else metros[s_][mkey][t]
-        pos = pw / i
-        if b["b"][k] is None or pos < b["b"][k] or (pos == b["b"][k] and i > b["bi"][k]):
-            b["b"][k], b["bq"][k], b["bi"][k] = pos, q, i
+        lo, hi = min(byday), min(N - 1, max(byday) + BEST_DAYS - 1)
+        ci, cp = [0] * (hi - lo + 2), [0.0] * (hi - lo + 2)     # prefix sums over days lo..hi
+        for k in range(lo, hi + 1):
+            v = byday.get(k)
+            ci[k - lo + 1] = ci[k - lo] + (v[0] if v else 0)
+            cp[k - lo + 1] = cp[k - lo] + (v[1] if v else 0.0)
+        for k in range(lo, hi + 1):
+            ws = max(lo, k - BEST_DAYS + 1) - lo            # window start (not w0: that's the opportunity window)
+            i = ci[k - lo + 1] - ci[ws]
+            if i < BEST_MIN_IMPR:
+                continue
+            pos = (cp[k - lo + 1] - cp[ws]) / i
+            if b["b"][k] is None or pos < b["b"][k] or (pos == b["b"][k] and i > b["bi"][k]):
+                b["b"][k], b["bq"][k], b["bi"][k] = pos, q, i
 
     def finish(b):
         """-> compact {c, i, p}; p = impression-weighted avg position. None = day not fetched
@@ -472,7 +485,7 @@ def export(con):
                  "top_window": [w1[0], w1[1]], "prev_window": [w0[0], w0[1]],
                  "types": [t for t in SEARCH_TYPES if finish(site[t])],
                  "covered_from": min((d for d in dates if d in covered), default=None),
-                 "best_min_impr": BEST_MIN_IMPR,
+                 "best_min_impr": BEST_MIN_IMPR, "best_days": BEST_DAYS,
                  "dates": dates},
         "site": {t: v for t in SEARCH_TYPES if (v := finish(site[t]))},
         "states": out_states,
