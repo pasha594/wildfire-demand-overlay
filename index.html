@@ -184,6 +184,7 @@
   #oscore { overflow-x: auto; }
   .mtab.score { min-width: 640px; }
   .mtab td.why { white-space: normal; }
+  .mtab.score th.why, .mtab.score td.why { padding-left: 22px; }
   .sline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: 12.5px; }
   .sline .slabel { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
     text-transform: uppercase; letter-spacing: .04em; margin-right: 4px; }
@@ -454,9 +455,12 @@
     <b>us</b> = the same for our organic visits (search-engine referrers: Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave).
     Status comes from us ÷ search, whether search rose or fell: below 0.6× = missing demand (our traffic fell behind search),
     above 1.25× = outperforming, otherwise tracking. <b>Est. missed visits/wk</b> = (search multiple − our multiple) × our
-    typical day × 7. <b>Likely why</b> reads Search Console over the same stretch: "losing visibility" = impressions
-    didn't keep up with search (a ranking or indexing gap); "shown, not clicked" = impressions rose but clicks didn't
-    (a title/snippet or position gap); "Google clicks kept pace" = the shortfall is outside Google search.
+    typical day × 7. <b>Why</b> is this dashboard's own reading of Search Console over the same stretch (Google doesn't
+    supply these labels); every multiple is "× a typical day": "losing visibility" = Google showed our pages much less
+    than searching fell (impressions ÷ search below 0.6 — a ranking or indexing gap); "shown, not clicked" = we were
+    shown but clicks fell behind impressions (clicks ÷ impressions below 0.6 — a title/snippet or position gap);
+    "Google clicks kept pace" = our Google clicks rose with searching, so the shortfall is in other engines or
+    tracking; otherwise "visibility and clicks both slipped".
     <b>Can't judge yet:</b> Google Trends reports low-volume days as zero except for the most recent ~14 days of each
     request, so for states whose search history is mostly zero there is no reliable typical level — those states are
     held back rather than given a misleading multiple. A 14-day window halves how often a status flips on noise compared
@@ -1276,12 +1280,12 @@ function whyOf(h) {
   const g = h.g;
   if (!g || g.low || g.Dg == null || g.I == null) return `<span class="lbl">no Search Console signal</span>`;
   if (g.I / g.Dg < 0.6)
-    return `losing visibility <span class="lbl">· impressions ${liftFmt(g.I)} vs search ${liftFmt(g.Dg)}</span>`;
+    return `losing visibility <span class="lbl">· Google showed us ${liftFmt(g.I)} as often as usual while searches ran ${liftFmt(g.Dg)} usual</span>`;
   if (g.C != null && g.I > 0 && g.C / g.I < 0.6)
-    return `shown, not clicked <span class="lbl">· clicks ${liftFmt(g.C)} vs impressions ${liftFmt(g.I)}</span>`;
+    return `shown, not clicked <span class="lbl">· shown ${liftFmt(g.I)} as often as usual but clicked ${liftFmt(g.C)} as often</span>`;
   if (g.C != null && h.D != null && g.C >= 0.8 * h.D)
-    return `Google clicks kept pace <span class="lbl">(${liftFmt(g.C)}) · gap is outside Google search</span>`;
-  return `visibility and clicks both slipped <span class="lbl">· impressions ${liftFmt(g.I)}, clicks ${liftFmt(g.C)}</span>`;
+    return `Google clicks kept pace <span class="lbl">· clicks ${liftFmt(g.C)} usual, in line with searches; the gap is outside Google search</span>`;
+  return `visibility and clicks both slipped <span class="lbl">· shown ${liftFmt(g.I)} as often as usual, clicked ${liftFmt(g.C)} as often</span>`;
 }
 
 const QPRESETS = {
@@ -1315,8 +1319,8 @@ function buildOverview() {
 
   let html = miss.length
     ? `<table class="mtab score"><colgroup><col style="width:130px"><col style="width:128px"><col style="width:130px"><col style="width:96px"><col></colgroup>
-       <thead><tr><th class="l">state</th><th class="l">status</th><th>search → us</th><th style="white-space:normal">est. missed visits / wk</th>
-       <th class="l">${hasG ? "likely why (Search Console)" : ""}</th></tr></thead><tbody>` +
+       <thead><tr><th class="l">state</th><th class="l">status</th><th>search → us</th><th style="white-space:normal">est. missed visits / week</th>
+       <th class="l why">${hasG ? "why · our read of Search Console" : ""}</th></tr></thead><tbody>` +
       miss.map(h => `<tr class="orow mrow" data-key="${h.st.key}" tabindex="0">
         <td class="mn">${h.st.name}</td>
         <td class="stcell"><span class="pill ${STATUS[h.status].cls}">${STATUS[h.status].label}</span></td>
@@ -1860,7 +1864,7 @@ function hideTip(el) {
 function updateMeta() {
   document.getElementById("meta").textContent =
     `${DATA.timeframe.replace(" ", " → ")} · ${MODE_GEO[mode]} · ${DATA.states.length} states · ` +
-    (DATA.fetchedAt ? `traffic via PostHog as of ${DATA.fetchedAt} · ` : "") + `built 2026-09-24 16:44Z`;
+    (DATA.fetchedAt ? `traffic via PostHog as of ${DATA.fetchedAt} · ` : "") + `built 2026-09-24 17:25Z`;
 }
 updateMeta();
 buildControls();
