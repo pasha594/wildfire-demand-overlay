@@ -2100,7 +2100,7 @@ function attachHover(card) {
           const b = gs.b ? gs.b[i] : null;
           rows += row(legendSwatch({ color: "var(--gp)", dash: "5 3" }), `GSC${who} best position, ${GSC.bestDays}d`, fposn(b));
           rows += muted(b == null ? `no query reached ${GSC.bestMin} impressions in the ${GSC.bestDays} days to here`
-            : `“${esc(gs.bq[i])}” · ${fmt(gs.bi[i])} impressions over ${GSC.bestDays} days`);
+            : `best query: “${esc(gs.bq[i])}” · ${fmt(gs.bi[i])} impressions over ${GSC.bestDays} days`);
         }
         if (visible.gctr) rows += row(legendSwatch({ color: "var(--gc)" }), `GSC${who} CTR`, gs.i[i] ? fpct(gs.c[i] / gs.i[i]) : "–");
       }
