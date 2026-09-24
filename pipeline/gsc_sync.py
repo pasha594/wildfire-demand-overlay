@@ -373,7 +373,7 @@ def export(con):
         g["exp"] += exp_clicks
         g["c"] += r["c"]
         g["gap"]["page 2+" if off_page1 else "weak snippet"] += exp_clicks - r["c"]
-        g["q"].append({"q": q, "i": r["i"], "c": r["c"], "pos": round(pos, 1),
+        g["q"].append({"q": q, "i": r["i"], "c": r["c"], "pos": round(pos, 1), "e": round(exp_clicks, 1),
                        "pot": round(max(0.0, exp_clicks - r["c"]) / (WIN / 7), 1)})
 
     def page_tot(page, a_, b_):

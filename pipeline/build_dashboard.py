@@ -557,6 +557,15 @@ HTML = r"""<meta charset="utf-8">
     padding: 0 2px; cursor: pointer; text-decoration: underline dotted; }
   .mtab button.more:hover { color: var(--ink); }
   .tqtab td.stcell { white-space: normal; text-align: left; }
+  .mtab tr.sub td.subwrap { padding: 2px 0 12px 24px; white-space: normal; overflow: visible; }
+  table.qtab { width: 100%; border-collapse: collapse; }
+  .mtab tr.sub .qtab th { padding: 4px 0 3px 12px; font-size: 9.5px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  .mtab tr.sub .qtab th.l { padding-left: 0; }
+  .mtab tr.sub .qtab td { padding: 3px 0 3px 12px; border-top: 0; border-bottom: 1px solid var(--grid); font-size: 11.5px;
+    white-space: nowrap; overflow: visible; color: var(--ink-2); }
+  .mtab tr.sub .qtab td.l { padding-left: 0; text-align: left; white-space: normal; color: var(--ink); }
+  .mtab tr.sub .qtab td.up { color: var(--good); }
+  .qmore { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; padding-top: 5px; }
   .tqtab th:last-child, .tqtab td.stcell { padding-left: 22px; }
   .mtab.surge { min-width: 640px; }
   .mtab.surge th, .mtab.surge td.mn { white-space: normal; line-height: 1.3; }
@@ -697,7 +706,8 @@ HTML = r"""<meta charset="utf-8">
     queries below page 1), minus the clicks they actually got. <b>Page 2+</b> = most of the gap is queries ranking below
     the first page · <b>Weak Snippet</b> = we rank on page 1 but get fewer clicks than usual for that position ·
     <b>New Demand</b> = the page had no impressions two weeks earlier · <b>Old Page</b> = traffic landing on a fire more
-    than 90 days old. Expand a row for its queries; click to open the state.</div>
+    than 90 days old. Expand a row to see its biggest queries: expected clicks = impressions × the click rate this site usually gets at that
+    position (at position 5 for queries below page 1), and extra clicks / week = (expected − actual clicks) ÷ 2. Click a row to open the state.</div>
   </section>
   <div class="grid" id="grid"></div>
 
@@ -2040,9 +2050,21 @@ function buildTopQueries() {
           <td>${fmt(g.i)} ${trend(g)}</td>
           <td class="up">${fmt(g.pot)}</td>
           <td class="stcell">${g.tags.map(t => `<span class="pill ${TAG[t] || "st-low"}">${titleCase(t)}</span>`).join(" ")}</td></tr>
-        ${g.queries.map(q => `<tr class="sub" data-gi="${gi}" hidden><td></td><td class="kw" title="${esc(q.q)}">${esc(q.q)}</td>
-          <td></td><td>${fmt(q.i)} <span class="lbl">impr · ${fmt(q.c)} clk</span></td><td>${q.pot >= 1 ? fmt(q.pot) : "–"}</td><td class="lbl">pos ${fposn(q.pos)}</td></tr>`).join("")}
-        ${g.n > g.queries.length ? `<tr class="sub" data-gi="${gi}" hidden><td></td><td class="lbl" colspan="5">+${fmt(g.n - g.queries.length)} smaller queries</td></tr>` : ""}
+        <tr class="sub" data-gi="${gi}" hidden><td colspan="6" class="subwrap">
+          <table class="qtab"><thead><tr><th class="l">query</th><th>avg position</th><th>impressions 14d</th><th>clicks 14d</th>
+            <th title="Impressions × the click rate this site usually gets at that position (at position 5 for queries below page 1)">expected clicks 14d</th>
+            <th>extra clicks / week</th></tr></thead><tbody>
+          ${g.queries.map(q => {
+            const e = q.e != null ? q.e : q.c + q.pot * (WIN / 7);
+            return `<tr><td class="l kw" title="${esc(q.q)}">${esc(q.q)}</td>
+              <td>${fposn(q.pos)}${q.pos > 10 ? ` <span class="lbl">page 2+</span>` : ""}</td>
+              <td>${fmt(q.i)}</td><td>${fmt(q.c)}</td>
+              <td>~${fmt(e)}${q.pos > 10 ? ` <span class="lbl">at #5</span>` : ""}</td>
+              <td class="up">${q.pot >= 1 ? fmt(q.pot) : "–"}</td></tr>`;
+          }).join("")}
+          </tbody></table>
+          ${g.n > g.queries.length ? `<div class="qmore lbl">+${fmt(g.n - g.queries.length)} smaller queries not shown</div>` : ""}
+        </td></tr>
         </tbody>`).join("") + `</table>`
     : `<div class="mempty">No page has a meaningful click opportunity right now.</div>`;
 
