@@ -265,7 +265,7 @@ generated = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%
 
 HTML = r"""<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wildfire Demand Overlay</title>
+<title>WFE SEO Dashboard</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
   :root {
@@ -278,17 +278,18 @@ HTML = r"""<meta charset="utf-8">
     --grid: #e1e0d9;
     --axis: #c3c2b7;
     --border: rgba(11,11,11,.10);
-    --wf: #eb6834;      /* wildfire */
-    --f: #1baf7a;       /* fire */
+    --wf: #a87600;   /* Trends: wildfire {state} (ochre) */
+    --f: #00626a;   /* Trends: fire {state} (teal) */
+    --good: #1baf7a;    /* positive change (up arrows) */
     --fm: #2a78d6;      /* fire map */
-    --fn: #4a3aa7;      /* fire near */
-    --gi: #e87ba4;      /* search console impressions */
-    --gc: #2a78d6;      /* search console clicks / CTR */
-    --gp: var(--ink);   /* search console avg position (dotted) */
+    --fn: #6a3fc4;   /* Trends: fire near me/{city} (violet) */
+    --gi: #2a7bd0;   /* GSC impressions (blue) */
+    --gc: #a3246f;   /* GSC CTR (berry / dusty rose) */
+    --gp: #4a4743;   /* GSC avg + best position (warm grey) */
     --range-bg: rgba(42,120,214,.13);   /* date picker: days inside the range */
-    --traffic: #6f6d67;
-    --traffic-fill: rgba(137,135,129,.20);
-    --fire-mk: #eda100;
+    --traffic: #12955f;   /* our traffic (green) */
+    --traffic-fill: rgba(18,149,95,.14);
+    --fire-mk: #d96200;   /* fire starts (orange) */
     --chip-bg: rgba(11,11,11,.045);
     --tooltip-bg: #ffffff;
   }
@@ -303,18 +304,20 @@ HTML = r"""<meta charset="utf-8">
       --grid: #2c2c2a;
       --axis: #383835;
       --border: rgba(255,255,255,.10);
-      --wf: #d95926;
-      --f: #199e70;
+      --wf: #e0b43a;
+      --f: #239aa6;
+      --good: #199e70;
       --fm: #3987e5;
-      --fn: #9085e9;
-      --gi: #d55181;
-      --gc: #3987e5;
+      --fn: #9d86ff;
+      --gi: #7cc0ff;
+      --gc: #d2779c;
       --range-bg: rgba(57,135,229,.24);
-      --traffic: #a3a19a;
-      --traffic-fill: rgba(137,135,129,.22);
-      --fire-mk: #c98500;
+      --traffic: #4cd68a;
+      --traffic-fill: rgba(76,214,138,.15);
+      --fire-mk: #f59331;
       --chip-bg: rgba(255,255,255,.06);
       --tooltip-bg: #242423;
+      --gp: #c1bdb5;
     }
   }
   :root[data-theme="dark"] {
@@ -327,18 +330,20 @@ HTML = r"""<meta charset="utf-8">
     --grid: #2c2c2a;
     --axis: #383835;
     --border: rgba(255,255,255,.10);
-    --wf: #d95926;
-    --f: #199e70;
+    --wf: #e0b43a;
+    --f: #239aa6;
+    --good: #199e70;
     --fm: #3987e5;
-    --fn: #9085e9;
-    --gi: #d55181;
-    --gc: #3987e5;
+    --fn: #9d86ff;
+    --gi: #7cc0ff;
+    --gc: #d2779c;
     --range-bg: rgba(57,135,229,.24);
-    --traffic: #a3a19a;
-    --traffic-fill: rgba(137,135,129,.22);
-    --fire-mk: #c98500;
+    --traffic: #4cd68a;
+    --traffic-fill: rgba(76,214,138,.15);
+    --fire-mk: #f59331;
     --chip-bg: rgba(255,255,255,.06);
     --tooltip-bg: #242423;
+    --gp: #c1bdb5;
   }
   * { box-sizing: border-box; }
   body {
@@ -351,10 +356,8 @@ HTML = r"""<meta charset="utf-8">
   }
   .wrap { max-width: 1440px; margin: 0 auto; padding: 28px 24px 64px; }
 
-  header.page { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 18px; margin-bottom: 6px; }
+  header.page { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 18px; margin-bottom: 12px; }
   h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
-  .meta { color: var(--muted); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; }
-  .sub { color: var(--ink-2); margin: 0 0 18px; max-width: 72ch; }
 
   .controls {
     position: sticky; top: 0; z-index: 5;
@@ -544,8 +547,8 @@ HTML = r"""<meta charset="utf-8">
   .mtab tr.mrow { cursor: pointer; }
   .mtab tr.mrow:hover td { background: var(--chip-bg); }
   .mtab tr.mrow:focus-visible { outline: 2px solid var(--fm); outline-offset: -2px; }
-  .mtab .up { color: var(--f); font-weight: 600; }
-  .mtab .up { color: var(--f); font-weight: 600; }
+  .mtab .up { color: var(--good); font-weight: 600; }
+  .mtab .up { color: var(--good); font-weight: 600; }
   .mtab .dn { color: #d03b3b; font-weight: 600; }
   .mtab .lbl { color: var(--muted); font-weight: 400; }
   .mtab .pill { font-size: 10.5px; padding: 1px 7px; }
@@ -605,7 +608,7 @@ HTML = r"""<meta charset="utf-8">
   .stats .pages { cursor: help; text-decoration: underline dotted var(--axis); text-underline-offset: 3px; }
   .stats .modestats { display: contents; }
   .stats .pill { font-size: 11px; }
-  .stats .up { color: var(--f); font-weight: 600; }
+  .stats .up { color: var(--good); font-weight: 600; }
   .stats .dn { color: #d03b3b; font-weight: 600; }
   .chart { position: relative; }
   .chart svg { display: block; width: 100%; height: auto; }
@@ -649,7 +652,7 @@ HTML = r"""<meta charset="utf-8">
     font-family: inherit; font-variant-numeric: normal;
   }
   #tip table.tt td.n span.sw { display: inline-flex; vertical-align: -1px; margin-right: 6px; }
-  #tip table.tt .pos { color: var(--f); }
+  #tip table.tt .pos { color: var(--good); }
   #tip table.tt .zero { color: var(--muted); }
 
   footer.notes { margin-top: 26px; color: var(--muted); font-size: 12px; max-width: 88ch; }
@@ -658,15 +661,8 @@ HTML = r"""<meta charset="utf-8">
 
 <div class="wrap">
   <header class="page">
-    <h1>Wildfire Demand Overlay</h1>
-    <span class="meta" id="meta"></span>
+    <h1>WFE SEO Dashboard</h1>
   </header>
-  <p class="sub">Google search interest for fire keywords vs. daily unique users on this
-  site's state &amp; incident pages (each state's total = its state page + all its fire pages).
-  Every series is indexed so timing and shape line up: <b>100&nbsp;= that area's peak in the window</b>
-  (Search Console position and CTR use their own units on the right-hand axis).
-  Search interest is measured in-state (queries from within the state), or per metro via the dropdown on each card.
-  Hover any chart for exact values; raw user counts are in the tooltip and tables.</p>
 
   <div class="controls" id="controls"></div>
   <div class="howto" id="howto" hidden></div>
@@ -698,9 +694,9 @@ HTML = r"""<meta charset="utf-8">
     <div id="tqlist"></div>
     <div class="qnote">One row per page on our site (usually one fire), ranked by <b>extra clicks / week</b>: the clicks
     its queries would get at the click-through rate this site normally earns at their position (or at position 5 for
-    queries below page 1), minus the clicks they actually got. <b>page 2+</b> = most of the gap is queries ranking below
-    the first page · <b>weak snippet</b> = we rank on page 1 but get fewer clicks than usual for that position ·
-    <b>new demand</b> = the page had no impressions two weeks earlier · <b>old page</b> = traffic landing on a fire more
+    queries below page 1), minus the clicks they actually got. <b>Page 2+</b> = most of the gap is queries ranking below
+    the first page · <b>Weak Snippet</b> = we rank on page 1 but get fewer clicks than usual for that position ·
+    <b>New Demand</b> = the page had no impressions two weeks earlier · <b>Old Page</b> = traffic landing on a fire more
     than 90 days old. Expand a row for its queries; click to open the state.</div>
   </section>
   <div class="grid" id="grid"></div>
@@ -802,7 +798,7 @@ const KW_META = [
   { tpl: "fire near", varr: "city", color: "var(--fn)", dash: "6 4" },  /* metro view only */
 ];
 /* "wildfire {state}" (zero on ~95% of days) and "fire near me" start hidden under "more terms" */
-const visible = { traffic: true, k0: false, k1: true, k2: true, k3: false, k4: true, fires: true, gi: true, gpos: true, gbest: true, gctr: false };
+const visible = { traffic: true, k0: false, k1: false, k2: false, k3: false, k4: false, fires: true, gi: true, gpos: true, gbest: true, gctr: true };
 let smooth = false;
 let y25 = false;
 let mode = "state";
@@ -894,7 +890,7 @@ function chip(k, sw, label, title) {
 function buildControls() {
   const c = document.getElementById("controls");
   const both = `<svg width="22" height="12" aria-hidden="true"><line x1="1" y1="3.5" x2="21" y2="3.5" stroke="var(--f)" stroke-width="2"/><line x1="1" y1="8.5" x2="21" y2="8.5" stroke="var(--f)" stroke-width="2" stroke-dasharray="4 3"/></svg>`;
-  let html = `<select class="statef" id="statef" aria-label="State filter"><option value="-1">All states</option>` +
+  let html = `<select class="statef" id="statef" aria-label="State filter"><option value="-1">All States</option>` +
     DATA.states.map(st => `<option value="${st.key}">${st.name}</option>`).join("") + `</select>`;
   html += `<details class="pop dpick" id="dpick"><summary class="lg dbtn" title="Dates shown on every state chart">
       <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1.5" y="2.5" width="11" height="10" rx="1.5"/><line x1="1.5" y1="5.6" x2="12.5" y2="5.6"/><line x1="4.5" y1="1" x2="4.5" y2="3.8"/><line x1="9.5" y1="1" x2="9.5" y2="3.8"/></svg>
@@ -905,8 +901,8 @@ function buildControls() {
       <div class="dcals"><div class="dcal" id="dcal-start"></div><div class="dcal" id="dcal-end"></div></div>
     </div></details>`;
   html += `<span class="gap"></span>`;
-  html += `<label class="smooth"><input type="checkbox" id="sm"> 7-day smooth</label>`;
-  html += `<details class="pop pop-r"><summary class="lg">⚙ settings</summary><div class="popbody">
+  html += `<label class="smooth"><input type="checkbox" id="sm"> 7-Day Smooth</label>`;
+  html += `<details class="pop pop-r"><summary class="lg">⚙ Settings</summary><div class="popbody">
       <div class="prow" title="A fire is impactful when at least this many people (2020 Census) live within this distance of its start point, measured from the fire's approximate edge">
         ${legendSwatch("fires")} impactful fire ≥
         <input type="range" id="ipop" min="0" max="${POP_STEPS.length - 1}" step="1" value="${POP_STEPS.indexOf(impact.pop)}" aria-label="Impactful population threshold">
@@ -914,30 +910,31 @@ function buildControls() {
         <input type="range" id="irad" min="0" max="${RING_STEPS.length - 1}" step="1" value="${RING_STEPS.indexOf(impact.ring)}" aria-label="Impactful radius">
         <b id="iradv">5 mi</b></div>
     </div></details>`;
-  html += `<button class="lg" id="howtoBtn" aria-expanded="false">ⓘ how to read</button>`;
+  html += `<button class="lg" id="howtoBtn" aria-expanded="false">ⓘ How to Read</button>`;
   html += `<span class="cbreak"></span>`;
-  html += chip("traffic", legendSwatch("traffic"), "our traffic");
-  html += chip("k1,k2", both, `fire <span style="color:var(--muted)">{state / abbr}</span>`);
-  html += chip("fires", legendSwatch("fires"), "fire starts");
+  html += chip("traffic", legendSwatch("traffic"), "Our Traffic");
+  html += chip("fires", legendSwatch("fires"), "Fire Starts");
   if (GSC) {
-    html += chip("gi", legendSwatch({ color: "var(--gi)" }), "GSC impressions");
-    html += chip("gpos", legendSwatch({ color: "var(--gp)", dash: "0.1 3.6", cap: true }), "GSC avg position",
+    html += chip("gi", legendSwatch({ color: "var(--gi)" }), "GSC Impressions");
+    html += chip("gpos", legendSwatch({ color: "var(--gp)", dash: "0.1 3.6", cap: true }), "GSC Avg Position",
       "Right-hand axis. Average position over all our impressions (1 = top result)");
-    html += chip("gbest", legendSwatch({ color: "var(--gp)", dash: "5 3" }), "GSC best position",
+    html += chip("gbest", legendSwatch({ color: "var(--gp)", dash: "5 3" }), "GSC Best Position",
       `Right-hand axis. Our best average position over the ${GSC.bestDays} days ending each day, among queries with at least ${GSC.bestMin} impressions in those days (brand and likely-automated queries left out). Hover a day for the query.`);
     html += chip("gctr", legendSwatch({ color: "var(--gc)" }), "GSC CTR", "Right-hand axis. Clicks ÷ impressions");
   }
-  html += `<details class="pop"><summary class="lg">more terms ▾</summary><div class="popbody">
-      ${chip("k0", legendSwatch(KW_META[0]), `wildfire <span style="color:var(--muted)">{state}</span>`)}
-      ${chip("k3", legendSwatch(KW_META[3]), "fire near me")}
-      ${chip("k4", legendSwatch(KW_META[4]), `fire near <span style="color:var(--muted)">{city} · metro view</span>`)}
+  html += `<details class="pop"><summary class="lg">More Terms ▾</summary><div class="popbody">
+      ${chip("k1,k2", both, `Fire <span style="color:var(--muted)">{State / Abbr}</span>`)}
+      ${chip("k0", legendSwatch(KW_META[0]), `Wildfire <span style="color:var(--muted)">{State}</span>`)}
+      ${chip("k3", legendSwatch(KW_META[3]), "Fire Near Me")}
+      ${chip("k4", legendSwatch(KW_META[4]), `Fire Near <span style="color:var(--muted)">{City} · Metro View</span>`)}
     </div></details>`;
   c.innerHTML = html;
 
   document.getElementById("howto").innerHTML = `Every line is indexed so shapes line up: 100 = that series' peak in the window.
     Search terms are in-state Google Trends (searches made from within the state); pick a metro on a card for metro-level data.
-    The green chip draws "fire {state}" solid and the two-letter abbreviation dashed. Search Console impressions (pink) are indexed
-    the same way. Search Console average position (dotted), best position (dashed) and CTR (blue) are drawn in their own units
+    Our traffic is green, Search Console impressions blue (indexed the same way), fire starts orange diamonds. Under More Terms,
+    "Fire {State / Abbr}" draws the state name solid and the two-letter abbreviation dashed. Search Console average position
+    (grey dotted), best position (grey dashed) and CTR (rose) are drawn in their own units
     on the right-hand axis; position is inverted so 1, the top result, sits at the top. Best position is our best average
     position over the ${GSC ? GSC.bestDays : 7} days ending that day, among queries with at least ${GSC ? GSC.bestMin : 20} impressions in those days;
     hover a day to see the query. Search Console lags about two days.
@@ -1082,7 +1079,7 @@ function fireMap(st) {
 }
 
 /* one date range for every state chart, set from the bar at the top */
-const RANGE_PRESETS = [["7", "Last 7 days"], ["14", "Last 14 days"], ["30", "Last 30 days"], ["90", "Last 90 days"], ["all", "All data"]];
+const RANGE_PRESETS = [["7", "Last 7 Days"], ["14", "Last 14 Days"], ["30", "Last 30 Days"], ["90", "Last 90 Days"], ["all", "All Data"]];
 const range = { preset: "90", r0: 0, r1: N - 1 };
 function setRange(preset, r0, r1) {
   range.preset = preset;
@@ -1479,14 +1476,15 @@ function openState(key) {
   const card = document.querySelector(`.card[data-si]:not([hidden])`);
   card && card.scrollIntoView({ behavior: "smooth", block: "start" });
 }
+const titleCase = t => String(t).replace(/(^|\s)([a-z])/g, (m, a, b) => a + b.toUpperCase());
 const esc = v => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /* ---------- overview: SEO health ---------- */
 const STATUS = {
-  out:   { label: "outperforming", cls: "st-out",   color: "#0ca30c" },
-  track: { label: "tracking",      cls: "st-track", color: "#898781" },
-  miss:  { label: "missing demand", cls: "st-miss", color: "#d03b3b" },
-  low:   { label: "low signal",    cls: "st-low",   color: "#898781" },
+  out:   { label: "Outperforming", cls: "st-out",   color: "#0ca30c" },
+  track: { label: "Tracking",      cls: "st-track", color: "#898781" },
+  miss:  { label: "Missing Demand", cls: "st-miss", color: "#d03b3b" },
+  low:   { label: "Low Signal",    cls: "st-low",   color: "#898781" },
 };
 
 /* one symmetric rule for every lift-vs-lift pair: us÷search below 0.6 = missing demand,
@@ -1943,7 +1941,7 @@ function buildMovers() {
         ${showTerm ? `<td class="kw">${(r.m.kws || r.st.kws)[r.k]}</td>` : ""}
         <td class="up">×${r.x.toFixed(1)}</td>
         <td>${v(r.tPrev)} → ${v(r.tNow)}</td>
-        <td class="stcell"><span class="pill ${r.captured ? "st-out" : "st-miss"}">${r.captured ? "capturing" : "not capturing"}</span></td></tr>`).join("") +
+        <td class="stcell"><span class="pill ${r.captured ? "st-out" : "st-miss"}">${r.captured ? "Capturing" : "Not Capturing"}</span></td></tr>`).join("") +
       `</tbody></table>`
     : `<div class="mempty">No metro's search jumped 1.5× or more this week with meaningful volume.</div>`;
 
@@ -2008,7 +2006,7 @@ function buildTopQueries() {
           <td class="l">${g.n > 1 ? `<button class="more" data-gi="${gi}" aria-expanded="false">${fmt(g.n)} ▸</button>` : "1"}</td>
           <td>${fmt(g.i)} ${trend(g)}</td>
           <td class="up">${fmt(g.pot)}</td>
-          <td class="stcell">${g.tags.map(t => `<span class="pill ${TAG[t] || "st-low"}">${t}</span>`).join(" ")}</td></tr>
+          <td class="stcell">${g.tags.map(t => `<span class="pill ${TAG[t] || "st-low"}">${titleCase(t)}</span>`).join(" ")}</td></tr>
         ${g.queries.map(q => `<tr class="sub" data-gi="${gi}" hidden><td></td><td class="kw" title="${esc(q.q)}">${esc(q.q)}</td>
           <td></td><td>${fmt(q.i)} <span class="lbl">impr · ${fmt(q.c)} clk</span></td><td>${q.pot >= 1 ? fmt(q.pot) : "–"}</td><td class="lbl">pos ${fposn(q.pos)}</td></tr>`).join("")}
         ${g.n > g.queries.length ? `<tr class="sub" data-gi="${gi}" hidden><td></td><td class="lbl" colspan="5">+${fmt(g.n - g.queries.length)} smaller queries</td></tr>` : ""}
@@ -2073,7 +2071,7 @@ function attachHover(card) {
     const row = (sw, name, v) => `<div class="row"><span class="n">${sw} ${name}</span><span class="v">${v}</span></div>`;
     const muted = t => `<div class="row"><span class="n" style="color:var(--muted)">${t}</span></div>`;
     let rows = "";
-    if (visible.traffic && traf) rows += row(legendSwatch("traffic"), "our traffic", `${traf[i]} visits`);
+    if (visible.traffic && traf) rows += row(legendSwatch("traffic"), "Our Traffic", `${traf[i]} visits`);
     if (kwS) {
       const on = kwS.map((s, k) => k).filter(k => visible["k" + k] && kwS[k].length);
       const missing = on.every(k => kwS[k][i] == null);
@@ -2099,11 +2097,11 @@ function attachHover(card) {
       const who = sel ? ` "${esc(sel.city)}"` : "";
       if (gs.i[i] == null) rows += muted("Search Console: not in yet (~2-day lag)");
       else {
-        if (visible.gi) rows += row(legendSwatch({ color: "var(--gi)" }), `GSC${who} impressions`, `${fmt(gs.i[i])} · ${fmt(gs.c[i])} clicks`);
-        if (visible.gpos) rows += row(legendSwatch({ color: "var(--gp)", dash: "0.1 3.6", cap: true }), `GSC${who} avg position`, fposn(gs.p[i]));
+        if (visible.gi) rows += row(legendSwatch({ color: "var(--gi)" }), `GSC${who} Impressions`, `${fmt(gs.i[i])} · ${fmt(gs.c[i])} clicks`);
+        if (visible.gpos) rows += row(legendSwatch({ color: "var(--gp)", dash: "0.1 3.6", cap: true }), `GSC${who} Avg Position`, fposn(gs.p[i]));
         if (visible.gbest) {
           const b = gs.b ? gs.b[i] : null;
-          rows += row(legendSwatch({ color: "var(--gp)", dash: "5 3" }), `GSC${who} best position, ${GSC.bestDays}d`, fposn(b));
+          rows += row(legendSwatch({ color: "var(--gp)", dash: "5 3" }), `GSC${who} Best Position, ${GSC.bestDays}d`, fposn(b));
           rows += muted(b == null ? `no query reached ${GSC.bestMin} impressions in the ${GSC.bestDays} days to here`
             : `best query: “${esc(gs.bq[i])}” · ${fmt(gs.bi[i])} impressions over ${GSC.bestDays} days`);
         }
@@ -2127,12 +2125,6 @@ function hideTip(el) {
 }
 
 /* ---------- boot ---------- */
-function updateMeta() {
-  document.getElementById("meta").textContent =
-    `${DATA.timeframe.replace(" ", " → ")} · ${MODE_GEO[mode]} · ${DATA.states.length} states · ` +
-    (DATA.fetchedAt ? `traffic via PostHog as of ${DATA.fetchedAt} · ` : "") + `built __GENERATED__`;
-}
-updateMeta();
 buildControls();
 buildCards();
 buildOverview();
