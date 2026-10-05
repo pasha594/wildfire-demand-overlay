@@ -569,6 +569,8 @@ HTML = r"""<meta charset="utf-8">
   .tqtab th:last-child, .tqtab td.stcell { padding-left: 22px; }
   .mtab.surge { min-width: 640px; }
   .mtab.surge th, .mtab.surge td.mn { white-space: normal; line-height: 1.3; }
+  .mtab.surge .nw { white-space: nowrap; }
+  .mtab.surge th:last-child, .mtab.surge td.stcell { padding-left: 22px; text-align: left; }
   #msurge, #tqlist { margin-top: 8px; overflow-x: auto; }
   .mempty { color: var(--muted); font-size: 12px; padding: 6px 2px; }
   .mcol .mempty { color: var(--muted); font-size: 12px; padding: 6px 2px; }
@@ -1975,9 +1977,9 @@ function buildMovers() {
   const showTerm = kwFilter < 0;
   const v = x => x >= 10 ? Math.round(x) : x.toFixed(1);
   document.getElementById("msurge").innerHTML = rows.length
-    ? `<table class="mtab surge"><colgroup><col>${showTerm ? '<col style="width:24%">' : ""}<col style="width:88px"><col style="width:120px"><col style="width:120px"></colgroup>
+    ? `<table class="mtab surge"><colgroup><col>${showTerm ? '<col style="width:24%">' : ""}<col style="width:88px"><col style="width:150px"><col style="width:150px"></colgroup>
        <thead><tr><th class="l">metro</th>${showTerm ? '<th class="l">surging term</th>' : ""}<th>search vs last week</th>
-       <th>our visitors / day<br>last → this week</th><th class="l">status</th></tr></thead><tbody>` +
+       <th><span class="nw">our visitors / day</span><br><span class="nw">last → this week</span></th><th class="l">status</th></tr></thead><tbody>` +
       rows.map(r => `<tr class="mrow" data-si="${r.si}" data-mi="${r.mi}" tabindex="0"
           data-tip="${esc(r.m.name)} · ${esc((r.m.kws || r.st.kws)[r.k])}: ${v(r.prev)} → ${v(r.now)} average this week (metro's own 0–100 index)">
         <td class="mn">${r.m.name}<span class="lbl"> · ${r.st.abbr}</span></td>
