@@ -1,9 +1,12 @@
 """Fetch Google Trends daily interest for the fire keywords per state (or metro).
 
-Usage: fetch_trends.py [state|national|metro] [year]
+Usage: fetch_trends.py [state|national|metro|demand] [year]
   state    (default) geo=US-{abbr}, queries originating in-state -> trends_data.json
   national geo=US -> trends_data_national.json
   metro    geo per metros.json entry -> trends_data_metro.json
+  demand   the "states in play" / "review health" demand terms -> trends_demand.json:
+           job "national" = fires, wildfires, fire map, wildfire map at geo=US; each state =
+           {name} fires, {name} wildfires, {name} fire map, {name} wildfire map at geo=US-{abbr}
   year     default 2026; e.g. 2025 -> trends_data_2025[.._national].json
 
 Keywords (KWV 3): wildfire {name}, fire {name}, fire {abbr}, fire near me —
@@ -24,9 +27,12 @@ from pytrends import exceptions as ptx
 from metros import METROS, STATE_ABBR
 
 KWV = 3  # keyword-set version; bump when the keyword templates change
+DEMAND_KWV = 1  # same, for the demand-mode templates
 
 MODE = sys.argv[1] if len(sys.argv) > 1 else "state"
-assert MODE in ("state", "national", "metro"), MODE
+assert MODE in ("state", "national", "metro", "demand"), MODE
+if MODE == "demand":
+    KWV = DEMAND_KWV
 YEAR = int(sys.argv[2]) if len(sys.argv) > 2 else 2026
 
 _today = datetime.date.today()
@@ -36,10 +42,16 @@ TIMEFRAME = f"{YEAR}-02-26 {_end.isoformat()}"
 _suffix = "" if YEAR == 2026 else f"_{YEAR}"
 _name = {"state": f"trends_data{_suffix}.json",
          "national": f"trends_data{_suffix}_national.json",
-         "metro": f"trends_data{_suffix}_metro.json"}[MODE]
+         "metro": f"trends_data{_suffix}_metro.json",
+         "demand": f"trends_demand{_suffix}.json"}[MODE]
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), _name)
 
+DEMAND_TEMPLATES = ["{} fires", "{} wildfires", "{} fire map", "{} wildfire map"]
+
 def keywords(state, city=None):
+    if MODE == "demand":
+        return [t.format("" if state is None else state.replace("_", " ").replace("-", " ")).strip()
+                for t in DEMAND_TEMPLATES]
     n = state.replace("_", " ").replace("-", " ")
     a = STATE_ABBR[state].lower()
     kws = [f"wildfire {n}", f"fire {n}", f"fire {a}", "fire near me"]
@@ -55,8 +67,10 @@ if MODE == "metro":
         for m in metros:
             jobs.append((f"{state}/{m['key']}", state, m["geo"], m["name"], m["city"]))
 else:
+    if MODE == "demand":
+        jobs.append(("national", None, "US", "national", None))
     for state in STATE_ABBR:
-        geo = f"US-{STATE_ABBR[state]}" if MODE == "state" else "US"
+        geo = f"US-{STATE_ABBR[state]}" if MODE in ("state", "demand") else "US"
         jobs.append((state, state, geo, state, None))
 
 class SkipJob(Exception):
@@ -121,7 +135,7 @@ def main():
             "note": "single request per geo; all terms share one normalization (max term-day = 100)",
         })
         data.setdefault("states", {})[job_key] = {
-            "abbr": STATE_ABBR[state], "label": label, "dates": dates,
+            "abbr": STATE_ABBR[state] if state else "US", "label": label, "dates": dates,
             "keywords": kws, "series": series,
         }
         with open(OUT, "w") as f:

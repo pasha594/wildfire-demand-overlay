@@ -1,0 +1,46 @@
+  /* ---- Review Health tabs ---- */
+  .hrow .psub { max-width: 96ch; }
+  /* side by side, each chart's header / plot / note sit on shared rows, so a wrapped legend can't push one plot lower */
+  .hgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 32px; }
+  .hc { min-width: 0; display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; }
+  .hempty { height: var(--hh, 220px); }
+  @media (max-width: 860px) {
+    .hgrid { grid-template-columns: minmax(0, 1fr); row-gap: 16px; }
+    .hc { display: block; grid-row: auto; }
+    .hempty { height: auto; min-height: 88px; }   /* stacked: no neighbour to line up with */
+  }
+  .hch { display: flex; flex-wrap: wrap; align-items: baseline; align-content: flex-start; gap: 2px 12px; margin-bottom: 6px; }
+  .hch h3 { font-size: 13px; font-weight: 600; margin: 0; }
+  .hlg { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 11.5px; color: var(--ink-2); }
+  .hlg span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .hlg svg { display: block; }
+  .hsub { color: var(--muted); font-size: 11.5px; }
+  .hbox { position: relative; touch-action: pan-y; }
+  .hbox svg { display: block; width: 100%; height: auto; }
+  .hbox:focus { outline: none; }
+  .hbox:focus-visible { outline: 2px solid var(--fm); outline-offset: 3px; border-radius: 4px; }
+  .hempty { display: flex; align-items: center; justify-content: center; text-align: center; padding: 12px 24px;
+    background: var(--chip-bg); border-radius: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .hnote { color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+  .hnote:empty { display: none; }
+  .tbar .hscope { flex-basis: 100%; }
+  .htw { max-height: 430px; overflow: auto; }
+  .htab { min-width: 700px; }
+  .htab col.wkc { width: 30%; }
+  .htab th { white-space: normal; line-height: 1.25; z-index: 1; }
+  .htab td.wk { text-align: left; padding-left: 0; white-space: normal; }
+  .htab td.wk .lbl { font-size: 11px; }
+  .hhint { display: none; }
+  /* phones: a narrow, pinned Week column so the numbers scroll under it */
+  @media (max-width: 600px) {
+    .htab { min-width: 600px; font-size: 11.5px; }
+    .htab col.wkc { width: 122px; }
+    .htab th.l, .htab td.wk { position: sticky; left: 0; background: var(--surface); box-shadow: 1px 0 0 var(--grid); }
+    .htab th.l { z-index: 2; }
+    .htab td.wk { padding-right: 6px; white-space: nowrap; }
+    .htab td.wk .lbl { display: block; white-space: normal; font-size: 10px; }
+    .hhint { display: inline; }
+  }
+  .hnotes { max-width: 96ch; }
+  .hsr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #tip table.tt .u { color: var(--muted); font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 11px; }

@@ -20,7 +20,7 @@ stored by this script.
 
 Two request shapes per day, because Google drops privacy-filtered queries
 whenever the query dimension is requested:
-    page_daily   dims date+page        -> complete totals (used for state series)
+    page_daily   dims date+page        -> complete totals (state series, state pages alone, homepage)
     query_daily  dims date+query+page  -> query detail (city slices, top queries)
 Discover and Google News cannot be grouped by query, so they only get page_daily.
 
@@ -260,16 +260,28 @@ def export(con):
             state_cache[p] = classify(p, known)
         return state_cache[p]
 
+    # landing pages on their own (web only): each state's page, and the homepage (the national one)
+    landing_cache = {}
+    def landing_of(p):
+        if p not in landing_cache:
+            path = p.rstrip("/")
+            m = re.match(r"^state/([a-z-]+)$", path)
+            landing_cache[p] = "home" if path == "" else (m.group(1) if m and m.group(1) in known else None)
+        return landing_cache[p]
+
     # state totals per type (complete, from page_daily)
     states = collections.defaultdict(lambda: collections.defaultdict(blank))
     site = collections.defaultdict(blank)
+    landing = collections.defaultdict(blank)
     for t, day, page, c, i, pos in con.execute(
             "SELECT search_type, date, page, clicks, impressions, position FROM page_daily WHERE date >= ?",
             (EXPORT_START,)):
         k = di.get(day)
         if k is None:
             continue
-        for bucket in filter(None, [site[t], states[st_of(page)][t] if st_of(page) else None]):
+        lp = landing_of(page) if t == "web" else None
+        for bucket in filter(None, [site[t], states[st_of(page)][t] if st_of(page) else None,
+                                    landing[lp] if lp else None]):
             bucket["c"][k] += c
             bucket["i"][k] += i
             bucket["pw"][k] += (pos or 0) * i
@@ -460,7 +472,7 @@ def export(con):
             return None
         out = {"c": [b["c"][k] if cov[k] else None for k in range(N)],
                "i": [b["i"][k] if cov[k] else None for k in range(N)],
-               "p": [round(b["pw"][k] / b["i"][k], 1) if cov[k] and b["i"][k] else None for k in range(N)]}
+               "p": [round(b["pw"][k] / b["i"][k], 2) if cov[k] and b["i"][k] else None for k in range(N)]}
         if any(v is not None for v in b["b"]):
             out["b"] = [round(b["b"][k], 1) if cov[k] and b["b"][k] is not None else None for k in range(N)]
             out["bq"] = [b["bq"][k] if cov[k] else None for k in range(N)]
@@ -476,6 +488,8 @@ def export(con):
             if mt:
                 ms[mkey] = mt
         out_states[s] = {"types": types, "metros": ms}
+        if s in landing and (sp := finish(landing[s])):
+            out_states[s]["state_page"] = sp
 
 
     out = {
@@ -488,6 +502,7 @@ def export(con):
                  "best_min_impr": BEST_MIN_IMPR, "best_days": BEST_DAYS,
                  "dates": dates},
         "site": {t: v for t in SEARCH_TYPES if (v := finish(site[t]))},
+        "home": finish(landing["home"]) if "home" in landing else None,
         "states": out_states,
         "top_queries": top,
     }

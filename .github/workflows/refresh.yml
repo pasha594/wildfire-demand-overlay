@@ -54,6 +54,11 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_trends.py metro 2026
 
+      # the "States in Play" / "Review Health" terms (fires, wildfires, fire map, wildfire map)
+      - name: trends, demand terms
+        continue-on-error: true
+        run: python pipeline/fetch_trends.py demand 2026
+
       - name: fire milestones
         run: python pipeline/fetch_fires.py
 

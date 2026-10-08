@@ -1,0 +1,54 @@
+  /* ---- tab: States in Play ---- */
+  /* the two panels share subgrid rows, so their header, subtitle and table rows line up side by side */
+  .stgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
+  .stgrid > .panel { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; }
+  @media (max-width: 1099px) { .stgrid, .stgrid > .panel { display: block; } }
+  .sthead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 28px; }
+  .sthead h2 { margin: 0; }
+  .sthead .dpick { margin-left: auto; }
+  .stwrap { overflow-x: auto; }
+  table.sttab { min-width: 470px; }
+  .sttab col.c0 { width: 20%; } .sttab col.c1 { width: 15%; } .sttab col.c2 { width: 19%; }
+  .sttab col.c3 { width: 12%; } .sttab col.c4 { width: 18%; } .sttab col.c5 { width: 16%; }
+  .sttab .ls { display: none; }
+  .sttab th { white-space: normal; line-height: 1.25; }
+  .sttab th[title] { cursor: help; }
+  .sttab tr.grp th { border-bottom: 0; padding-bottom: 2px; white-space: nowrap; overflow: visible; }
+  .sttab tr.grp th span { display: block; border-bottom: 1px solid var(--axis); padding-bottom: 2px; text-align: center; }
+  /* the label is wider than its one column: let its rule reach into the empty cell over State */
+  .sttab tr.grp th.gt span { margin-left: -30px; }
+  .sttab th button.sortb { font: inherit; text-transform: inherit; letter-spacing: inherit; color: inherit; text-align: inherit;
+    background: none; border: 0; padding: 0; margin: 0; cursor: pointer; line-height: inherit; }
+  .sttab th button.sortb:hover { color: var(--ink); }
+  .sttab th[aria-sort] { color: var(--ink); }
+  .sttab th button.sortb:focus-visible { outline: 2px solid var(--fm); outline-offset: 1px; border-radius: 2px; }
+  /* both tables keep the (hidden) indicator, so their headers wrap alike. Before a right-aligned label it is a
+     plain inline glyph: it takes real width (so it can't read as part of the previous column's label) and can't
+     wrap away from the label's first word */
+  .sttab .si { visibility: hidden; }
+  .sttab .si.pre { padding-right: .2em; }
+  .sttab .si.post { display: inline-block; width: .9em; text-align: center; margin-right: -.9em; }
+  .sttab .si.on { visibility: visible; }
+  .sttab tr.nat td { background: var(--chip-bg); font-weight: 600; border-bottom: 1px solid var(--axis); }
+  .sttab tr.nat td.lbl { font-weight: 400; }
+  .sttab tr.mrow.hl td { background: var(--chip-bg); }
+  .sttab td.sp { font-style: italic; }   /* sparse demand: grey and italic, not colour alone */
+  .stwarn { color: var(--ink-2); font-weight: 600; }
+  .sttab tr.nat.hl td, .sttab tr.nat:hover td { background: var(--grid); }
+  .stkw { color: var(--muted); font-size: 11.5px; margin: -6px 0 4px; }
+  .stkw b { color: var(--ink-2); font-weight: 600; }
+  /* phones: state abbreviations and short headers so all six columns fit without scrolling */
+  @media (max-width: 560px) {
+    table.sttab { min-width: 300px; font-size: 11.5px; }
+    .sttab .lf { display: none; }
+    .sttab .ls { display: inline; }
+    .sttab th { font-size: 9.5px; letter-spacing: .02em; }
+    .sttab th, .sttab td { padding-left: 5px; }
+    .sttab th.l, .sttab td.mn { padding-left: 0; }
+    .sttab col.c0 { width: 13%; } .sttab col.c1 { width: 17%; } .sttab col.c2 { width: 21%; }
+    .sttab col.c3 { width: 15%; } .sttab col.c4 { width: 18%; } .sttab col.c5 { width: 16%; }
+    .sttab tr.grp th { font-size: 9px; letter-spacing: 0; }
+    .sttab tr.grp th.gt span { margin-left: -36px; }
+    .sthead .dpick { margin-left: 0; }
+    .sthead details.pop-r .popbody { left: 0; right: auto; }
+  }

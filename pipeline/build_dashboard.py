@@ -1,13 +1,16 @@
 """Build the self-contained dashboard HTML.
 
 Inputs: site_traffic.json (per-state daily users), trends_data.json (Google
-Trends, geo=US-{abbr}, in-state), trends_data_national.json (geo=US).
-Output: dashboard.html with an in-state <-> national toggle.
+Trends, geo=US-{abbr}, in-state), trends_data_national.json (geo=US),
+trends_demand.json (the newer tabs' Google Trends terms), gsc_daily.json (Search Console).
+Output: dashboard.html. The "States in Play" and "Review Health" tabs' code lives in
+tabs/{states,health}.{js,css} and is inlined here. DASHBOARD_OUT / DASHBOARD_TABS env vars
+redirect the output / limit which tab files are inlined (for test builds).
 """
 import json, math, os, datetime
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(BASE, "dashboard.html")
+OUT = os.environ.get("DASHBOARD_OUT") or os.path.join(BASE, "dashboard.html")   # override: test builds
 
 # national mode and the 2025 overlay are descoped (user request 2026-09-03);
 # flip these and re-add the fetch passes in refresh.py to bring them back
@@ -35,6 +38,7 @@ tr_natl = load_opt("trends_data_national.json") if INCLUDE_NATIONAL else None
 tr25_state = load_opt("trends_data_2025.json") if INCLUDE_2025 else None
 tr25_natl = load_opt("trends_data_2025_national.json") if INCLUDE_2025 else None
 tr_metro = load_opt("trends_data_metro.json")
+tr_demand = load_opt("trends_demand.json")   # "states in play" / "review health" terms (fetch_trends.py demand)
 maps = load_opt("maps.json") or {}
 
 dates = traffic["dates"]
@@ -221,6 +225,26 @@ def null_dropouts(modes, what):
 dropout_days = null_dropouts([mp["mode"] for sp in states_payload for mp in sp["metros"]], "metro trends")
 dropout_days += null_dropouts([sp["modes"]["state"] for sp in states_payload], "state trends")
 
+# ---- demand terms for the new tabs: {kws, s} per area, s = one daily series per term on the
+# dashboard axis (None = no Google value that day); each area's terms share one 0-100 scale ----
+demand_payload = None
+if tr_demand:
+    def demand_entry(e):
+        idx = {d: i for i, d in enumerate(e["dates"])}
+        ser = [[(lambda k: float(e["series"][kw][k]) if k is not None and k < len(e["series"][kw]) else None)(idx.get(d))
+                for d in dates] for kw in e["keywords"]]
+        return {"kws": e["keywords"], "kwSeries": ser}
+    d_entries = {k: demand_entry(e) for k, e in tr_demand["states"].items() if e.get("dates")}
+    null_dropouts(list(d_entries.values()), "demand trends")
+    demand_payload = {
+        "timeframe": tr_demand["meta"]["timeframe"],
+        "national": ({"kws": d_entries["national"]["kws"], "s": d_entries["national"]["kwSeries"]}
+                     if "national" in d_entries else None),
+        "states": {k: {"kws": v["kws"], "s": v["kwSeries"]} for k, v in d_entries.items() if k != "national"},
+    }
+    print(f"demand trends: national {'yes' if demand_payload['national'] else 'no'}, "
+          f"{len(demand_payload['states'])} states ({demand_payload['timeframe']})")
+
 # ---- Search Console (optional; produced locally by gsc_sync.py) ----
 gsc_raw = load_opt("gsc_daily.json")
 gsc_payload = None
@@ -241,6 +265,8 @@ if gsc_raw:
         if not g:
             continue
         sp["gsc"] = {t: galign(v) for t, v in g["types"].items() if in_window(v)}
+        if g.get("state_page"):
+            sp["gscPage"] = galign(g["state_page"])   # the state's own page alone (web)
         for mp in sp["metros"]:
             mg = g["metros"].get(mp["key"])
             if mg:
@@ -253,6 +279,8 @@ if gsc_raw:
         "types": [t for t in gm["types"] if any(t in (sp.get("gsc") or {}) for sp in states_payload)],
         "topWindow": gm["top_window"], "prevWindow": gm["prev_window"],
         "topQueries": gsc_raw["top_queries"],
+        "site": galign(gsc_raw["site"]["web"]) if gsc_raw["site"].get("web") else None,   # every page (web)
+        "home": galign(gsc_raw["home"]) if gsc_raw.get("home") else None,                 # homepage alone (web)
     }
     print(f"search console: {gm['property']} through {gm['last_date']} (complete through {gm['last_complete_date']}), "
           f"types {gsc_payload['types']}, {sum(1 for sp in states_payload if sp.get('gsc'))} states, "
@@ -260,7 +288,8 @@ if gsc_raw:
 
 payload = {"dates": dates, "timeframe": tr_state["meta"]["timeframe"],
            "has25": bool(tr25_state or tr25_natl), "hasNatl": bool(tr_natl),
-           "fetchedAt": fetched_at, "states": states_payload, "maps": maps, "gsc": gsc_payload}
+           "fetchedAt": fetched_at, "states": states_payload, "maps": maps, "gsc": gsc_payload,
+           "demand": demand_payload}
 generated = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%MZ")
 
 HTML = r"""<meta charset="utf-8">
@@ -668,13 +697,35 @@ HTML = r"""<meta charset="utf-8">
 
   footer.notes { margin-top: 26px; color: var(--muted); font-size: 12px; max-width: 88ch; }
   footer.notes p { margin: 4px 0; }
+
+  /* ---- top-level tabs ---- */
+  nav.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 0 0 14px;
+    overflow-x: auto; scrollbar-width: none; }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  nav.tabs button { font: inherit; font-size: 13px; font-weight: 500; color: var(--ink-2); background: none; border: 0;
+    border-bottom: 2px solid transparent; padding: 7px 12px 8px; margin-bottom: -1px; cursor: pointer; white-space: nowrap; }
+  nav.tabs button:hover { color: var(--ink); }
+  nav.tabs button[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+  nav.tabs button:focus-visible { outline: 2px solid var(--fm); outline-offset: -2px; }
+  /* shared look for the newer tabs: a picker bar, then panels like the overview's */
+  .tbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 14px; }
+  .tbar .tlabel { color: var(--muted); font-size: 11.5px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px 12px; margin-bottom: 18px; min-width: 0; }
+  .panel h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+  .panel .psub { color: var(--muted); font-size: 11.5px; margin-bottom: 10px; }
+  .tabnotes { margin-top: 8px; color: var(--muted); font-size: 12px; max-width: 88ch; }
+  .tabnotes p { margin: 4px 0; }
+/*__TABS_CSS__*/
 </style>
 
 <div class="wrap">
   <header class="page">
     <h1>WFE SEO Dashboard</h1>
   </header>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Dashboard views"></nav>
 
+  <div class="tabpane" id="pane-main" role="tabpanel" aria-labelledby="tab-main">
   <div class="controls" id="controls"></div>
   <div class="howto" id="howto" hidden></div>
   <section class="overview" id="overview" hidden>
@@ -800,6 +851,10 @@ HTML = r"""<meta charset="utf-8">
     (state-restricted volumes are smaller, so this happens more often in in-state mode).
     The final day of the window is partial in Google's data.</p>
   </footer>
+  </div>
+  <div class="tabpane" id="pane-states" role="tabpanel" aria-labelledby="tab-states" hidden></div>
+  <div class="tabpane" id="pane-hpage" role="tabpanel" aria-labelledby="tab-hpage" hidden></div>
+  <div class="tabpane" id="pane-hall" role="tabpanel" aria-labelledby="tab-hall" hidden></div>
 </div>
 <div id="tip" role="status"></div>
 
@@ -2210,6 +2265,157 @@ function hideTip(el) {
   if (el) el.querySelectorAll(".xh").forEach(xh => xh.setAttribute("opacity", "0"));
 }
 
+/* ---------- shared date-range picker for the newer tabs ----------
+   Same look as the chart-dates button: presets on the left, a start and an end calendar.
+   Ranges are inclusive index pairs into DATA.dates.
+   opts: { title, presets: [{ key, label, get: () => [r0, r1] }], initial: preset key,
+           storageKey (optional, remembers the pick per viewer), minDays (default 1), onChange(range) }
+   Returns { el, get() -> { preset, r0, r1 }, refresh() }; refresh() re-evaluates a preset whose
+   dates depend on something else (e.g. "previous period") and updates the label, without onChange. */
+function makeRangePicker(host, opts) {
+  const D0 = DATA.dates[0], D1 = DATA.dates[N - 1], minSpan = (opts.minDays || 1) - 1;
+  const ymd = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const monthOf = iso => { const [y, m] = iso.split("-"); return { y: +y, m: +m - 1 }; };
+  const st = { preset: opts.initial, r0: 0, r1: N - 1 }, cal = {};
+  const clamp = (r0, r1) => {
+    r0 = Math.max(0, Math.min(N - 1 - minSpan, r0));
+    return [r0, Math.max(r0 + minSpan, Math.min(N - 1, r1))];
+  };
+  /* a custom pick that happens to equal a preset is shown as that preset */
+  const match = () => (opts.presets.find(p => { const [a, b] = clamp(...p.get()); return a === st.r0 && b === st.r1; }) || { key: "custom" }).key;
+  function apply(preset, r0, r1) {
+    const p = opts.presets.find(x => x.key === preset);
+    if (p) [r0, r1] = p.get();
+    [st.r0, st.r1] = clamp(r0, r1);
+    st.preset = p ? preset : match();
+  }
+  const el = document.createElement("details");
+  el.className = "pop dpick";
+  el.innerHTML = `<summary class="lg dbtn"${opts.title ? ` title="${esc(opts.title)}"` : ""}>
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1.5" y="2.5" width="11" height="10" rx="1.5"/><line x1="1.5" y1="5.6" x2="12.5" y2="5.6"/><line x1="4.5" y1="1" x2="4.5" y2="3.8"/><line x1="9.5" y1="1" x2="9.5" y2="3.8"/></svg>
+      <span class="rplabel"></span> ▾</summary>
+    <div class="popbody dpbody">
+      <div class="dpresets" role="group" aria-label="Date presets">` +
+      opts.presets.map(p => `<button type="button" data-p="${p.key}" aria-pressed="false">${p.label}</button>`).join("") + `</div>
+      <div class="dcals"><div class="dcal" data-which="start"></div><div class="dcal" data-which="end"></div></div>
+    </div>`;
+  host.appendChild(el);
+  function renderCal(which) {
+    const box = el.querySelector(`.dcal[data-which="${which}"]`), v = cal[which];
+    const first = new Date(v.y, v.m, 1), days = new Date(v.y, v.m + 1, 0).getDate();
+    const s0 = DATA.dates[st.r0], s1 = DATA.dates[st.r1], picked = which === "start" ? s0 : s1;
+    const canPrev = ymd(v.y, v.m, 1) > D0, canNext = ymd(v.y, v.m, days) < D1;
+    let h = `<div class="dchead">${which === "start" ? "Start" : "End"} <b>${fdateY(picked)}</b></div>
+      <div class="dcnav"><button type="button" class="dnav" data-dir="-1" aria-label="Previous month"${canPrev ? "" : " disabled"}>‹</button>
+      <span>${first.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
+      <button type="button" class="dnav" data-dir="1" aria-label="Next month"${canNext ? "" : " disabled"}>›</button></div>
+      <div class="dgrid">` + ["S", "M", "T", "W", "T", "F", "S"].map(d => `<span class="dow" aria-hidden="true">${d}</span>`).join("");
+    for (let k = 0; k < first.getDay(); k++) h += `<span></span>`;
+    for (let d = 1; d <= days; d++) {
+      const iso = ymd(v.y, v.m, d);
+      const cls = [iso === picked ? "pick" : "", iso >= s0 && iso <= s1 ? "in" : "", iso === s0 ? "rs" : "", iso === s1 ? "re" : ""].filter(Boolean).join(" ");
+      h += `<button type="button" class="dday ${cls}" data-d="${iso}"${iso < D0 || iso > D1 ? " disabled" : ""}
+        aria-label="${which} date ${fdateY(iso)}" aria-pressed="${iso === picked}">${d}</button>`;
+    }
+    box.innerHTML = h + `</div>`;
+  }
+  function sync(resetViews = true) {
+    const p = opts.presets.find(x => x.key === st.preset);
+    const dates = st.r0 === st.r1 ? fdate(DATA.dates[st.r0]) : `${fdate(DATA.dates[st.r0])} – ${fdate(DATA.dates[st.r1])}`;
+    el.querySelector(".rplabel").innerHTML = p ? `${p.label} <span class="lbl">· ${dates}</span>` : dates;
+    el.querySelectorAll("[data-p]").forEach(b => {
+      const on = b.dataset.p === st.preset;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    if (resetViews || !cal.start) { cal.start = monthOf(DATA.dates[st.r0]); cal.end = monthOf(DATA.dates[st.r1]); }
+    renderCal("start"); renderCal("end");
+    if (opts.storageKey) try { localStorage.setItem(opts.storageKey, JSON.stringify(st.preset === "custom"
+      ? { p: "custom", from: DATA.dates[st.r0], to: DATA.dates[st.r1] } : { p: st.preset })); } catch (e) {}
+  }
+  const idxAt = d => { const i = DATA.dates.findIndex(x => x >= d); return i < 0 ? N - 1 : i; };
+  apply(opts.initial);
+  if (opts.storageKey) try {
+    const saved = JSON.parse(localStorage.getItem(opts.storageKey) || "null");
+    if (saved && saved.p === "custom" && saved.from && saved.to) {
+      const [a, b] = saved.from <= saved.to ? [saved.from, saved.to] : [saved.to, saved.from];
+      if (b >= D0 && a <= D1) apply("custom", idxAt(a), idxAt(b));   /* ignore a range the data has moved past */
+    } else if (saved && opts.presets.some(p => p.key === saved.p)) apply(saved.p);
+  } catch (e) {}
+  sync();
+  const fire = () => opts.onChange && opts.onChange({ ...st });
+  el.querySelector(".dpbody").addEventListener("click", e => {
+    const pr = e.target.closest("[data-p]"), nav = e.target.closest(".dnav"), day = e.target.closest(".dday");
+    if (pr) { apply(pr.dataset.p); sync(); fire(); el.open = false; return; }
+    if (nav && !nav.disabled) {
+      const which = nav.closest(".dcal").dataset.which, v = cal[which];
+      const d = new Date(v.y, v.m + +nav.dataset.dir, 1);
+      cal[which] = { y: d.getFullYear(), m: d.getMonth() };
+      renderCal(which);
+      return;
+    }
+    if (day && !day.disabled) {
+      /* move the picked end; if it crosses the other end, carry that one along to keep the span */
+      const which = day.closest(".dcal").dataset.which, i = DIDX[day.dataset.d], span = st.r1 - st.r0;
+      if (which === "start") apply("custom", i, i <= st.r1 ? st.r1 : i + span);
+      else apply("custom", i >= st.r0 ? st.r0 : i - span, i);
+      sync(false); fire();
+      const again = el.querySelector(`.dcal[data-which="${which}"] .dday[data-d="${DATA.dates[which === "start" ? st.r0 : st.r1]}"]`);
+      if (again) again.focus();
+    }
+  });
+  return {
+    el,
+    get: () => ({ ...st }),
+    refresh() { if (st.preset !== "custom") { apply(st.preset); sync(); } },
+  };
+}
+
+/* ---------- top-level tabs ----------
+   Each newer tab's script registers tabHooks[key] = { show(), resize() }: show() runs every time
+   the tab opens (build lazily on the first call), resize() when the window width changes while it's open. */
+const TABS = [
+  { key: "main",   label: "Overview" },
+  { key: "states", label: "States in Play" },
+  { key: "hpage",  label: "Review Health · State Page" },
+  { key: "hall",   label: "Review Health · All Pages" },
+];
+const tabHooks = {};
+let curTab = "main";
+function showTab(key) {
+  if (!TABS.some(t => t.key === key)) key = "main";
+  curTab = key;
+  tip.style.display = "none";
+  TABS.forEach(t => {
+    document.getElementById("pane-" + t.key).hidden = t.key !== key;
+    const b = document.getElementById("tab-" + t.key);
+    b.setAttribute("aria-selected", String(t.key === key));
+    b.tabIndex = t.key === key ? 0 : -1;
+  });
+  try { localStorage.setItem("wdo-tab", key); } catch (e) {}
+  try { history.replaceState(null, "", "#" + key); } catch (e) {}
+  if (key === "main") { if (chartGeom().w !== renderedW) renderAll(); }
+  else if (tabHooks[key] && tabHooks[key].show) tabHooks[key].show();
+}
+function initTabs() {
+  const nav = document.getElementById("tabs");
+  nav.innerHTML = TABS.map(t => `<button type="button" role="tab" id="tab-${t.key}" aria-controls="pane-${t.key}"
+    aria-selected="false" tabindex="-1">${t.label}</button>`).join("");
+  nav.addEventListener("click", e => { const b = e.target.closest("[role=tab]"); if (b) showTab(b.id.slice(4)); });
+  nav.addEventListener("keydown", e => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const i = TABS.findIndex(t => t.key === curTab), j = (i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length;
+    showTab(TABS[j].key);
+    document.getElementById("tab-" + TABS[j].key).focus();
+  });
+  let start = (location.hash || "").slice(1);
+  if (!TABS.some(t => t.key === start)) try { start = localStorage.getItem("wdo-tab") || "main"; } catch (e) { start = "main"; }
+  showTab(start);
+  addEventListener("hashchange", () => { const k = location.hash.slice(1); if (k !== curTab && TABS.some(t => t.key === k)) showTab(k); });
+}
+
+/*__TABS_JS__*/
+
 /* ---------- boot ---------- */
 buildControls();
 buildCards();
@@ -2217,15 +2423,33 @@ buildOverview();
 initMovers();
 buildTopQueries();
 renderAll();
+initTabs();
 let resizeRaf = 0;
 addEventListener("resize", () => {
   cancelAnimationFrame(resizeRaf);
-  resizeRaf = requestAnimationFrame(() => { if (chartGeom().w !== renderedW) renderAll(); });
+  resizeRaf = requestAnimationFrame(() => {
+    if (curTab === "main") { if (chartGeom().w !== renderedW) renderAll(); }
+    else if (tabHooks[curTab] && tabHooks[curTab].resize) tabHooks[curTab].resize();
+  });
 });
 </script>
 """
 
-html = HTML.replace("__DATA__", json.dumps(payload, separators=(",", ":"))).replace("__GENERATED__", generated)
+def tab_src(ext):
+    """the newer tabs' code lives in tabs/*.js and tabs/*.css, inlined here (missing files = empty)"""
+    out = []
+    only = os.environ.get("DASHBOARD_TABS")   # e.g. "states": test one tab without the other's work in progress
+    for name in ("states", "health"):
+        if only and name not in only.split(","):
+            continue
+        p = os.path.join(BASE, "tabs", f"{name}.{ext}")
+        if os.path.exists(p):
+            with open(p) as f:
+                out.append(f.read())
+    return "\n".join(out)
+
+html = (HTML.replace("/*__TABS_CSS__*/", tab_src("css")).replace("/*__TABS_JS__*/", tab_src("js"))
+        .replace("__DATA__", json.dumps(payload, separators=(",", ":"))).replace("__GENERATED__", generated))
 with open(OUT, "w") as f:
     f.write(html)
 n_traffic = sum(1 for s in states_payload if s["stats"])
