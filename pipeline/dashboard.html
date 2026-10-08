@@ -458,27 +458,31 @@
     request, so they share one scale — the area's best term-day = 100 — and are directly comparable within an area,
     but not across areas. When Google Trends returns zeros for many metros on the same day (unprocessed recent days),
     those metro-days are treated as missing rather than as zero.</p>
-    <p><b>SEO health (Overview and card headers).</b> Everything that judges health uses the last 14 days.
-    <b>Search</b> = the average of an area's keyword indices over those days as a multiple of its typical (median) day;
+    <p><b>SEO health (Overview and card headers).</b> Everything that judges health uses the dates picked with the date
+    button at the top, less the latest day (still partial) — e.g. "Last 14 Days" judges the 13 complete days in it.
+    <b>Search</b> = the average of an area's keyword indices over those days as a multiple of its typical (median) day
+    across all the data;
     <b>clicks</b> (in the table; "us" on the cards) = the same for our organic visits, i.e. visitors arriving from a search
     engine (Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave), counted by PostHog; they track Search Console clicks within a few percent.
     Status comes from clicks ÷ search, whether search rose or fell: below 0.6× = missing demand (our traffic fell behind search),
     above 1.25× = outperforming, otherwise tracking. <b>Est. missed visits/wk</b> = (search multiple − our multiple) × our
-    typical day × 7. <b>Why</b> is this dashboard's own reading of Search Console over the same stretch (Google doesn't
-    supply these labels); every multiple is "× a typical day": "losing visibility" = Google showed our pages much less
+    typical day × 7. <b>Why</b> is this dashboard's own reading of Search Console (Google doesn't supply these labels) over the
+    same dates, up to Search Console's last complete day, about two days behind; every multiple is "× a typical day": "losing visibility" = Google showed our pages much less
     than searching fell (impressions ÷ search below 0.6 — a ranking or indexing gap); "shown, not clicked" = we were
     shown but clicks fell behind impressions (clicks ÷ impressions below 0.6 — a title/snippet or position gap);
     "Google clicks kept pace" = our Google clicks rose with searching, so the shortfall is in other engines or
     tracking; otherwise "visibility and clicks both slipped".
     <b>Can't judge yet:</b> Google Trends reports low-volume days as zero except for the most recent ~14 days of each
     request, so for states whose search history is mostly zero there is no reliable typical level — those states are
-    held back rather than given a misleading multiple. A 14-day window halves how often a status flips on noise compared
-    with 7 days, while a real surge still registers the day after it starts. The quadrant plots any two of these
+    held back rather than given a misleading multiple. Short windows react fastest but flip on noise: 14 days halves how
+    often a status flips compared with 7, while a real surge still registers the day after it starts; longer windows show
+    the season's overall picture. The card headers' Search Console figures compare those dates with the same number of
+    days just before them. The quadrant plots any two of these
     multiples on log axes, capped at 24× (states past the cap are drawn scaled down along their own ray, so they stay on
     the correct side of the diagonal).</p>
     <p><b>Chart dates.</b> The date button at the top sets the window every state chart shows: the last 7, 14, 30 or 90
-    days, all data, or any start and end day picked on its two calendars. The health tables, surge list and opportunities
-    keep their own fixed windows. The left axis rescales to the largest value visible in the chosen dates, but index
+    days, all data, or any start and end day picked on its two calendars. The SEO health overview and card headers judge
+    the same dates; the surge list and opportunities keep their own fixed windows. The left axis rescales to the largest value visible in the chosen dates, but index
     values don't change when you pick dates: traffic and Search Console impressions stay indexed to their own peak over
     the whole window, and the search terms share one Google Trends scale per area (100 = the busiest term-day). Search
     Console average position and CTR are plotted on the right-hand axis in their own units, sharing the left axis'
@@ -774,7 +778,7 @@ function buildControls() {
   syncRange();
   dpick.querySelector(".dpbody").addEventListener("click", e => {
     const pr = e.target.closest("[data-p]"), nav = e.target.closest(".dnav"), day = e.target.closest(".dday");
-    if (pr) { setRange(pr.dataset.p); syncRange(); renderAll(); dpick.open = false; return; }
+    if (pr) { setRange(pr.dataset.p); syncRange(); rangeChanged(); dpick.open = false; return; }
     if (nav && !nav.disabled) {
       const which = nav.closest(".dcal").id.slice(5), v = calView[which];
       const d = new Date(v.y, v.m + +nav.dataset.dir, 1);
@@ -787,7 +791,7 @@ function buildControls() {
       const which = day.closest(".dcal").id.slice(5), i = DIDX[day.dataset.d], span = range.r1 - range.r0;
       if (which === "start") setRange("custom", i, i < range.r1 ? range.r1 : i + span);
       else setRange("custom", i > range.r0 ? range.r0 : i - span, i);
-      syncRange(false); renderAll();
+      syncRange(false); rangeChanged();
       const again = dpick.querySelector(`#dcal-${which} .dday[data-d="${DATA.dates[which === "start" ? range.r0 : range.r1]}"]`);
       if (again) again.focus();
     }
@@ -1079,8 +1083,17 @@ function renderChart(st, sel, G) {
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" data-w="${w}" data-mr="${mr}" role="img" aria-label="Search interest (${viewOf(st, sel).label}) vs site traffic for ${st.name}, ${rangeText()}">${g}</svg>`;
 }
 
-/* ---------- health math shared by cards + overview (one clock: WIN days) ---------- */
+/* ---------- health math shared by cards + overview (one clock: the picked chart dates) ---------- */
+/* Top search opportunities' fixed Search Console window (gsc_sync's top_window) */
 const WIN = 14;
+/* the health window: the dates picked at the top, less today's still-partial day.
+   Its Search Console side stops at GSC's last complete day (g = null when that's before the start). */
+function healthWin() {
+  const b = Math.min(range.r1, N - 2), a = Math.min(range.r0, b);
+  const gb = GSC_LAST == null ? null : Math.min(b, GSC_LAST);
+  return { a, b, n: b - a + 1, g: gb != null && gb >= a ? { b: gb, n: gb - a + 1 } : null };
+}
+const spanText = (a, b) => a === b ? fdate(DATA.dates[a]) : `${fdate(DATA.dates[a])} – ${fdate(DATA.dates[b])}`;
 /* mean of the last `win` values ending at endI, skipping missing (null) days */
 function rollN(s, endI, win) {
   let sum = 0, n = 0;
@@ -1098,17 +1111,18 @@ function medianOf(arr, end) {
   const a = arr.slice(0, end + 1).filter(v => v != null).sort((x, y) => x - y);
   return a.length ? a[Math.floor(a.length / 2)] : 0;
 }
-/* lift = mean of the last WIN days vs the series' typical (median) day; baselines floored
-   so a near-zero median can't manufacture a huge multiple */
-function liftPair(S, T, end) {
+/* lift = mean over the health window vs the series' typical (median) day across all the data;
+   baselines floored so a near-zero median can't manufacture a huge multiple */
+function liftPair(S, T, w = healthWin()) {
+  const end = N - 2;
   const smax = Math.max(0, ...S.filter(v => v != null));
   const baseS = Math.max(medianOf(S, end), 0.05 * smax, 0.5);
   const baseT = Math.max(medianOf(T, end), 1);
-  const s = rollN(S, end, WIN), t = rollN(T, end, WIN);
+  const s = rollN(S, w.b, w.n), t = rollN(T, w.b, w.n);
   return { D: s == null ? null : s / baseS, C: t == null ? null : t / baseT, baseT };
 }
 /* GSC totals over `win` days ending at `end` */
-function gscWin(gs, end, win = WIN) {
+function gscWin(gs, end, win) {
   if (!gs || end == null || end - win + 1 < 0) return null;
   let c = 0, i = 0, pw = 0, pi = 0, days = 0;
   for (let k = end - win + 1; k <= end; k++) {
@@ -1127,36 +1141,36 @@ function chg(now, prev) {
 
 /* ---------- cards ---------- */
 function modeStatsHtml(st, sel) {
-  const end = N - 2;
+  const w = healthWin();
   let h = "";
   if (!sel) {
     const hl = healthOf(st);
     if (hl) h += `<span class="pill ${STATUS[hl.status].cls}">${STATUS[hl.status].label}</span>` + (hl.sparse
       ? `<span class="lbl">search too sparse in Google Trends to judge</span>`
-      : `<span><span class="lbl">search</span> <b>${liftFmt(hl.D)}</b> <span class="lbl">→ us</span> <b>${liftFmt(hl.C)}</b> <span class="lbl">vs typical, ${WIN}d</span></span>`);
+      : `<span><span class="lbl">search</span> <b>${liftFmt(hl.D)}</b> <span class="lbl">→ us</span> <b>${liftFmt(hl.C)}</b> <span class="lbl">vs typical, ${w.n}d</span></span>`);
     const T = st.organic && st.organic.some(v => v > 0) ? st.organic : st.traffic;
-    if (T) h += `<span class="pages"><span class="lbl">organic ${WIN}d</span> <b>${fmt(rollN(T, end, WIN) * WIN)}</b></span>`;
+    if (T) h += `<span class="pages"><span class="lbl">organic ${w.n}d</span> <b>${fmt(rollN(T, w.b, w.n) * w.n)}</b></span>`;
   } else {
     const S = sel.mode && sel.mode.kwSeries ? meanSeries(sel.mode.kwSeries) : null;
     if (S && sel.traffic) {
-      const lp = liftPair(S, sel.traffic, end);
+      const lp = liftPair(S, sel.traffic, w);
       h += sparseSearch(S) ? `<span class="lbl">metro search too sparse to judge</span>`
-        : `<span><span class="lbl">search</span> <b>${liftFmt(lp.D)}</b> <span class="lbl">→ our visitors</span> <b>${liftFmt(lp.C)}</b> <span class="lbl">vs typical, ${WIN}d</span></span>`;
+        : `<span><span class="lbl">search</span> <b>${liftFmt(lp.D)}</b> <span class="lbl">→ our visitors</span> <b>${liftFmt(lp.C)}</b> <span class="lbl">vs typical, ${w.n}d</span></span>`;
     } else if (!S) h += `<span class="lbl">no metro search data</span>`;
-    if (sel.traffic) h += `<span><span class="lbl">metro visitors ${WIN}d</span> <b>${fmt(rollN(sel.traffic, end, WIN) * WIN)}</b></span>`;
+    if (sel.traffic) h += `<span><span class="lbl">metro visitors ${w.n}d</span> <b>${fmt(rollN(sel.traffic, w.b, w.n) * w.n)}</b></span>`;
   }
   const vf = viewFires(st, sel);
   if (vf.length)
     h += `<span><b>${vf.length}</b> <span class="lbl">fires${sel ? " in this metro" : ""} ·</span> <b class="fscount">${vf.filter(isImpactful).length}</b> <span class="lbl">impactful</span></span>`;
   else if (sel && chartFires(st).length)
     h += `<span class="lbl">no fires over 100 acres in this metro</span>`;
-  if (GSC && GSC_LAST != null) {
+  if (GSC && w.g) {
     const gs = gscOf(st, sel);
-    const now = gscWin(gs, GSC_LAST), prev = gscWin(gs, GSC_LAST - WIN);
+    const now = gscWin(gs, w.g.b, w.g.n), prev = gscWin(gs, w.a - 1, w.g.n);
     if (now && (!sel || now.i >= 20)) {
       const dpos = now.pos != null && prev && prev.pos != null ? prev.pos - now.pos : null;
-      h += `<span title="Search Console, web, ${WIN} days to ${fdate(DATA.dates[GSC_LAST])} vs the ${WIN} before · CTR ${fpct(now.ctr)}">
-        <span class="lbl">GSC ${WIN}d${sel ? ` "${esc(sel.city)}"` : ""}</span> <b>${fmt(now.i)}</b> <span class="lbl">impr</span> ${chg(now.i, prev && prev.i)}
+      h += `<span title="Search Console, web, ${spanText(w.a, w.g.b)} vs the ${w.g.n} days before · CTR ${fpct(now.ctr)}">
+        <span class="lbl">GSC ${w.g.n}d${sel ? ` "${esc(sel.city)}"` : ""}</span> <b>${fmt(now.i)}</b> <span class="lbl">impr</span> ${chg(now.i, prev && prev.i)}
         <span class="lbl">· ${fmt(now.c)} clicks · pos</span> <b>${fposn(now.pos)}</b>${dpos == null || Math.abs(dpos) < 0.1 ? "" : dpos > 0 ? ` <span class="up">↑${dpos.toFixed(1)}</span>` : ` <span class="dn">↓${(-dpos).toFixed(1)}</span>`}</span>`;
     }
   }
@@ -1246,6 +1260,12 @@ function renderAll() {
   renderedW = G.w;
   document.querySelectorAll(".card[data-si]").forEach(card => renderCard(card, G));
 }
+/* a new date pick re-judges SEO health too: card headers and the overview */
+function rangeChanged() {
+  renderAll();
+  updateModeStats();
+  buildOverview();
+}
 
 function openState(key) {
   stateFilter = key;
@@ -1283,8 +1303,12 @@ function sparseSearch(S) {
   const v = S.slice(0, FRESH0).filter(x => x != null);
   return !v.length || v.filter(x => x > 0).length / v.length < 0.5;
 }
+/* cached per state for the current health window; a new date pick starts a fresh cache */
 const _health = new Map();
+let _healthKey = "";
 function healthOf(st) {
+  const w = healthWin(), wk = `${w.a}:${w.b}`;
+  if (wk !== _healthKey) { _health.clear(); _healthKey = wk; }
   if (_health.has(st.key)) return _health.get(st.key);
   const kwS = st.modes.state && st.modes.state.kwSeries;
   const T = st.organic && st.organic.some(v => v > 0) ? st.organic : st.traffic;
@@ -1292,19 +1316,19 @@ function healthOf(st) {
   if (kwS && T) {
     const end = N - 2;
     const S = meanSeries(kwS);
-    const { D, C, baseT } = liftPair(S, T, end);
+    const { D, C, baseT } = liftPair(S, T, w);
     const totalT = T.reduce((a, b) => a + (b || 0), 0);
     /* rough visits/week we'd have had if our traffic had risen as much as search did */
     const missed = D != null && C != null && D > C ? (D - C) * baseT * 7 : 0;
     let g = null;
     const gw = st.gsc && st.gsc.web;
-    if (GSC && gw && GSC_LAST != null && gw.i.some(v => v != null)) {
-      /* GSC side on its own clock (it lags ~2 days): WIN days ending GSC_LAST, demand re-measured on that window */
+    if (GSC && gw && w.g && gw.i.some(v => v != null)) {
+      /* GSC lags ~2 days, so its side stops at its last complete day; demand re-measured on those same days */
       const smax = Math.max(0, ...S.filter(v => v != null));
       const baseS = Math.max(medianOf(S, end), 0.05 * smax, 0.5);
-      const sw = rollN(S, Math.min(GSC_LAST, end), WIN);
-      const iw = rollN(gw.i, GSC_LAST, WIN), cw = rollN(gw.c, GSC_LAST, WIN);
-      const now = gscWin(gw, GSC_LAST);
+      const sw = rollN(S, w.g.b, w.g.n);
+      const iw = rollN(gw.i, w.g.b, w.g.n), cw = rollN(gw.c, w.g.b, w.g.n);
+      const now = gscWin(gw, w.g.b, w.g.n);
       g = { I: iw == null ? null : iw / Math.max(medianOf(gw.i, GSC_LAST), 1),
             C: cw == null ? null : cw / Math.max(medianOf(gw.c, GSC_LAST), 1),
             Dg: sw == null ? null : sw / baseS, ctr: now && now.ctr, pos: now && now.pos,
@@ -1312,7 +1336,7 @@ function healthOf(st) {
     }
     const sparse = sparseSearch(S);
     h = { st, D, C, ratio: D > 0 && C != null ? C / D : null, status: statusOf(D, C, totalT < 300 || sparse),
-          sparse, totalT, t14: Math.round((rollN(T, end, WIN) || 0) * WIN), missed: sparse ? 0 : missed, g };
+          sparse, totalT, tSum: Math.round((rollN(T, w.b, w.n) || 0) * w.n), missed: sparse ? 0 : missed, g };
   }
   _health.set(st.key, h);
   return h;
@@ -1350,10 +1374,10 @@ function buildOverview() {
   const healths = DATA.states.map(healthOf);
   if (!healths.some(Boolean)) { sec.hidden = true; return; }
   sec.hidden = false;
-  const end = N - 2;
+  const w = healthWin();
   document.getElementById("osub").textContent =
-    `last ${WIN} days (to ${fdate(DATA.dates[end])}) vs each state's typical day · clicks = organic visits from search engines`
-    + (GSC && GSC_LAST != null ? ` · Search Console to ${fdate(DATA.dates[GSC_LAST])}` : "");
+    `${spanText(w.a, w.b)} (${w.n} complete day${w.n > 1 ? "s" : ""}) vs each state's typical day · clicks = organic visits from search engines`
+    + (!GSC ? "" : w.g ? ` · Search Console ${spanText(w.a, w.g.b)}` : ` · no complete Search Console days in these dates yet`);
 
   const hs = healths.filter(Boolean);
   const by = st => hs.filter(h => h.status === st);
@@ -1367,7 +1391,7 @@ function buildOverview() {
 
   let html = rows.length
     ? `<table class="mtab score"><colgroup><col style="width:130px"><col style="width:128px"><col style="width:130px"><col style="width:96px"><col></colgroup>
-       <thead><tr><th class="l">state</th><th class="l">status</th><th title="Each as a multiple of a typical day over the last 14 days. Clicks = our organic visits from search engines (PostHog), which track Google's Search Console clicks within a few percent.">search → clicks</th><th style="white-space:normal">est. missed visits / week</th>
+       <thead><tr><th class="l">state</th><th class="l">status</th><th title="Each as a multiple of a typical day, over the dates picked at the top. Clicks = our organic visits from search engines (PostHog), which track Google's Search Console clicks within a few percent.">search → clicks</th><th style="white-space:normal">est. missed visits / week</th>
        <th class="l why">${hasG ? "why · our read of Search Console" : ""}</th></tr></thead><tbody>` +
       rows.map(h => `<tr class="orow mrow" data-key="${h.st.key}" tabindex="0">
         <td class="mn">${h.st.name}</td>
@@ -1375,7 +1399,7 @@ function buildOverview() {
         <td>${liftFmt(h.D)} → ${liftFmt(h.C)}</td>
         ${h.status === "miss" ? `<td class="bad">${fmt(h.missed)}</td>` : `<td class="lbl">–</td>`}
         <td class="kw why">${!hasG ? "" : h.status === "miss" ? whyOf(h) : gscRead(h)}</td></tr>`).join("") + `</tbody></table>`
-    : `<div class="mempty">No state has enough search and traffic over the last ${WIN} days to judge.</div>`;
+    : `<div class="mempty">No state has enough search and traffic over these dates to judge.</div>`;
 
   const low = by("low");
   if (low.length)
@@ -1389,7 +1413,7 @@ function buildOverview() {
     qsel.innerHTML = Object.entries(QPRESETS).filter(([k]) => k === "dc" || hasG)
       .map(([k, v]) => `<option value="${k}">${v.label}</option>`).join("");
     qsel.value = qpreset;
-    qsel.addEventListener("change", e => { qpreset = e.target.value; renderQuad(healths); });
+    qsel.addEventListener("change", e => { qpreset = e.target.value; renderQuad(DATA.states.map(healthOf)); });
   }
   renderQuad(healths);
 
@@ -1399,10 +1423,10 @@ function buildOverview() {
     el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openState(el.dataset.key); } });
     el.addEventListener("pointermove", e => {
       const g = h.g;
-      tip.innerHTML = `<div class="d">${h.st.name} · last ${WIN} days vs typical</div>
+      tip.innerHTML = `<div class="d">${h.st.name} · ${spanText(w.a, w.b)} vs typical</div>
         <table class="tt"><tbody>
         <tr><td class="n">search demand</td><td>${liftFmt(h.D)}</td></tr>
-        <tr><td class="n">our organic traffic</td><td>${liftFmt(h.C)} · ${fmt(h.t14)} visits</td></tr>
+        <tr><td class="n">our organic traffic</td><td>${liftFmt(h.C)} · ${fmt(h.tSum)} visits</td></tr>
         <tr><td class="n">response ratio</td><td>${h.ratio == null ? "–" : h.ratio.toFixed(2) + "×"}</td></tr>
         ${g ? `<tr><td class="n">GSC impressions</td><td>${liftFmt(g.I)}</td></tr>
         <tr><td class="n">GSC clicks</td><td>${liftFmt(g.C)}</td></tr>
@@ -1427,6 +1451,13 @@ function renderQuad(healths) {
     if (!v || v.x == null || v.y == null) return null;
     return { h, x: v.x, y: v.y, ratio: v.x > 0 ? v.y / v.x : null, status: statusOf(v.x, v.y, v.low) };
   }).filter(p => p && p.status !== "low");
+  const w = healthWin(), wTxt = spanText(w.a, w.b), gTxt = w.g ? spanText(w.a, w.g.b) : null;
+  if (!pts.length) {
+    document.getElementById("oquad").innerHTML = `<div class="mempty">${qpreset !== "dc" && !gTxt
+      ? "Search Console has no complete days in these dates yet — it runs about two days behind."
+      : "No state has enough data over these dates to plot."}</div>`;
+    return;
+  }
   const allLifts = pts.flatMap(p => [p.x, p.y]).filter(v => v > 0);
   /* cap the axis so one extreme state (e.g. 100×+) can't squash everyone else into a corner */
   const CAP = 24;
@@ -1472,22 +1503,20 @@ function renderQuad(healths) {
       g += `<g class="dot orow" data-key="${h.st.key}" data-pi="${pts.indexOf(pt)}">
         <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="${STATUS[pt.status].color}" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"/>${lbl}</g>`;
     });
-  const gEnd = GSC_LAST != null ? fdate(DATA.dates[GSC_LAST]) : "–";
   document.getElementById("oquad").innerHTML =
-    `<svg viewBox="0 0 ${QW} ${QH}" role="img" aria-label="${P.label}, by state, last ${WIN} days">${g}</svg>
+    `<svg viewBox="0 0 ${QW} ${QH}" role="img" aria-label="${P.label}, by state, ${wTxt}">${g}</svg>
     <div class="qnote">${{
       dv: `<b>Did Google show us more as searching rose?</b> x = search demand, y = how often Google showed our pages
-        (Search Console impressions), each as a multiple of its typical day over the ${WIN} days to ${gEnd}. Below the
+        (Search Console impressions), each as a multiple of its typical day over ${gTxt} (Search Console's complete days). Below the
         diagonal = searching grew but our visibility didn't keep up — a ranking or indexing gap.`,
       dc: `<b>Did our traffic rise with search demand?</b> x = search demand, y = our organic traffic, each as a multiple
-        of its typical day over the last ${WIN} days. Below the diagonal = searching grew more than our traffic did.`,
-      vc: `<b>When Google showed us, did people click?</b> x = impressions, y = clicks (Search Console, ${WIN} days to
-        ${gEnd}). Below the diagonal = we were seen more but chosen proportionally less — a title, snippet or position problem.`,
+        of its typical day over ${wTxt}. Below the diagonal = searching grew more than our traffic did.`,
+      vc: `<b>When Google showed us, did people click?</b> x = impressions, y = clicks (Search Console,
+        ${gTxt}). Below the diagonal = we were seen more but chosen proportionally less — a title, snippet or position problem.`,
     }[qpreset]} The 1× lines mark an ordinary stretch; colors come from this chart's own ratio. A state past ${CAP}×
     is drawn scaled down along its own line from the origin (so it stays on the correct side of the diagonal) and
     labelled with both values. States whose search is too sparse to judge are left off. Hover a dot for exact values;
     click to open the state.</div>`;
-  const gEndTip = GSC_LAST != null && qpreset !== "dc" ? `, to ${fdate(DATA.dates[GSC_LAST])}` : "";
   document.querySelectorAll("#oquad .dot").forEach(d => {
     d.addEventListener("pointermove", e => {
       const pt = pts[+d.dataset.pi];
@@ -1496,7 +1525,7 @@ function renderQuad(healths) {
           <tr><td class="n">${P.xs}</td><td>${liftFmt(pt.x)}</td></tr>
           <tr><td class="n">${P.ys}</td><td>${liftFmt(pt.y)}</td></tr>
         </tbody></table>
-        <div class="tnote">vs a typical day · last ${WIN} days${gEndTip}</div>`;
+        <div class="tnote">vs a typical day · ${qpreset === "dc" ? wTxt : gTxt}</div>`;
       tip.style.display = "block";
       let tx = e.clientX + 14, ty = e.clientY + 12;
       if (tx + tip.offsetWidth > innerWidth - 8) tx = e.clientX - tip.offsetWidth - 14;
