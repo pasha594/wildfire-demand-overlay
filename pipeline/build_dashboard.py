@@ -260,6 +260,17 @@ if gsc_raw:
         return {f: [t[f][k] if k is not None else None for k in pos] for f in ("c", "i", "p", "b", "bq", "bi") if f in t}
 
     in_window = lambda t: any((v or 0) > 0 for v in galign(t)["i"])
+
+    def tracked_align(tr):
+        """tracked searches (queries containing all the words of one of the area's demand terms) on the
+        dashboard axis: {terms, topFrom, all|page: {any, terms: [4], top: [[query, impressions, clicks]]}}"""
+        out = {"terms": tr["terms"], "topFrom": tr["top_from"]}
+        for scope in ("all", "page"):
+            if tr.get(scope):
+                out[scope] = {"any": galign(tr[scope]["any"]) if tr[scope]["any"] else None,
+                              "terms": [galign(t) if t else None for t in tr[scope]["terms"]],
+                              "top": tr[scope]["top"]}
+        return out
     for sp in states_payload:
         g = gsc_raw["states"].get(sp["key"])
         if not g:
@@ -267,6 +278,8 @@ if gsc_raw:
         sp["gsc"] = {t: galign(v) for t, v in g["types"].items() if in_window(v)}
         if g.get("state_page"):
             sp["gscPage"] = galign(g["state_page"])   # the state's own page alone (web)
+        if g.get("tracked"):
+            sp["gscTracked"] = tracked_align(g["tracked"])
         for mp in sp["metros"]:
             mg = g["metros"].get(mp["key"])
             if mg:
@@ -281,6 +294,7 @@ if gsc_raw:
         "topQueries": gsc_raw["top_queries"],
         "site": galign(gsc_raw["site"]["web"]) if gsc_raw["site"].get("web") else None,   # every page (web)
         "home": galign(gsc_raw["home"]) if gsc_raw.get("home") else None,                 # homepage alone (web)
+        "trackedNational": tracked_align(gsc_raw["tracked"]) if gsc_raw.get("tracked") else None,
     }
     print(f"search console: {gm['property']} through {gm['last_date']} (complete through {gm['last_complete_date']}), "
           f"types {gsc_payload['types']}, {sum(1 for sp in states_payload if sp.get('gsc'))} states, "
@@ -295,6 +309,7 @@ generated = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%
 HTML = r"""<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WFE SEO Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0b0b'/%3E%3Cpolyline points='3,17 10,17 13,9 18.5,25 21.5,17 29,17' fill='none' stroke='%234cd68a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
   :root {

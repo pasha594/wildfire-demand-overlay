@@ -232,7 +232,7 @@ def classify(path, known):
 
 
 def export(con):
-    from metros import METROS, STATE_ABBR
+    from metros import METROS, STATE_ABBR, demand_terms
     known = set(STATE_ABBR)
     last = con.execute("SELECT MAX(date) FROM page_daily WHERE search_type='web'").fetchone()[0]
     if not last:
@@ -290,13 +290,47 @@ def export(con):
     city_rx = {s: [(m["key"], re.compile(r"\b" + re.escape(m["city"]) + r"\b")) for m in ms]
                for s, ms in METROS.items()}
     metros = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(blank)))
+
+    # tracked searches (web): queries containing every word of one of an area's Google Trends demand terms, in any
+    # order (the way Trends counts a term, e.g. "oregon wildfires 2026", "fires in oregon"), landing on the area's
+    # pages — scope "all" = the state's pages / the whole site, "page" = the state page / the homepage. Per term,
+    # plus "any" (a query matching several terms counts once). Summed over landing pages: when two of our pages
+    # show in one search both count, which adds 0-3% here.
+    term_toks = {a: [frozenset(re.findall(r"[a-z0-9]+", t)) for t in demand_terms(None if a == "national" else a)]
+                 for a in ["national", *STATE_ABBR]}
+    tracked = collections.defaultdict(lambda: collections.defaultdict(blank))   # (area, scope) -> "any" | term index
+    t90 = (datetime.date.fromisoformat(last_complete) - datetime.timedelta(days=89)).isoformat()
+    tracked_top = collections.defaultdict(lambda: collections.defaultdict(lambda: [0, 0]))  # (area, scope) -> q -> [i, c]
+    qtok = {}
+
     for t, day, q, page, c, i, pos in con.execute(
             "SELECT search_type, date, query, page, clicks, impressions, position FROM query_daily WHERE date >= ?",
             (EXPORT_START,)):
         s = st_of(page)
+        k = di.get(day)
+        if t == "web" and k is not None:
+            if q not in qtok:
+                qtok[q] = frozenset(re.findall(r"[a-z0-9]+", q.lower()))
+            lp = landing_of(page)
+            for area in ("national", s):
+                if not area:
+                    continue
+                hits = [n for n, tt in enumerate(term_toks[area]) if tt <= qtok[q]]
+                if not hits:
+                    continue
+                on_page = lp == ("home" if area == "national" else area)
+                for scope in ("all", "page") if on_page else ("all",):
+                    for key in ("any", *hits):
+                        b = tracked[(area, scope)][key]
+                        b["c"][k] += c
+                        b["i"][k] += i
+                        b["pw"][k] += (pos or 0) * i
+                    if t90 <= day <= last_complete:
+                        tt = tracked_top[(area, scope)][q]
+                        tt[0] += i
+                        tt[1] += c
         if not s or s not in city_rx:
             continue
-        k = di.get(day)
         for mkey, rx in city_rx[s]:
             if rx.search(q):
                 b = metros[s][mkey][t]
@@ -479,6 +513,18 @@ def export(con):
             out["bi"] = [b["bi"][k] if cov[k] else None for k in range(N)]
         return out
 
+    def tracked_out(area):
+        """{terms, top_from, scope: {any, terms: [4], top: [[query, impressions, clicks] x 8, last 90 complete days]}}"""
+        out = {"terms": demand_terms(None if area == "national" else area), "top_from": t90}
+        for scope in ("all", "page"):
+            b = tracked.get((area, scope))
+            if not b:
+                continue
+            top = sorted(tracked_top[(area, scope)].items(), key=lambda kv: -kv[1][0])[:8]
+            out[scope] = {"any": finish(b["any"]), "terms": [finish(b[n]) if n in b else None for n in range(4)],
+                          "top": [[q, v[0], v[1]] for q, v in top]}
+        return out
+
     out_states = {}
     for s in sorted(states):
         types = {t: v for t in SEARCH_TYPES if (v := finish(states[s][t]))}
@@ -490,6 +536,7 @@ def export(con):
         out_states[s] = {"types": types, "metros": ms}
         if s in landing and (sp := finish(landing[s])):
             out_states[s]["state_page"] = sp
+        out_states[s]["tracked"] = tracked_out(s)
 
 
     out = {
@@ -503,6 +550,7 @@ def export(con):
                  "dates": dates},
         "site": {t: v for t in SEARCH_TYPES if (v := finish(site[t]))},
         "home": finish(landing["home"]) if "home" in landing else None,
+        "tracked": tracked_out("national"),
         "states": out_states,
         "top_queries": top,
     }

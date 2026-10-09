@@ -3,11 +3,16 @@
    homepage), "all" = every page of the state (national: the whole site). Search demand is the same in
    both: Google Trends, the mean of the area's four terms each day (meanSeries). */
 (() => {
-/* every chart keeps the right-axis margin, so all six share one x scale (and one set of date ticks) */
+/* every chart keeps the right-axis margin, so all eight share one x scale (and one set of date ticks) */
 const HML = 40, HMR = 42, HMT = 10, HMB = 22;
-/* demand averaging under 1 point (on Google's 0–100 scale) is at the reporting floor: one term moving
-   a single point shifts it 25% or more, so a ratio over it is mostly rounding */
-const FLOOR = 1;
+/* capture and share (the right-hand log charts) are measured only over a week with at least CAP_DAYS days
+   Google reported searches, a Google Trends signal (the four terms' raw values added up) of CAP_SIG, and
+   enough of the numerator: CAP_X impressions or clicks. Below that, 1-point rounding, the reporting
+   threshold and a handful of clicks dominate. An area needs CAP_MIN measurable days in its history for a
+   typical rate. CTR needs CTR_MIN impressions in its week for a stable %. The log axis never runs past
+   2^LOG_LO–2^LOG_HI (⅛×–32×); values beyond are drawn at the edge. */
+const CAP_DAYS = 4, CAP_SIG = 10, CAP_MIN = 14, CTR_MIN = 50, LOG_LO = -3, LOG_HI = 5;
+const CAP_X = { impressions: 50, clicks: 10 };
 const PRESETS = [
   { key: "30",  label: "Last 30 Days",  get: () => [N - 30, N - 1] },
   { key: "90",  label: "Last 90 Days",  get: () => [N - 90, N - 1] },
@@ -16,24 +21,37 @@ const PRESETS = [
 ];
 const ROWS = [
   { q: "Are we capturing search demand?",
-    sub: "Impressions should rise and fall with searching. A falling ratio means Google shows us less for the same demand — a ranking or indexing gap." },
+    sub: "1× = Google showed us as much as usual for this much searching. Below 1× = shown less than demand predicts (a ranking or indexing gap); above 1× = more." },
   { q: "Is demand turning into traffic?",
-    sub: "Clicks from Google per unit of search demand: the whole funnel in one line." },
+    sub: "1× = as many clicks as usual for this much searching. Below 1× = demand isn't turning into traffic as well as usual." },
   { q: "Are impressions turning into traffic?",
     sub: "CTR falling while impressions hold points at titles, snippets or position." },
+  { q: "Are we winning the searches we track?", track: true },   /* subtitle depends on the area (renderTracked) */
 ];
 const CH = [
   { t: "Search demand and impressions" },
-  { t: "Impressions ÷ demand", sub: "trailing 7-day · impressions per demand point" },
+  { t: "Impressions vs demand", sub: "× our typical rate · trailing 7-day · log scale" },
   { t: "Search demand and search traffic" },
-  { t: "Traffic ÷ demand", sub: "trailing 7-day · clicks per demand point" },
+  { t: "Traffic vs demand", sub: "× our typical rate · trailing 7-day · log scale" },
   { t: "Impressions and search traffic" },
   { t: "CTR", sub: "clicks ÷ impressions, trailing 7-day · %" },
+  { t: "Search demand and our impressions on these searches" },
+  { t: "Share of these searches we're shown in", tl: "Our share of these searches", sub: "× our typical share · trailing 7-day · log scale" },
 ];
 const tickFmt = v => v >= 1e6 ? +(v / 1e6).toFixed(2) + "M" : v >= 1000 ? +(v / 1000).toFixed(2) + "k" : String(+v.toFixed(2));
 const num = v => v == null ? "–" : v < 10 && v % 1 ? v.toFixed(1) : Math.round(v).toLocaleString();
 const rfmt = v => v == null ? "–" : v >= 100 ? Math.round(v).toLocaleString() : v >= 1 ? v.toFixed(1) : v.toFixed(2);
 const dfmt = v => v == null ? "–" : v.toFixed(1);
+/* compact counts for the biggest-searches line: 16.5k, 101k, 1.2M */
+const kfmt = v => v >= 1e6 ? +(v / 1e6).toFixed(1) + "M" : v >= 1e5 ? Math.round(v / 1000) + "k" : v >= 1000 ? +(v / 1000).toFixed(1) + "k" : String(v);
+/* a capture multiple, two significant digits ("0.72×", "1.3×", "12×"); under 0.1× without a trailing
+   zero ("0.007×", not "0.0070×"); axis ticks are powers of two */
+const cfmt = v => v == null ? "–" : (v >= 10 ? Math.round(v).toLocaleString() : v >= 0.1 ? v.toPrecision(2)
+  : v >= 0.001 ? String(+v.toPrecision(2)) : "<0.001") + "×";
+/* axis tick for 2^m: "⅛×" "¼×" "½×" "1×" "2×" "4×" … (the axis never goes below ⅛×); the fraction
+   glyphs are drawn a size up so they read as large as the digits beside them */
+const FRAC = { "-1": "½", "-2": "¼", "-3": "⅛" };
+const xfmt = m => (m < 0 ? `<tspan font-size="12.5">${FRAC[m]}</tspan>` : String(Math.pow(2, m))) + "×";
 const keyOf = l => l.fill ? legendSwatch("traffic") : legendSwatch({ color: l.color });   /* legend / tooltip key mirrors the mark */
 const sw = l => `<span class="sw">${keyOf(l)}</span>`;
 /* day i of the axis as a date: works past either end (weeks that start before the data or end after it) */
@@ -45,65 +63,133 @@ const niceUp = (raw, min = 0) => {
   return [1, 2, 2.5, 5, 10].map(m => m * p).find(s => s >= raw - 1e-9);
 };
 const boxH = w => w < 480 ? 180 : 220;
-const floorNote = m => `Demand averaged ${m.toFixed(2)} points on these days — at Google Trends' reporting floor, so this ratio is mostly rounding.`;
+const gscLast = () => GSC_LAST == null ? N - 1 : GSC_LAST;
+/* the Google Trends signal on day j: the four terms' raw values (the integers Google returned) added up */
+const sigOf = (a, j) => a.terms.reduce((p, t) => p + (t[j] || 0), 0);
 
-/* trailing 7-day ratio Σnum ÷ Σden over days d-6..d where both exist; for demand ratios only days
-   Google reported searches (a zero there means "below its threshold"). Null under 4 such days and
-   after Search Console's last complete day (the window would only be shedding older days).
-   m = mean denominator over the days used. */
-function ratio7(nm, dn, needDen) {
-  const last = GSC_LAST == null ? N - 1 : GSC_LAST;
+/* capture of search demand, for one numerator x (impressions or clicks) needing at least minX of it in a
+   week. For each day d, the usable days among d-6..d are those Google reported searches (demand above
+   zero: a zero means "below its threshold", not "no demand") and x has a value; over them rate
+   r = Σx ÷ Σdemand, measured only with at least CAP_DAYS such days, a Trends signal of CAP_SIG and
+   Σx >= minX. The typical rate R is the median r over every measurable day of the area's history through
+   Search Console's last complete day — independent of the picked dates — and c = r ÷ R (1 = typical).
+   Days after that last day get nothing: the window would only be shedding older days. Google Trends
+   rescales its 0–100 index, so r on its own means little. k0 counts the days the Trends rule alone
+   passes (sig), to tell "too little Trends signal" from "too few impressions/clicks". tx / nx = x over
+   every day of the window that has it (usable or not), so a readout can show the week's real total. */
+function capture7(x, a, minX) {
+  const D = a.D, last = gscLast();
+  let k0 = 0;
+  const w = DATA.dates.map((_, d) => {
+    if (d > last) return null;
+    let sx = 0, sd = 0, p = 0, n = 0, tx = 0, nx = 0, dn = 0;
+    for (let j = Math.max(0, d - 6); j <= d; j++) {
+      if (x[j] == null) continue;
+      tx += x[j]; nx++;
+      if (D[j] == null) dn++;
+      if (!(D[j] > 0)) continue;
+      sx += x[j]; sd += D[j]; p += sigOf(a, j); n++;
+    }
+    const sig = n >= CAP_DAYS && p >= CAP_SIG;
+    if (sig) k0++;
+    return { sx, sd, p, n, tx, nx, dn, sig, r: sig && sx >= minX ? sx / sd : null };
+  });
+  const rs = w.filter(o => o && o.r != null).map(o => o.r).sort((u, v) => u - v), k = rs.length, h = k >> 1;
+  const R = k >= CAP_MIN ? (k % 2 ? rs[h] : (rs[h - 1] + rs[h]) / 2) : null;   /* > 0: every r has Σx >= minX */
+  w.forEach(o => { if (o) o.c = o.r != null && R ? o.r / R : null; });
+  return { w, R, k, k0, minX };
+}
+
+/* trailing 7-day CTR: Σclicks ÷ Σimpressions over the days d-6..d with both; nothing under 4 such days
+   or after Search Console's last complete day, and v = null when the week has fewer than CTR_MIN
+   impressions (too few for a stable %) */
+function ctr7(gs) {
+  const last = gscLast();
   return DATA.dates.map((_, d) => {
     if (d > last) return null;
     let a = 0, b = 0, n = 0;
-    for (let j = Math.max(0, d - 6); j <= d; j++) {
-      if (nm[j] == null || dn[j] == null || (needDen && !dn[j])) continue;
-      a += nm[j]; b += dn[j]; n++;
-    }
-    return n >= 4 && b > 0 ? { v: a / b, a, b, n, m: b / n } : null;
+    for (let j = Math.max(0, d - 6); j <= d; j++) if (gs.c[j] != null && gs.i[j] != null) { a += gs.c[j]; b += gs.i[j]; n++; }
+    return n >= 4 ? { a, b, n, v: b >= CTR_MIN ? a / b : null } : null;
   });
+}
+
+/* log2 axis for the capture charts. The domain is the plotted values' own extent (a little headroom past
+   them), widened to at least ½×–2× and capped at ⅛×–32× — values beyond the cap are drawn at the edge.
+   Ticks are the powers of two inside it, thinned to every other (or third…) when closer than ~20px;
+   1× always stays. */
+function log2Axis(lines, r0, r1, ih) {
+  let lo = 0, hi = 0;
+  lines.forEach(l => { for (let i = r0; i <= r1; i++) { const v = l.s[i];
+    if (v > 0) { const e = Math.log2(v); if (e < lo) lo = e; if (e > hi) hi = e; } } });
+  const pad = 0.04 * (Math.max(hi, 1) - Math.min(lo, -1));
+  const a = Math.max(LOG_LO, Math.min(-1, lo - pad)), b = Math.min(LOG_HI, Math.max(1, hi + pad));
+  let e = 1;
+  while (ih / (b - a) * e < 20) e++;
+  const ticks = [];
+  for (let m = Math.ceil(a - 1e-9); m <= Math.floor(b + 1e-9); m++) if (m % e === 0) ticks.push({ v: Math.pow(2, m), m, one: m === 0 });
+  const at = v => Math.min(b, Math.max(a, Math.log2(v)));
+  return { ticks, Y: v => HMT + ih - (at(v) - a) / (b - a) * ih };
 }
 
 function areaData(scope, key) {
   const st = key === "national" ? null : DATA.states.find(s => s.key === key) || null;
   const dm = DATA.demand ? (st ? DATA.demand.states[st.key] : DATA.demand.national) : null;
   const gs = !GSC ? null : scope === "page" ? (st ? st.gscPage : GSC.home) : (st ? st.gsc && st.gsc.web : GSC.site);
+  const trk = !GSC ? null : (st ? st.gscTracked : GSC.trackedNational) || null;
   return {
-    st, name: st ? st.name : "the US", hasDm: !!dm, kws: dm ? dm.kws : null, terms: dm ? dm.s : null,
+    st, scope, name: st ? st.name : "the US", hasDm: !!dm, kws: dm ? dm.kws : null, terms: dm ? dm.s : null,
     D: dm ? meanSeries(dm.s) : null, gs: gs || null,
+    trk, ts: trk && trk[scope] || null,   /* tracked searches: the area's terms, and this scope's numbers */
     geo: st ? `searches made in ${st.name} (geo US-${st.abbr})` : "searches across the US (geo US)",
     covers: scope === "page" ? (st ? `fires.cornea.is/state/${st.key} only` : "the fires.cornea.is homepage only")
       : (st ? `every ${st.name} page — /state/${st.key} and its fire pages` : "every page on fires.cornea.is"),
     short: scope === "page" ? (st ? `the ${st.name} state page` : "the homepage") : (st ? `${st.name}'s pages` : "the site"),
+    where: scope === "page" ? (st ? `the ${st.name} state page` : "the homepage") : (st ? `any ${st.name} page` : "any page on the site"),
   };
 }
 
 /* one SVG chart into `box`: lines on a left axis (which owns the gridlines) and optionally a right
-   axis that reuses those gridlines with its own nice step. A line's `weak` flags (per day) draw those
-   stretches dashed and faint. Returns what the hover layer needs. */
+   axis that reuses those gridlines with its own nice step. o.log puts the left axis on a log2 scale
+   (capture multiples) with the 1× gridline drawn heavier and marked "typical". Returns what the hover
+   layer needs. */
 function plot(box, o) {
   const { r0, r1, lines } = o;
   const w = Math.max(260, Math.round(box.clientWidth)), h = boxH(w);
   const hasR = lines.some(l => l.ax === "r");
   const mr = HMR, iw = w - HML - mr, ih = h - HMT - HMB;
   const X = i => HML + (i - r0) / (r1 - r0) * iw;
-  const top = ax => { let m = 0; lines.forEach(l => { if (l.ax === ax) for (let i = r0; i <= r1; i++) if (l.s[i] > m) m = l.s[i]; }); return m; };
-  const tl = top("l"), tr = top("r");
-  const L = niceAxis(tl), nGrid = Math.round(L.ymax / L.step);
-  const rStep = hasR ? niceUp(tr / nGrid, 1) : 1;
-  const Yl = v => HMT + ih - v / L.ymax * ih, Yr = v => HMT + ih - v / (rStep * nGrid) * ih;
-  const Yof = l => l.ax === "r" ? Yr : Yl;
   const colOf = ax => (lines.find(l => l.ax === ax) || {}).color;
-  const fmtL = o.fmtL || tickFmt;
   const mono = `font-family="IBM Plex Mono, monospace" font-size="9.5"`;
-  let g = "";
-  for (let k = 0; k <= nGrid; k++) {
-    const y = Yl(k * L.step);
-    g += `<line x1="${HML}" x2="${w - mr}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(${k ? "--grid" : "--axis"})" stroke-width="1"/>`;
-    /* a series that never leaves zero gets only its 0 label: the rest of the scale would be invented */
-    if (!k || tl > 0) g += `<text x="${HML - 6}" y="${(y + 3.3).toFixed(1)}" text-anchor="end" fill="${colOf("l")}" ${mono}>${fmtL(k * L.step)}</text>`;
-    if (hasR && (!k || tr > 0)) g += `<text x="${w - mr + 6}" y="${(y + 3.3).toFixed(1)}" fill="${colOf("r")}" ${mono}>${tickFmt(k * rStep)}</text>`;
+  let g = "", Yl, Yr;
+  if (o.log) {
+    const A = log2Axis(lines, r0, r1, ih);
+    Yl = A.Y;
+    let one = "";
+    A.ticks.forEach(t => {
+      const y = Yl(t.v).toFixed(1), ln = `<line x1="${HML}" x2="${w - mr}" y1="${y}" y2="${y}"`;
+      g += `<text x="${HML - 6}" y="${(+y + 3.3).toFixed(1)}" text-anchor="end" fill="${colOf("l")}" ${mono}>${xfmt(t.m)}</text>`;
+      if (!t.one) { g += `${ln} stroke="var(--grid)" stroke-width="1"/>`; return; }
+      /* 1× goes over the other gridlines, in a colour that holds up in both themes */
+      one = `${ln} stroke="var(--muted)" stroke-opacity="0.7" stroke-width="1.4"/>` +
+        `<text x="${w - mr + 5}" y="${(+y + 3.3).toFixed(1)}" fill="var(--muted)" font-family="IBM Plex Sans, system-ui, sans-serif" font-size="10">typical</text>`;
+    });
+    g += one;
+  } else {
+    const top = ax => { let m = 0; lines.forEach(l => { if (l.ax === ax) for (let i = r0; i <= r1; i++) if (l.s[i] > m) m = l.s[i]; }); return m; };
+    const tl = top("l"), tr = top("r");
+    const L = niceAxis(tl), nGrid = Math.round(L.ymax / L.step);
+    const rStep = hasR ? niceUp(tr / nGrid, 1) : 1;
+    const fmtL = o.fmtL || tickFmt;
+    Yl = v => HMT + ih - v / L.ymax * ih; Yr = v => HMT + ih - v / (rStep * nGrid) * ih;
+    for (let k = 0; k <= nGrid; k++) {
+      const y = Yl(k * L.step);
+      g += `<line x1="${HML}" x2="${w - mr}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(${k ? "--grid" : "--axis"})" stroke-width="1"/>`;
+      /* a series that never leaves zero gets only its 0 label: the rest of the scale would be invented */
+      if (!k || tl > 0) g += `<text x="${HML - 6}" y="${(y + 3.3).toFixed(1)}" text-anchor="end" fill="${colOf("l")}" ${mono}>${fmtL(k * L.step)}</text>`;
+      if (hasR && (!k || tr > 0)) g += `<text x="${w - mr + 6}" y="${(y + 3.3).toFixed(1)}" fill="${colOf("r")}" ${mono}>${tickFmt(k * rStep)}</text>`;
+    }
   }
+  const Yof = l => l.ax === "r" ? Yr : Yl;
   let lastR = -1e9;
   xTicks(r0, r1, iw).forEach(([i, t, anchor]) => {
     const tw = t.length * 5.8;
@@ -124,17 +210,12 @@ function plot(box, o) {
     const Y = Yof(l), pt = i => X(i).toFixed(1) + " " + Y(l.s[i]).toFixed(1);
     g += `<path d="${runs(l.s).filter(r => r.length > 1).map(r => `M${X(r[0]).toFixed(1)} ${base}L${r.map(pt).join("L")}L${X(r[r.length - 1]).toFixed(1)} ${base}Z`).join("")}" fill="${l.fill}"/>`;
   });
-  const stroke = (l, s, extra) => {
-    const Y = Yof(l), pt = i => X(i).toFixed(1) + " " + Y(s[i]).toFixed(1), rs = runs(s);
-    /* a day with no neighbours has no segment: draw it as a dot */
-    rs.filter(r => r.length === 1).forEach(([i]) => { g += `<circle cx="${X(i).toFixed(1)}" cy="${Y(s[i]).toFixed(1)}" r="1.8" fill="${l.color}"${extra}/>`; });
-    const d = rs.filter(r => r.length > 1).map(r => "M" + r.map(pt).join("L")).join("");
-    if (d) g += `<path d="${d}" fill="none" stroke="${l.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"${extra}/>`;
-  };
   lines.forEach(l => {
-    if (!l.weak) return stroke(l, l.s, "");
-    stroke(l, l.s, ` opacity="0.6" stroke-dasharray="3 3"`);   /* the whole line, faint; firm days drawn over it */
-    stroke(l, l.s.map((v, i) => l.weak[i] ? null : v), "");
+    const s = l.s, Y = Yof(l), pt = i => X(i).toFixed(1) + " " + Y(s[i]).toFixed(1), rs = runs(s);
+    /* a day with no neighbours has no segment: draw it as a dot */
+    rs.filter(r => r.length === 1).forEach(([i]) => { g += `<circle cx="${X(i).toFixed(1)}" cy="${Y(s[i]).toFixed(1)}" r="1.8" fill="${l.color}"/>`; });
+    const d = rs.filter(r => r.length > 1).map(r => "M" + r.map(pt).join("L")).join("");
+    if (d) g += `<path d="${d}" fill="none" stroke="${l.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
   });
   g += `<line class="xh" x1="-10" x2="-10" y1="${HMT}" y2="${HMT + ih}" stroke="var(--muted)" stroke-width="1" opacity="0"/><g class="hd"></g>`;
   box.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">${g}</svg>`;
@@ -173,10 +254,11 @@ function makeHealthTab(key, scope) {
   function hover(i, ci, cx, cy) {
     hoverI = i;
     charts.forEach(c => c && c.mark(i));
-    if (i == null || !charts[ci]) { tip.style.display = "none"; hov = null; return; }
+    if (i == null || !charts[ci]) { tip.style.display = "none"; tip.classList.remove("htip"); hov = null; return; }
     const r = cells[ci].getBoundingClientRect();
     hov = { ci, dx: cx - r.left, dy: cy - r.top };
     tip.innerHTML = charts[ci].tip(i);
+    tip.classList.add("htip");   /* keeps an 8px gutter on both sides of a phone screen (health.css) */
     tip.style.display = "block";
     place(cx, cy);
   }
@@ -188,11 +270,11 @@ function makeHealthTab(key, scope) {
         DATA.states.map(s => `<option value="${s.key}">${esc(s.name)}</option>`).join("") + `</select>
         <label class="smooth"><input type="checkbox"> 7-Day Smooth</label>
         <span class="tlabel hscope"></span></div>` +
-      ROWS.map((r, ri) => `<section class="panel hrow"><h2>${r.q}</h2><div class="psub">${r.sub}</div><div class="hgrid">` +
+      ROWS.map((r, ri) => `<section class="panel hrow${r.track ? " htrack" : ""}"><h2>${r.q}</h2><div class="psub">${r.sub || ""}</div><div class="hgrid">` +
         [0, 1].map(k => { const c = CH[ri * 2 + k]; return `<div class="hc"><div class="hch"><h3>${c.t}</h3>
           <div class="${c.sub ? "hsub" : "hlg"}">${c.sub || ""}</div></div>
           <div class="hbox" role="group" aria-roledescription="chart"></div><div class="hnote"></div></div>`; }).join("") +
-        `</div></section>`).join("") +
+        `</div>${r.track ? `<div class="htrk"></div>` : ""}</section>`).join("") +
       `<section class="panel"><h2>The data</h2><div class="psub"><span class="hwsub"></span><span class="hhint"> · Swipe sideways for every column</span></div><div class="htw"></div></section>
       <div class="tabnotes hnotes"></div><div class="hsr" aria-live="polite"></div>`;
     const bar = pane.querySelector(".tbar");
@@ -239,23 +321,32 @@ function makeHealthTab(key, scope) {
     const a = areaData(scope, area), D = a.D, gs = a.gs;
     const sm = s => smoothOn ? smooth7n(s) : s;
     const any = s => !!s && s.slice(r0, r1 + 1).some(v => v != null);
-    const hasD = any(D), hasG = !!gs && any(gs.i);
+    const tAny = a.ts && a.ts.any;   /* tracked searches, "any of the four" */
+    const hasD = any(D), hasG = !!gs && any(gs.i), hasT = !!tAny && any(tAny.i);
     let zero = 0, miss = 0;
     for (let i = r0; i <= r1; i++) { if (!D || D[i] == null) miss++; else if (!D[i]) zero++; }
     const sparse = hasD && zero + miss > n / 2;
     const gThru = GSC ? ` (through ${fdate(GSC.lastComplete)})` : "";
     pane.querySelector(".hscope").textContent = `Search Console${gThru}: ${a.covers} · Google Trends: ${a.geo}`;
-    const wr = renderTable(a, r0, r1);
+    /* capture over the area's whole history (its typical rate doesn't depend on the picked dates) */
+    const capI = D && gs ? capture7(gs.i, a, CAP_X.impressions) : null, capC = D && gs ? capture7(gs.c, a, CAP_X.clicks) : null;
+    const capT = D && tAny ? capture7(tAny.i, a, CAP_X.impressions) : null;
+    renderTable(a, r0, r1, capI && capI.R);
+    renderTracked(a, r0, r1);
     renderNotes(a);
 
     const noD = a.hasDm ? `Google Trends has no values for ${a.name} in these dates.` : `No Google Trends data for ${a.name}.`;
-    let gEnd = -1;
-    if (gs) for (let i = N - 1; i >= 0; i--) if (gs.i[i] != null) { gEnd = i; break; }
-    const noG = !GSC ? "No Search Console data in this build."
-      : gEnd < 0 ? `No Search Console data for ${a.short}.`
-      : gEnd < r0 ? `Search Console data for ${a.short} runs through ${fdate(DATA.dates[gEnd])}, before these dates.`
-      : `No Search Console data for ${a.short} in these dates.`;
-    const zTxt = `${zero + miss} of ${n} days are zero${miss ? " or missing" : ""}`;
+    /* why a Search Console series has nothing to draw in these dates */
+    const gWhy = (s, what) => {
+      if (!GSC) return "No Search Console data in this build.";
+      let e = -1;
+      if (s) for (let i = N - 1; i >= 0; i--) if (s[i] != null) { e = i; break; }
+      return e < 0 ? `No Search Console data ${what}.`
+        : e < r0 ? `Search Console data ${what} runs through ${fdate(DATA.dates[e])}, before these dates.`
+        : `No Search Console data ${what} in these dates.`;
+    };
+    const noG = gWhy(gs && gs.i, `for ${a.short}`), noT = gWhy(tAny && tAny.i, `on these searches for ${a.short}`);
+    const G = { has: hasG, why: noG, i: gs && gs.i }, GT = { has: hasT, why: noT, i: tAny && tAny.i };
     const empty = (ci, msg) => {
       cells[ci].innerHTML = `<div class="hempty" style="--hh:${boxH(Math.max(260, cells[ci].clientWidth))}px">${msg}</div>`;
       cells[ci].setAttribute("aria-label", msg);
@@ -275,12 +366,13 @@ function makeHealthTab(key, scope) {
     const sparseNote = `Google Trends reports zero for these terms in ${a.name} on ${zero} of ${n} days${miss ? ` (and has no value on ${miss} more)` : ""} — `
       + `searching stayed below its reporting threshold, so a flat line means too few searches to report.`;
 
-    /* left-hand chart: two series, each on its own axis (smoothed when 7-Day Smooth is on) */
-    const dual = (ci, defs, withD) => {
+    /* left-hand chart: two series, each on its own axis (smoothed when 7-Day Smooth is on); src = the
+       Search Console series it draws (for "nothing to draw" and "not in yet") */
+    const dual = (ci, defs, withD, src) => {
       const lines = defs.filter(Boolean).map(d => ({ ...d, s: sm(d.raw) }));
       if (lines.length === 1) lines[0].ax = "l";
       legend(ci, lines);
-      const why = [withD && !hasD ? noD : "", hasG ? "" : noG].filter(Boolean).join(" ");
+      const why = [withD && !hasD ? noD : "", src.has ? "" : src.why].filter(Boolean).join(" ");
       if (!lines.length) return empty(ci, why);
       notes[ci].textContent = [why, withD && sparse ? sparseNote : ""].filter(Boolean).join(" ");
       label(ci, CH[ci].t);
@@ -290,7 +382,7 @@ function makeHealthTab(key, scope) {
         const rows = lines.map(l => `<tr><td class="n">${sw(l)}${l.name}</td><td>${f(l, l.s[i])}</td>` +
           (smoothOn ? `<td class="zero">${f(l, l.raw[i])}</td>` : "") + `</tr>`).join("");
         const tn = [];
-        if (hasGsc && gs.i[i] == null) tn.push(GSC_LAST != null && i > GSC_LAST ? "Search Console: not in yet (~2-day lag)" : "Search Console: no data this day");
+        if (hasGsc && src.i[i] == null) tn.push(GSC_LAST != null && i > GSC_LAST ? "Search Console: not in yet (~2-day lag)" : "Search Console: no data this day");
         if (hasDem && a.terms) tn.push(D[i] == null ? "Google Trends: no value this day"
           : "Google Trends, this day: " + a.kws.map((k, j) => `${esc(k)} ${a.terms[j][i] == null ? "–" : a.terms[j][i]}`).join(" · ") + (i === N - 1 ? " (partial day)" : ""));
         return `<div class="d">${fdateY(DATA.dates[i])}</div><table class="tt">` +
@@ -298,73 +390,199 @@ function makeHealthTab(key, scope) {
           tn.map(t => `<div class="tnote">${t}</div>`).join("");
       } });
     };
-    /* trailing 7-day ratio chart; demand ratios dash the stretches where demand sits at the floor */
-    const ratio = (ci, o) => {
-      if (o.block) return empty(ci, o.block);
-      const R = ratio7(o.nm, o.dn, o.needDen), s = R.map(r => r && r.v * (o.pct ? 100 : 1));
-      if (!s.slice(r0, r1 + 1).some(v => v != null))
-        return empty(ci, `Not enough days with both ${o.dnName} and ${o.nmName} in these dates for a 7-day ratio.`);
-      const weak = o.needDen ? R.map(r => !!r && r.m < FLOOR) : null;
-      if (weak && weak.slice(r0, r1 + 1).some(Boolean))
-        notes[ci].textContent = `Dashed where demand averaged under ${FLOOR} point: at Google Trends' reporting floor a 1-point step in one term moves demand 25% or more, so the ratio there is mostly rounding.`;
+    /* "Sep 14 – Sep 20"; just the date when the window is one day (the data's first) */
+    const span7 = i => i ? `${dlab(Math.max(0, i - 6))} – ${dlab(i)}` : dlab(i);
+    const head7 = i => `<div class="d">${fdateY(DATA.dates[i])}<span class="lbl">7 days to here</span></div>`;
+    const wk7 = (i, n) => `${span7(i)} · ${n} of 7 days`;
+    const notIn = `<div class="tnote">Search Console not in yet (~2-day lag)</div>`;
+    const lastG = Math.min(r1, gscLast());
+    const f0 = D ? Math.max(0, D.findIndex(v => v != null)) : 0;
+    const since = fdate(DATA.dates[f0]), nDays = k => `${k} day${k === 1 ? "" : "s"}`;
+    /* capture / share chart (rows 1, 2 and 4, right): the week's rate as a multiple of the area's typical
+       rate, log scale; weeks with too thin a signal are gaps. c = { nm: the numerator in words, src, noun:
+       "capture" | "share", gauge: a sentence added when Google Trends is too thin for a typical } */
+    const capture = (ci, K, c) => {
+      if (!hasD) return empty(ci, noD);
+      if (!c.src.has) return empty(ci, c.src.why);
+      if (!K.R) return empty(ci, K.k0 >= CAP_MIN
+        ? `Too few ${c.nm} for ${a.short} to measure ${c.noun}: a week needs ${K.minX}+, and only ${nDays(K.k)} since ${since} had that with enough Google Trends signal (a typical needs ${CAP_MIN}).`
+        : `${trendsThin} ${c.noun} (only ${nDays(K.k0)} since ${since} had enough signal; a typical needs ${CAP_MIN}).${c.gauge ? " " + c.gauge : ""}`);
+      const s = K.w.map(x => x && x.c);
+      if (!s.slice(r0, r1 + 1).some(v => v != null))   /* say which side is thin in these dates */
+        return empty(ci, K.w.slice(r0, lastG + 1).some(x => x && x.sig)
+          ? `Too few ${c.nm} to measure ${c.noun} in these dates: no week with enough Google Trends signal had ${K.minX}+.`
+          : `Google Trends reports zero or too little for these terms in ${a.name} in every week of these dates, so ${c.noun} can't be measured here.`);
+      /* the first 6 days can't fill a 7-day window: not worth a note on their own */
+      if (K.w.slice(Math.max(r0, 6), lastG + 1).some(x => x && x.c == null))
+        notes[ci].textContent = `Gaps = weeks with too thin a signal to measure: Google Trends above zero on fewer than ${CAP_DAYS} days, a Google Trends signal under ${CAP_SIG}, or under ${K.minX} ${c.nm}.`;
       label(ci, CH[ci].t);
-      charts[ci] = plot(cells[ci], { r0, r1, lines: [{ s, weak, color: o.color, ax: "l" }], fmtL: o.pct ? v => +v.toFixed(2) + "%" : tickFmt, tip: i => {
-        const r = R[i], head = `<div class="d">${fdateY(DATA.dates[i])}<span class="lbl">7 days to here</span></div>`;
-        if (!r) return head + `<div class="tnote">${GSC_LAST != null && i > GSC_LAST ? "Search Console: not in yet (~2-day lag)"
-          : `Fewer than 4 of the 7 days to here have both values${o.needDen ? " (and searches Google reported)" : ""}.`}</div>`;
-        return head + `<table class="tt"><tbody>
-          <tr><td class="n">${sw(o)}${CH[ci].t}</td><td>${o.pct ? (r.v * 100).toFixed(2) + "%" : rfmt(r.v) + ` <span class="u">${o.unit}</span>`}</td></tr>
-          <tr><td class="n">${o.nmName}, ${r.n} days</td><td>${o.nmFmt(r.a)}</td></tr>
-          <tr><td class="n">${o.dnName}, ${r.n} days</td><td>${o.dnFmt(r.b)}</td></tr></tbody></table>
-          <div class="tnote">${dlab(Math.max(0, i - 6))} – ${dlab(i)} · ${r.n} of 7 days used${o.needDen && r.n < 7 ? " (days with a Google Trends value above zero and Search Console data)" : ""}</div>` +
-          (weak && weak[i] ? `<div class="tnote">${floorNote(r.m)}</div>` : "");
+      const o = { color: "var(--ink-2)" }, Nm = c.nm[0].toUpperCase() + c.nm.slice(1);
+      const need = k => ` <span class="u">(needs ${k}+)</span>`;
+      const row = (nm, v) => `<tr><td class="n">${nm}</td><td>${v}</td></tr>`;
+      charts[ci] = plot(cells[ci], { r0, r1, log: true, lines: [{ s, color: o.color, ax: "l" }], tip: i => {
+        const x = K.w[i];
+        if (!x) return head7(i) + notIn;
+        const ok = x.c != null, off = ok && (x.c > Math.pow(2, LOG_HI) || x.c < Math.pow(2, LOG_LO));
+        /* why it isn't measurable, naming the side that's thin: with under CAP_DAYS days of data that is
+           (nearly always) Google Trends at zero, whatever the impressions or clicks were */
+        const thin = x.n < CAP_DAYS
+          ? (x.nx < CAP_DAYS ? `Search Console has only ${x.nx} of these days`
+            : x.n ? `Google Trends was above zero on only ${x.n} of ${x.nx} days`
+            : `Google Trends was ${x.dn ? "zero or missing" : "zero"} all week`)
+          : [x.p < CAP_SIG && "too little Google Trends signal",
+             x.sx < K.minX && (x.tx > x.sx ? `too few ${c.nm} on the days Google Trends was above zero` : `too few ${c.nm}`)].filter(Boolean).join(", ");
+        const start = i < 6 && `the data starts ${fdateY(DATA.dates[0])}, so this week has only ${i + 1} of its 7 days`;
+        /* the numerator over the whole window (what the left chart and the table show); when some of its
+           days had no Google Trends signal, also the part the rate uses, which is what needs minX */
+        const xr = x.n && x.sx !== x.tx
+          ? [row(`${Nm}, 7 days`, num(x.tx)), row(`On the ${nDays(x.n)} with data`, num(x.sx) + need(K.minX))]
+          : [row(`${Nm}, 7 days`, num(x.tx) + (x.n ? need(K.minX) : ""))];
+        const rows = [row(sw(o) + (CH[ci].tl || CH[ci].t), ok ? `${cfmt(x.c)} <span class="u">typical${off ? " — off the chart" : ""}</span>` : "–"),
+          ...xr,
+          row("Search demand, 7 days", dfmt(x.sd)),
+          row("Google Trends signal", x.p.toLocaleString() + need(CAP_SIG)),
+          row("Days with data", `${x.n} of 7` + (x.n < CAP_DAYS ? need(CAP_DAYS) : ""))];
+        return head7(i) + `<table class="tt hcap"><tbody>${rows.join("")}</tbody></table>` +
+          (ok ? "" : `<div class="tnote">Not measurable — ${start ? start + (i + 1 >= CAP_DAYS && thin ? `; ${thin}` : "") : thin}</div>`) +
+          `<div class="tnote">Typical: ${rfmt(K.R)} ${c.nm} per unit of search demand</div>` +
+          `<div class="tnote">${span7(i)}. Days with data: Google Trends above zero and in Search Console.</div>`;
+      } });
+    };
+    /* CTR chart (row 3, right): linear %, trailing 7-day; weeks under CTR_MIN impressions are gaps */
+    const ctr = ci => {
+      if (!hasG) return empty(ci, noG);
+      const R = ctr7(gs), s = R.map(r => r && r.v != null ? r.v * 100 : null), inR = R.slice(r0, lastG + 1);
+      if (!s.slice(r0, r1 + 1).some(v => v != null))
+        return empty(ci, inR.some(Boolean) ? `Fewer than ${CTR_MIN} impressions in every week of these dates — too few for a stable CTR.`
+          : "Not enough days with both impressions and clicks in these dates for a 7-day CTR.");
+      if (inR.some(r => r && r.v == null)) notes[ci].textContent = `Gaps = weeks with fewer than ${CTR_MIN} impressions — too few for a stable CTR.`;
+      label(ci, CH[ci].t);
+      const o = { color: "var(--gc)" };
+      charts[ci] = plot(cells[ci], { r0, r1, lines: [{ s, color: o.color, ax: "l" }], fmtL: v => +v.toFixed(2) + "%", tip: i => {
+        const r = R[i];
+        if (!r) return head7(i) + (i > gscLast() ? notIn : `<div class="tnote">Fewer than 4 of the 7 days to here have both values.</div>`);
+        return head7(i) + `<table class="tt"><tbody>
+          <tr><td class="n">${sw(o)}CTR</td><td>${r.v == null ? "–" : (r.v * 100).toFixed(2) + "%"}</td></tr>
+          <tr><td class="n">clicks, ${r.n} days</td><td>${num(r.a)}</td></tr>
+          <tr><td class="n">impressions, ${r.n} days</td><td>${num(r.b)}</td></tr></tbody></table>` +
+          (r.v == null ? `<div class="tnote">Under ${CTR_MIN} impressions — too few for a stable CTR</div>` : "") +
+          `<div class="tnote">${wk7(i, r.n)} used</div>`;
       } });
     };
 
+    const trendsThin = `Google Trends reports too few searches for these terms in ${a.name} to measure`;
     const dem = hasD && { raw: D, color: "var(--f)", name: "Search demand", ax: "l", kind: "d" };
     const imp = ax => hasG && { raw: gs.i, color: "var(--gi)", name: "Impressions", ax, kind: "g" };
     const clk = hasG && { raw: gs.c, color: "var(--traffic)", fill: "var(--traffic-fill)", name: "Search traffic (clicks)", ax: "r", kind: "g" };
-    const sparseMsg = `Google Trends reports too few searches for these terms in ${a.name} to compute a ratio — ${zTxt}.`;
-    const dBlock = !hasD ? noD : !hasG ? noG : sparse ? sparseMsg : null;
-    dual(0, [dem, imp("r")], true);
-    ratio(1, { block: dBlock && dBlock + (sparse && hasG && wr ? ` The table below has it for the ${wr} week${wr > 1 ? "s" : ""} where Google reported searches on most days.` : ""),
-      nm: hasG && gs.i, dn: D, needDen: true, color: "var(--ink-2)", unit: "impressions per demand point",
-      nmName: "impressions", dnName: "demand points", nmFmt: num, dnFmt: dfmt });
-    dual(2, [dem, clk], true);
-    ratio(3, { block: dBlock, nm: hasG && gs.c, dn: D, needDen: true, color: "var(--ink-2)", unit: "clicks per demand point",
-      nmName: "clicks", dnName: "demand points", nmFmt: num, dnFmt: dfmt });
-    dual(4, [imp("l"), clk], false);
-    ratio(5, { block: hasG ? null : noG, nm: hasG && gs.c, dn: hasG && gs.i, pct: true, color: "var(--gc)",
-      nmName: "clicks", dnName: "impressions", nmFmt: num, dnFmt: num });
+    const timp = hasT && { raw: tAny.i, color: "var(--gi)", name: "Impressions on these searches", ax: "r", kind: "g" };
+    dual(0, [dem, imp("r")], true, G);
+    capture(1, capI, { nm: "impressions", src: G, noun: "capture" });
+    dual(2, [dem, clk], true, G);
+    capture(3, capC, { nm: "clicks", src: G, noun: "capture" });
+    dual(4, [imp("l"), clk], false, G);
+    ctr(5);
+    dual(6, [dem, timp], true, GT);
+    /* the two charts stack below 860px (health.css), so the impressions chart is above, not to the left */
+    capture(7, capT, { nm: "impressions on these searches", src: GT, noun: "share",
+      gauge: `Our impressions on these searches (${matchMedia("(max-width: 860px)").matches ? "above" : "left"}) are the best gauge here — on page 1 they come close to the number of searches.` });
     lastW = cells[0].clientWidth;
   }
 
+  /* row 4's subtitle, and under its charts the tracked searches for the picked dates (Search Console's
+     complete days only): each term, then any of the four (a search counted once), plus the area's
+     biggest matching searches over the export's fixed 90 days */
+  function renderTracked(a, r0, r1) {
+    const row = pane.querySelector(".htrack"), T = a.trk, ts = a.ts, top = ts && ts.top || [];
+    const eg = top.slice(0, 2).map(q => `“${esc(q[0])}”`).join(", ");
+    row.querySelector(".psub").innerHTML = `Search Console for the same searches Google Trends counts here: any search containing all the words of one of the four terms, in any order${eg ? ` (e.g. ${eg})` : ""}, that showed ${esc(a.where)}.`;
+    const box = row.querySelector(".htrk");
+    const terms = T ? T.terms : a.kws;
+    if (!terms) { box.innerHTML = `<div class="htop">No Google Trends terms for ${esc(a.name)}, so no tracked searches.</div>`; return; }
+    const g1 = Math.min(r1, gscLast()), hasDays = !!GSC && g1 >= r0, e1 = hasDays ? g1 : r1;
+    const avg = s => { if (!s) return null; let v = 0, k = 0; for (let j = r0; j <= e1; j++) if (s[j] != null) { v += s[j]; k++; } return k ? v / k : null; };
+    const tot = t => {
+      if (!t || !hasDays) return null;
+      let i = 0, c = 0, pw = 0, pi = 0, k = 0;
+      for (let j = r0; j <= g1; j++) {
+        if (t.i[j] == null) continue;
+        k++; i += t.i[j]; c += t.c[j] || 0;
+        if (t.p[j] != null && t.i[j]) { pw += t.p[j] * t.i[j]; pi += t.i[j]; }
+      }
+      return k ? { i, c, pos: pi ? pw / pi : null } : null;
+    };
+    const tr = (label, dem, t, cls) => `<tr${cls ? ` class="${cls}"` : ""}><td class="kw">${label}</td><td>${dem == null ? "–" : dem.toFixed(1)}</td>` +
+      `<td>${t ? t.i.toLocaleString() : "–"}</td><td>${t ? t.c.toLocaleString() : "–"}</td>` +
+      `<td>${t && t.i ? fpct(t.c / t.i) : "–"}</td><td>${t && t.pos != null ? fposn(t.pos) : "–"}</td></tr>`;
+    const rows = terms.map((term, j) => {
+      const di = a.kws ? a.kws.indexOf(term) : -1, ds = a.terms && a.terms[di >= 0 ? di : j];
+      return tr(esc(term), avg(ds), tot(ts && ts.terms && ts.terms[j]));
+    }).join("") + tr("Any of the four", avg(a.D), tot(ts && ts.any), "any");
+    const cap = `${dlab(r0)} – ${fdateY(DATA.dates[e1])}` + (hasDays ? (g1 < r1 ? " · Search Console's complete days in the picked dates" : "")
+      : " · Search Console has no complete days in these dates");
+    const tf = T ? fdate(T.topFrom) : "", tl = GSC ? fdate(GSC.lastComplete) : "";
+    const topLine = !ts ? `No Search Console data on these searches for ${esc(a.short)}.`
+      : top.length ? `Biggest matching searches, ${tf} – ${tl}: ` + top.slice(0, 6).map(q =>
+        `<span class="q">${esc(q[0])}</span> (${kfmt(q[1])} impressions, ${kfmt(q[2])} clicks)`).join(" · ")
+      : `No matching searches in Search Console, ${tf} – ${tl}.`;
+    box.innerHTML = `<div class="htcap">Tracked searches · ${esc(a.st ? a.st.name : "National")} · ${cap}<span class="hhint"> · Swipe sideways for every column</span></div>
+      <div class="httw"><table class="mtab htt"><colgroup><col class="tc"><col><col><col><col><col></colgroup>
+      <thead><tr><th class="l">Search term</th>
+      <th title="Google Trends index on the area's own 0–100 scale, averaged over these dates (Any of the four: the mean of the four terms)">Search Demand</th>
+      <th title="Searches that showed one of our pages (on page 1, nearly every search for the term)">Impressions</th>
+      <th title="Search Console clicks">Clicks</th>
+      <th title="Share of those searches that clicked us">CTR</th>
+      <th title="Impression-weighted average position (1 = top result)">Avg Position</th></tr></thead>
+      <tbody>${rows}</tbody></table></div><div class="htop">${topLine}</div>`;
+  }
+
   /* weeks (Monday–Sunday) overlapping the range, newest first; Search Console sides stop at GSC_LAST.
-     Returns how many weeks have an Impressions ÷ Demand value. */
-  function renderTable(a, r0, r1) {
-    const D = a.D, gs = a.gs, rows = [];
-    let withRatio = 0;
+     Impressions vs Demand = the week's Σ impressions ÷ Σ demand over its usable days (as capture7) ÷ the
+     area's typical rate Ri; blank under CAP_DAYS usable days, a Trends signal under CAP_SIG or fewer than
+     CAP_X.impressions impressions, or without Ri. */
+  function renderTable(a, r0, r1, Ri) {
+    const D = a.D, gs = a.gs, rows = [], minI = CAP_X.impressions;
+    /* the capture rule over days lo..hi */
+    const usable = (lo, hi) => {
+      let n = 0, I = 0, d = 0, p = 0, g = 0, dn = 0;   /* g: days in Search Console; dn: of those, no Trends value */
+      for (let j = lo; j <= hi; j++) {
+        if (j > GSC_LAST || gs.i[j] == null) continue;
+        g++; if (D[j] == null) dn++;
+        if (D[j] > 0) { n++; I += gs.i[j]; d += D[j]; p += sigOf(a, j); }
+      }
+      return { n, I, d, p, g, dn, ok: n >= CAP_DAYS && p >= CAP_SIG && I >= minI };
+    };
     for (let s = r0 - (dayAt(r0).getDay() + 6) % 7; s <= r1; s += 7) {
       const lo = Math.max(s, r0), hi = Math.min(s + 6, r1), gh = GSC_LAST == null ? -1 : Math.min(hi, GSC_LAST);
-      let dS = 0, dN = 0, I = 0, C = 0, PW = 0, PI = 0, gN = 0, rI = 0, rD = 0, both = 0, rep = 0;
+      let dS = 0, dN = 0, I = 0, C = 0, PW = 0, PI = 0, gN = 0;
       for (let j = lo; j <= hi; j++) {
         const d = D ? D[j] : null, gi = gs && j <= gh ? gs.i[j] : null;
         if (d != null) { dS += d; dN++; }
         if (gi == null) continue;
         gN++; I += gi; C += gs.c[j] || 0;
         if (gs.p[j] != null) { PW += gs.p[j] * gi; PI += gi; }
-        if (d != null) { both++; if (d > 0) { rep++; rI += gi; rD += d; } }
       }
       const days = hi - lo + 1, cut = [];
       if (days < 7) cut.push(`${days} of 7 days`);
       if (gs && gN < days) cut.push(gN ? `Search Console ${gN} of 7` : "no Search Console yet");
-      const ok = rep * 2 > both && rD > 0, weak = ok && rD / rep < FLOOR;
-      if (ok) withRatio++;
-      const rAttr = !ok ? (both ? ` class="lbl" title="Google Trends reported searches on ${rep} of ${both} days this week — too few for a ratio"` : "")
-        : weak ? ` class="lbl" title="${floorNote(rD / rep)}"` : "";
+      const u = Ri ? usable(lo, hi) : null, ok = !!u && u.ok;
+      let why = "";
+      if (Ri && gN && !ok) {
+        /* the data's first day or the picked dates clipped the week: say so rather than blame the signal,
+           and add the signal's reason only when the clipped part had days enough to be measured */
+        const start = s < 0 && lo === 0, clip = start ? `The data starts ${fdateY(DATA.dates[0])}: only ${days} of this week's days are in it`
+          : days < 7 ? `The picked dates cut this week to ${days} of 7 days` : "";
+        const thin = u.n < CAP_DAYS ? (u.g < CAP_DAYS ? `Search Console has only ${u.g} of this week's days — needs ${CAP_DAYS}+`
+            : u.n ? `Google Trends was above zero on only ${u.n} of this week's ${u.g} days — needs ${CAP_DAYS}+`
+            : `Google Trends reported ${u.dn ? "zero or nothing" : "zero"} on all ${u.g} days — needs ${CAP_DAYS}+ days above zero`)
+          : u.p < CAP_SIG ? `Google Trends signal this week is ${u.p} (its four terms added up) — needs ${CAP_SIG}+`
+          : I > u.I ? `Only ${u.I.toLocaleString()} impressions on the ${u.n} days Google Trends was above zero — needs ${minI}+`
+          : `${u.I.toLocaleString()} impressions this week — needs ${minI}+`;
+        why = clip && (days < CAP_DAYS || !start && usable(Math.max(s, 0), Math.min(s + 6, N - 1)).ok) ? `${clip} — too few to measure`
+          : clip ? `${clip}; ${thin.replace(/^Only /, "only ")}` : thin;
+      }
       rows.unshift(`<tr><td class="wk">${dlab(s)} – ${dlab(s + 6)}${cut.length ? ` <span class="lbl">· ${cut.join(" · ")}</span>` : ""}</td>
         <td>${dN ? (dS / dN).toFixed(1) : "–"}</td><td>${gN ? I.toLocaleString() : "–"}</td>
-        <td${rAttr}>${ok ? rfmt(rI / rD) : "–"}</td>
+        <td${why ? ` class="lbl" title="${why}"` : ""}>${ok ? cfmt(u.I / u.d / Ri) : "–"}</td>
         <td>${gN && I ? fpct(C / I) : "–"}</td><td>${gN ? C.toLocaleString() : "–"}</td><td>${PI ? fposn(PW / PI) : "–"}</td></tr>`);
     }
     pane.querySelector(".hwsub").textContent = `Weekly, Monday–Sunday, newest first · ${a.name === "the US" ? "National" : a.name} · ${dlab(r0)} – ${dlab(r1)}`
@@ -373,12 +591,11 @@ function makeHealthTab(key, scope) {
       <thead><tr><th class="l">Week</th>
       <th title="Google Trends: mean of the area's four terms, averaged over the week's days with a value (0–100 index)">Search Demand</th>
       <th title="Search Console impressions, summed">Impressions</th>
-      <th title="Impressions ÷ search demand — the same way round as the 'Impressions ÷ demand' chart (the requested SD/Impressions column, flipped so higher = more of the demand captured). Σ impressions ÷ Σ demand over the week's days Google reported searches; blank when it reported zero on half the days or more; grey when demand on those days averaged under ${FLOOR} point (Google Trends' reporting floor, so mostly rounding).">Impressions ÷ Demand</th>
+      <th title="The requested SD/Impressions, flipped: the week's impressions per unit of search demand, compared with ${a.st ? esc(a.st.name) + "'s" : "the national"} typical (the median 7-day rate since ${fdate(DATA.dates[0])}). 1× = typical; 0.5× = half the usual impressions for that much searching. Blank when the week's signal is too thin.">Impressions vs Demand</th>
       <th title="Clicks ÷ impressions">CTR</th>
       <th title="Search Console clicks (search traffic), summed">Traffic</th>
       <th title="Impression-weighted average position (1 = top result)">Avg Position</th></tr></thead>
       <tbody>${rows.join("")}</tbody></table>`;
-    return withRatio;
   }
 
   function renderNotes(a) {
@@ -391,13 +608,20 @@ function makeHealthTab(key, scope) {
       areas at once are treated as missing.</p>
       <p><b>Impressions</b>, <b>search traffic</b> (clicks), <b>CTR</b> (clicks ÷ impressions) and <b>avg position</b>
       (impression-weighted, 1 = the top result) come from Google Search Console, web search, for ${esc(a.covers)}. Search
-      Console runs about two days behind, so its lines and the ratios stop at its last complete day${GSC ? ` (${fdateY(GSC.lastComplete)})` : ""}.</p>
-      <p><b>Ratios</b> (right-hand charts) are trailing 7-day: for each day, the top summed over the 7 days ending that day ÷
-      the bottom summed over the same days, using days where both exist — for the two demand ratios, only days Google
-      reported searches (above zero) — and left blank when fewer than 4 days qualify. The demand ratios are hidden when
-      Google reports zero on more than half the picked days, and dashed where demand averaged under ${FLOOR} point (its
-      reporting floor, where 1-point rounding swamps the ratio). The table's Impressions ÷ Demand uses the same rules per
-      week (grey = at the floor). 7-Day Smooth averages the left-hand charts over a centered week; ratios and the table are unaffected.</p>
+      Console runs about two days behind, so its lines and the right-hand charts stop at its last complete day${GSC ? ` (${fdateY(GSC.lastComplete)})` : ""}.</p>
+      <p><b>Impressions vs demand</b> and <b>traffic vs demand</b> (rows 1–2, right). Google Trends is relative, so impressions
+      per unit of search demand mean little. Each point adds up the 7 days to it, divides impressions (or clicks) by
+      search demand and compares that with this area's typical, the median since ${fdate(DATA.dates[0])} (1× = typical).
+      The log scale makes halving and doubling look equally big. Blank = too thin a signal. These terms miss fire-name
+      searches, which bring much of our traffic; the “tracked searches” row measures exactly the searches they count.</p>
+      <p><b>CTR</b> (row 3, right) is clicks ÷ impressions over the same trailing 7 days, left blank where those days had
+      fewer than ${CTR_MIN} impressions. 7-Day Smooth averages the left-hand charts over a centered week; the right-hand
+      charts and the tables are unaffected.</p>
+      <p><b>Tracked searches</b> (row 4): searches containing every word of one of the four terms, in any order, as Trends
+      counts them. On page 1 nearly every such search shows us, so impressions ≈ searches and CTR is our click share.
+      Absolute share isn't available (Search Console skips searches we didn't appear in; Google Trends has no absolute
+      volume), so share is relative to typical. A search counts twice when two of our pages show (0–3% here). Search
+      Console omits rare ones.</p>
       <p><b>Terms for ${a.st ? esc(a.st.name) : "National"}</b>, ${a.geo}: ${a.kws ? a.kws.map(k => `“${esc(k)}”`).join(", ") : "no Google Trends data for this area"}.</p>
       <p>Structures threatened, smoke impact and evacuations can be layered in once collected.</p>`;
   }

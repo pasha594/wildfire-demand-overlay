@@ -12,6 +12,14 @@ with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "metros.json"
 
 RADIUS_MI = 50
 
+# the "States in Play" / "Review Health" demand terms (Google Trends via fetch_trends.py demand, and the matching
+# Search Console searches via gsc_sync.py): national = None
+DEMAND_TEMPLATES = ["{} fires", "{} wildfires", "{} fire map", "{} wildfire map"]
+
+def demand_terms(state=None):
+    name = "" if state is None else state.replace("_", " ").replace("-", " ")
+    return [t.format(name).strip() for t in DEMAND_TEMPLATES]
+
 STATE_ABBR = {
     "minnesota": "MN", "georgia": "GA", "colorado": "CO", "utah": "UT",
     "oregon": "OR", "michigan": "MI", "washington": "WA", "florida": "FL",

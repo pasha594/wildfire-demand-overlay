@@ -17,14 +17,16 @@ terms share a single normalization (top term-day = 100; values never exceed
 
 Window: Feb 26 of the year through "today" shifted into that year. Progress is
 saved after every job (resumable); a stored file with a different timeframe or
-keyword version is wiped and refetched. A geo Google rejects outright is
-skipped with a warning instead of killing the run.
+keyword version is wiped and refetched (demand mode: when only the window moved,
+each area keeps its previous fetch until it is refetched, so throttling leaves it
+stale rather than missing). A geo Google rejects outright is skipped with a
+warning instead of killing the run.
 """
 import datetime, json, os, random, sys, time
 
 from pytrends.request import TrendReq
 from pytrends import exceptions as ptx
-from metros import METROS, STATE_ABBR
+from metros import METROS, STATE_ABBR, demand_terms
 
 KWV = 3  # keyword-set version; bump when the keyword templates change
 DEMAND_KWV = 1  # same, for the demand-mode templates
@@ -46,12 +48,9 @@ _name = {"state": f"trends_data{_suffix}.json",
          "demand": f"trends_demand{_suffix}.json"}[MODE]
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), _name)
 
-DEMAND_TEMPLATES = ["{} fires", "{} wildfires", "{} fire map", "{} wildfire map"]
-
 def keywords(state, city=None):
     if MODE == "demand":
-        return [t.format("" if state is None else state.replace("_", " ").replace("-", " ")).strip()
-                for t in DEMAND_TEMPLATES]
+        return demand_terms(state)
     n = state.replace("_", " ").replace("-", " ")
     a = STATE_ABBR[state].lower()
     kws = [f"wildfire {n}", f"fire {n}", f"fire {a}", "fire near me"]
@@ -104,7 +103,13 @@ def main():
         with open(OUT) as f:
             data = json.load(f)
     meta = data.get("meta", {})
-    if meta and (meta.get("timeframe") != TIMEFRAME or meta.get("kwv") != KWV):
+    if meta and MODE == "demand" and meta.get("kwv") == KWV and meta.get("timeframe") != TIMEFRAME:
+        # demand runs last in the bot and is the first to be throttled: keep each area's previous fetch
+        # (its own request, its own scale) until it is refetched, so a 429 leaves it a day stale, not missing
+        print(f"stored window {meta.get('timeframe')} != {TIMEFRAME}; refetching each area, keeping the old one until then",
+              flush=True)
+        meta["timeframe"] = TIMEFRAME
+    elif meta and (meta.get("timeframe") != TIMEFRAME or meta.get("kwv") != KWV):
         print(f"stored meta {meta.get('timeframe')}/kwv{meta.get('kwv')} != "
               f"{TIMEFRAME}/kwv{KWV}; starting fresh", flush=True)
         data = {}
@@ -113,7 +118,8 @@ def main():
     skipped = []
 
     for job_key, state, geo, label, city in jobs:
-        if job_key in data.get("states", {}):
+        prev = data.get("states", {}).get(job_key)
+        if prev and prev.get("timeframe", TIMEFRAME if MODE != "demand" else None) == TIMEFRAME:
             print(f"{job_key}: already fetched, skipping", flush=True)
             continue
         kws = keywords(state, city)
@@ -135,7 +141,7 @@ def main():
             "note": "single request per geo; all terms share one normalization (max term-day = 100)",
         })
         data.setdefault("states", {})[job_key] = {
-            "abbr": STATE_ABBR[state] if state else "US", "label": label, "dates": dates,
+            "abbr": STATE_ABBR[state] if state else "US", "label": label, "dates": dates, "timeframe": TIMEFRAME,
             "keywords": kws, "series": series,
         }
         with open(OUT, "w") as f:

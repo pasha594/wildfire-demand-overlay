@@ -44,3 +44,25 @@
   .hnotes { max-width: 96ch; }
   .hsr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   #tip table.tt .u { color: var(--muted); font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 11px; }
+  /* row 4: tracked searches table under the charts */
+  .htrk { margin-top: 16px; }
+  .htcap { color: var(--muted); font-size: 11.5px; margin-bottom: 4px; }
+  .httw { overflow-x: auto; }
+  .htt { min-width: 560px; }
+  .htt col.tc { width: 30%; }
+  .htt th { white-space: normal; line-height: 1.25; }
+  .htt td.kw { padding-left: 0; color: var(--ink); }
+  .htt tr.any td { font-weight: 600; border-top: 1px solid var(--muted); }
+  .htop { color: var(--muted); font-size: 11.5px; margin-top: 8px; line-height: 1.5; max-width: 110ch; }
+  .htop .q { color: var(--ink-2); }
+  @media (max-width: 600px) {
+    .htt { min-width: 540px; font-size: 11.5px; }
+    .htt col.tc { width: 132px; }
+    .htt th.l, .htt td.kw { position: sticky; left: 0; background: var(--surface); box-shadow: 1px 0 0 var(--grid); z-index: 1; }
+    .htt td.kw { white-space: normal; }
+  }
+  /* capture readouts: let a long row label wrap rather than push the readout past a phone's edge */
+  #tip table.tt.hcap td.n { white-space: normal; min-width: 9em; }
+  #tip table.tt.hcap td { vertical-align: top; }
+  /* a Review Health readout never runs past a phone's edge: 8px gutter each side (place() keeps left >= 8) */
+  #tip.htip { max-width: min(420px, calc(100vw - 16px)); }
