@@ -78,9 +78,10 @@ Good vs bad collapse for red-green colorblind readers (deutan ΔE 1.5), like eve
 ### Chart series (meaning unchanged, names unchanged)
 | Token | Value | Series | Mark |
 |---|---|---|---|
-| `--traffic` | `#34762e` | Our traffic / search traffic (clicks) | 2px line + `--traffic-fill` area wash |
-| `--traffic-fill` | `rgba(52,118,46,.12)` | Area under traffic | fill only |
-| `--gi` | `#3069b2` | Search Console impressions | 2px line |
+| `--traffic` | `#297613` | Our traffic / search traffic (clicks) | 2px line + `--traffic-fill` area wash |
+| `--traffic-fill` | `rgba(41,118,19,.12)` | Area under traffic | fill only |
+| `--gi` | `#3246a9` | Search Console impressions | 2px line |
+| `--demand` | `#bd8630` | Health tabs: combined Google Trends search demand (ochre) | 2px line; never on a chart with fire markers (too close to `--fire-mk`) |
 | `--gc` | `#a34a7c` | Search Console CTR | 1.75px line |
 | `--gp` | `#54493e` | Search Console avg position (dotted) and best position (dashed) | 2px dotted `0.1 3.6` round caps / 1.5px dashed `5 3` |
 | `--f` | `#049e98` | Google Trends "fire {state}" = search demand (also health tabs' "Search demand") | 1.75-2px line; abbreviation variant dashed `6 4` |
@@ -92,7 +93,9 @@ Copy that names colors should say: traffic **green**, impressions **blue**, CTR 
 (dotted = average, dashed = best), search demand **teal**, "wildfire {state}" **mustard**, "fire near me" **lavender**,
 fire starts **orange diamonds**. (The old footer's "yellow diamonds" is wrong; fix it when you move that text.)
 
-**Validation** (dataviz skill validator, light mode, surface `#fffcf7`):
+**Validation** (dataviz skill validator, light mode, surface `#fffcf7`; colors revised 2026-10-09 because impressions blue and traffic green read too alike):
+- Health tabs' three core lines, all pairs: impressions vs traffic normal ΔE 28.7 / CVD 26 (was 21.5 / 20.3); demand vs traffic 20.9 / 10.3 (teal was 15.8 / 15.4); demand vs impressions 37+ (was 17.2). With CTR berry: PASS.
+- Overview lines (traffic, impressions, CTR, the three term colors), all pairs: PASS, worst CVD 8.6, normal 16.3.
 - Core four lines that share charts on every tab (traffic, gi, gc, f), all pairs: PASS. Worst CVD ΔE 8.6, normal 15.8, all ≥ 3:1.
 - All six colored lines (traffic, gi, gc, f, wf, fn), all pairs: PASS. Worst CVD ΔE 8.6, normal 15.7.
 - Known, accepted exceptions (each has a non-color channel):

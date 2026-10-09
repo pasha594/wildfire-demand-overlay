@@ -489,7 +489,7 @@ function makeHealthTab(key, scope) {
 
     const trendsThin = `Google Trends reports too few searches for these terms in ${a.name} to measure`;
     /* axis = the short title over that series' axis on a two-axis chart */
-    const dem = hasD && { raw: D, color: "var(--f)", name: "Search demand", axis: "Search demand", ax: "l", kind: "d" };
+    const dem = hasD && { raw: D, color: "var(--demand)", name: "Search demand", axis: "Search demand", ax: "l", kind: "d" };
     const imp = ax => hasG && { raw: gs.i, color: "var(--gi)", name: "Impressions", axis: "Impressions", ax, kind: "g" };
     const clk = hasG && { raw: gs.c, color: "var(--traffic)", fill: "var(--traffic-fill)", name: "Search traffic (clicks)", axis: "Clicks", ax: "r", kind: "g" };
     const timp = hasT && { raw: tAny.i, color: "var(--gi)", name: "Impressions on these searches", axis: "Impressions", ax: "r", kind: "g" };

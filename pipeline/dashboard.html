@@ -46,9 +46,10 @@
     --neutral-soft: #eee7dc;
     --neutral-ink: #5c5248;   /* text on --neutral-soft (6.2:1) */
     /* chart series: meaning unchanged, values validated on --surface (all >= 3:1; see DESIGN.md) */
-    --traffic: #34762e;       /* our traffic / clicks (green, drawn with an area wash) */
-    --traffic-fill: rgba(52, 118, 46, .12);
-    --gi: #3069b2;            /* Search Console impressions (blue) */
+    --traffic: #297613;       /* our traffic / clicks (forest green, drawn with an area wash) */
+    --traffic-fill: rgba(41, 118, 19, .12);
+    --gi: #3246a9;            /* Search Console impressions (indigo: darker and bluer than the green, so the two never blur) */
+    --demand: #bd8630;        /* health tabs: combined Google Trends search demand (ochre; no fire markers share those charts) */
     --gc: #a34a7c;            /* Search Console CTR (berry) */
     --gp: #54493e;            /* Search Console avg + best position (umber; dotted / dashed) */
     --f: #049e98;             /* Trends: fire {state} = search demand (teal) */
@@ -3434,7 +3435,7 @@ function makeHealthTab(key, scope) {
 
     const trendsThin = `Google Trends reports too few searches for these terms in ${a.name} to measure`;
     /* axis = the short title over that series' axis on a two-axis chart */
-    const dem = hasD && { raw: D, color: "var(--f)", name: "Search demand", axis: "Search demand", ax: "l", kind: "d" };
+    const dem = hasD && { raw: D, color: "var(--demand)", name: "Search demand", axis: "Search demand", ax: "l", kind: "d" };
     const imp = ax => hasG && { raw: gs.i, color: "var(--gi)", name: "Impressions", axis: "Impressions", ax, kind: "g" };
     const clk = hasG && { raw: gs.c, color: "var(--traffic)", fill: "var(--traffic-fill)", name: "Search traffic (clicks)", axis: "Clicks", ax: "r", kind: "g" };
     const timp = hasT && { raw: tAny.i, color: "var(--gi)", name: "Impressions on these searches", axis: "Impressions", ax: "r", kind: "g" };

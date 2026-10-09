@@ -357,9 +357,10 @@ HTML = r"""<meta charset="utf-8">
     --neutral-soft: #eee7dc;
     --neutral-ink: #5c5248;   /* text on --neutral-soft (6.2:1) */
     /* chart series: meaning unchanged, values validated on --surface (all >= 3:1; see DESIGN.md) */
-    --traffic: #34762e;       /* our traffic / clicks (green, drawn with an area wash) */
-    --traffic-fill: rgba(52, 118, 46, .12);
-    --gi: #3069b2;            /* Search Console impressions (blue) */
+    --traffic: #297613;       /* our traffic / clicks (forest green, drawn with an area wash) */
+    --traffic-fill: rgba(41, 118, 19, .12);
+    --gi: #3246a9;            /* Search Console impressions (indigo: darker and bluer than the green, so the two never blur) */
+    --demand: #bd8630;        /* health tabs: combined Google Trends search demand (ochre; no fire markers share those charts) */
     --gc: #a34a7c;            /* Search Console CTR (berry) */
     --gp: #54493e;            /* Search Console avg + best position (umber; dotted / dashed) */
     --f: #049e98;             /* Trends: fire {state} = search demand (teal) */
