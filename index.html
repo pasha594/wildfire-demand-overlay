@@ -23,7 +23,7 @@
     --line: #eee6da;          /* table row hairlines */
     --control-border: #d5c8b5;/* buttons, selects, inputs: just enough edge to read as a control */
     --grid: #ece4d8;          /* chart gridlines */
-    --axis: #cfc2af;          /* chart baseline, the "1x" reference lines, dashed low-signal outlines */
+    --axis: #cfc2af;          /* chart baseline, the "1x" reference lines, group-header rules */
     --chip-bg: rgba(110, 86, 56, .07);   /* hover / highlighted-row tint; works on bg and surface */
     --tooltip-bg: #fffcf7;
     --shadow-card: 0 1px 2px rgba(74, 56, 36, .05);
@@ -250,7 +250,7 @@
   .card, .mapcard { scroll-margin-top: calc(var(--top-h, 0px) + var(--ctrl-h, 0px) + var(--lg-h, 0px) + 12px); }
   .tabpane { scroll-margin-top: var(--top-h, 0px); }
   @media (max-width: 700px) {
-    .controls, .lgbar { position: relative; }
+    .controls, .lgbar { position: relative; top: auto; }   /* the sticky offset would push a relative bar over the first heading */
     /* phone: a control's popover spans the bar's content width under its button, so it never runs off-screen */
     :is(.controls, .lgbar) details.pop { position: static; }
     :is(.controls, .lgbar) details.pop .popbody { left: var(--sp-4); right: var(--sp-4); min-width: 0; top: auto; margin-top: var(--sp-2); }
@@ -339,27 +339,25 @@
   .mempty { color: var(--muted); font-size: 14px; padding: var(--sp-3) 0; }
   .mcol .mempty { color: var(--muted); font-size: 14px; padding: var(--sp-3) 0; }
 
-  /* ---- status pills: soft tint + darker text of the same hue, a dot so state never rides on color alone ---- */
+  /* ---- status pills: soft tint + darker text of the same hue; the label carries the state, so it never rides on color alone ---- */
   .pill {
     display: inline-flex; align-items: center; gap: 6px; vertical-align: middle;
-    border-radius: var(--r-pill); padding: 2px 10px 2px 8px;
+    border-radius: var(--r-pill); padding: 2px 10px;
     font-size: var(--fs-pill); font-weight: 600; line-height: 1.45; white-space: nowrap;
     background: var(--neutral-soft); color: var(--neutral-ink);
   }
-  .pill::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .pill.st-out { background: var(--good-soft); color: var(--good-ink); }
   .pill.st-track { background: var(--neutral-soft); color: var(--neutral-ink); }
   .pill.st-miss { background: var(--bad-soft); color: var(--bad-ink); }
-  .pill.st-low { background: transparent; color: var(--muted); border: 1px dashed var(--axis); padding: 1px 9px 1px 7px; }
-  .pill.st-low::before { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+  .pill.st-low { background: transparent; color: var(--muted); border: 1px solid var(--line); padding: 1px 9px; }
 
   /* ---- Overview pieces (restructured by the Overview pass; restyled here to the shared look) ---- */
   .ocols { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); }
   /* status counts above the table */
   .ssum { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-5); }
   .ssum .slead { color: var(--ink-2); font-size: 14px; font-weight: 600; margin-right: var(--sp-1); }
-  .ssum .pill { font-size: 13px; padding: 3px 12px 3px 10px; }
-  .ssum .pill.st-low { padding: 2px 11px 2px 9px; }
+  .ssum .pill { font-size: 13px; padding: 3px 12px; }
+  .ssum .pill.st-low { padding: 2px 11px; }
   .ssum .sumlow { cursor: help; }
   .ssum .sumlow:hover { border-color: var(--muted); }
   .ssum .sumlow:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -461,8 +459,8 @@
   .mtab .up { color: var(--good); font-weight: 600; }
   .mtab .dn { color: var(--bad); font-weight: 600; }
   .mtab .lbl { color: var(--muted); font-weight: 400; }
-  .mtab .pill { font-size: 12px; padding: 1px 9px 1px 7px; }
-  .mtab .pill.st-low { padding: 0 8px 0 6px; }
+  .mtab .pill { font-size: 12px; padding: 1px 8px; }
+  .mtab .pill.st-low { padding: 0 7px; }
   .mtab tr.sub td { border-top: 0; padding-top: 2px; padding-bottom: 2px; font-size: var(--fs-small); color: var(--ink-2); }
   .mtab button.more { font: inherit; font-size: 14px; font-weight: 500; color: var(--accent); background: none; border: 0;
     padding: 2px 6px; margin-left: -6px; border-radius: var(--r-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
@@ -517,7 +515,7 @@
     line-height: 1.3; margin: 0; color: var(--ink); display: flex; align-items: baseline; gap: var(--sp-2); }
   .card .chead h2 .ab { font-family: var(--font-ui); color: var(--muted); font-size: var(--fs-small); font-weight: 500; letter-spacing: 0; }
   .card .chead .cpill:empty { display: none; }
-  .card .chead .notraffic { color: var(--muted); font-size: 12.5px; font-weight: 500; border: 1px dashed var(--axis);
+  .card .chead .notraffic { color: var(--muted); font-size: 12.5px; font-weight: 500; border: 1px solid var(--line);
     border-radius: var(--r-pill); padding: 1px 10px; }
   .card .chead .msel { margin-left: auto; }
   /* key numbers: label over value, no boxes */
@@ -555,7 +553,7 @@
     padding: 10px 12px; font-size: var(--fs-small); line-height: 1.45; min-width: 200px; max-width: 420px;
   }
   #tip .d { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
-  #tip .d .pill { font-size: 12px; padding: 0 8px 0 7px; margin-left: 6px; vertical-align: 1px; }
+  #tip .d .pill { font-size: 12px; padding: 0 8px; margin-left: 6px; vertical-align: 1px; }
   #tip .tnote { color: var(--muted); font-size: 12.5px; margin-top: var(--sp-1); }
   #tip .d .lbl { color: var(--muted); font-weight: 400; margin-left: 8px; }
   #tip .row { display: flex; align-items: center; gap: var(--sp-2); justify-content: space-between; color: var(--ink-2); padding: 2px 0; }
@@ -825,9 +823,9 @@
     <div class="psub" id="tqnote"></div>
     <div id="tqlist"></div>
     <details class="about"><summary>How this is calculated</summary><div class="about-body">
-      <p>One row per page on our site (usually one fire), ranked by <b>extra clicks per week</b>: the clicks its queries
-      would get at the click-through rate this site normally earns at their position (or at position 5 for queries below
-      page 1), minus the clicks they actually got.</p>
+      <p>One row per page on our site (usually one fire), ranked by <b>extra clicks per week</b>. That is the clicks its
+      queries would get at the click-through rate this site normally earns at their position, minus the clicks they
+      actually got.</p>
       <h4>Reasons</h4>
       <dl class="tags">
         <dt><span class="pill st-miss">Page 2+</span></dt><dd>Most of the gap is queries ranking below the first page.</dd>
@@ -837,8 +835,8 @@
       </dl>
       <h4>The query list</h4>
       <p>Click a page's query count to see its biggest queries. Expected clicks = impressions × the click rate this site
-      usually gets at that position (at position 5 for queries below page 1). Extra clicks per week = (expected − actual
-      clicks) ÷ 2. Click a row to open the state.</p>
+      usually gets at that position; queries below page 1 are counted at position 5. Extra clicks per week = (expected −
+      actual clicks) ÷ 2. Click a row to open the state.</p>
     </div></details>
   </section>
   <div class="sechead" id="ghead">
@@ -854,7 +852,7 @@
   <footer class="notes">
     <details class="about"><summary>Methodology and data sources</summary><div class="about-body">
     <h4>Site traffic and search demand</h4>
-    <p>Site traffic is pulled from the PostHog API at build time; the header shows when. State and metro totals are true
+    <p>Site traffic is pulled from the PostHog API each time the dashboard is built. State and metro totals are true
     daily uniques: a person visiting several of a state's pages in one day counts once. The per-page list (hover the
     organic visits number on a card) counts a person once per page visited, so pages can sum to more than the total.</p>
     <p>Search demand is Google Trends daily interest, measured <b>in-state</b> (queries made from within the state itself,
@@ -869,27 +867,32 @@
     still partial. For example, "Last 14 days" judges the 13 complete days in it.</p>
     <dl>
       <dt>Search</dt><dd>The average of an area's keyword indices over those days, as a multiple of its average over the
-      same number of days just before (1× = no change). "All data" has no earlier period, so it can't be judged.</dd>
+      same number of days immediately before (1× = no change). "All data" has no earlier period, so it can't be judged.</dd>
       <dt>Visits</dt><dd>In the table and on the cards ("Search → visits"): the same for our organic visits, i.e. visitors arriving
       from a search engine (Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave), counted by PostHog. They track Search Console
       clicks within a few percent. "Clicks" on this page always means Google Search Console clicks.</dd>
       <dt>Status</dt><dd>Visits ÷ search, whether search rose or fell. Below 0.6× = missing demand (our traffic fell behind
       search), above 1.25× = outperforming, otherwise tracking.</dd>
       <dt>Missed visits per week (estimate)</dt><dd>(search multiple − our multiple) × our average day in the previous period × 7.</dd>
-      <dt>What Search Console shows</dt><dd>This dashboard's own reading of Search Console (Google doesn't supply these
-      labels) over the same dates, up to Search Console's last complete day, about two days behind. Every multiple is
-      "× the previous period". <b>Losing visibility</b> = Google showed our pages much less than searching fell (impressions ÷
-      search below 0.6: a ranking or indexing gap). <b>Shown, not clicked</b> = we were shown but clicks fell behind
-      impressions (clicks ÷ impressions below 0.6: a title, snippet or position gap). <b>Google clicks kept pace</b> = our
-      Google clicks rose with searching, so the shortfall is in other engines or tracking. Otherwise <b>visibility and
-      clicks both slipped</b>.</dd>
+      <dt>What Search Console shows</dt><dd>This dashboard's own labels (Google doesn't supply them), read from Search
+      Console over the same dates, up to its last complete day. Search Console runs about two days behind. Every multiple
+      compares with the previous period. For states missing demand:
+      <ul>
+        <li><b>Losing visibility</b>: our impressions fell well behind search (impressions ÷ search below 0.6). Points to
+        a ranking or indexing gap.</li>
+        <li><b>Shown, not clicked</b>: our clicks fell well behind our impressions (clicks ÷ impressions below 0.6). Points
+        to a title, snippet or position gap.</li>
+        <li><b>Google clicks kept pace</b>: our Google clicks rose with searching, so the shortfall is in other search
+        engines or in tracking.</li>
+        <li><b>Visibility and clicks both slipped</b>: none of the above.</li>
+      </ul></dd>
       <dt>Can't judge yet</dt><dd>Google Trends reports low-volume days as zero except for the most recent ~14 days of each
-      request. For states whose search history is mostly zero there is no reliable level to compare, so those states are held
-      back rather than given a misleading multiple.</dd>
+      request. For states whose search history is mostly zero there is no reliable level to compare, so they are left out
+      of the health table.</dd>
     </dl>
-    <p>Short windows react fastest but flip on noise: 14 days halves how often a status flips compared with 7, while a
+    <p>Short windows react fastest but flip on noise. 14 days halves how often a status flips compared with 7, while a
     real surge still registers the day after it starts. Longer windows show the season's overall picture. The card
-    headers' Search Console figures compare those dates with the same number of days just before them. The comparison
+    headers' Search Console figures compare those dates with the same number of days immediately before them. The comparison
     chart plots any two of these multiples on log axes, capped at 24×. States past the cap are drawn scaled down along
     their own ray, so they stay on the correct side of the diagonal.</p>
 
@@ -906,7 +909,7 @@
     <p><b>Best position</b> is, for each day, our best average position over the 7 days ending that day, among queries
     that brought the state's pages (or, in a metro view, its city queries) at least 20 impressions in those 7 days. Brand
     queries and likely-automated queries are left out, and the hover names the query. The trailing week keeps the line
-    continuous and steady: it moves when a ranking holds for days, not on one-day blips. It can sit below the average line
+    continuous and steady, so it moves only when a ranking holds for days. It can sit below the average line
     when our strongest rankings are all on low-volume queries, and the smoothing toggle doesn't change it. Google
     withholds rare queries, so it only sees the queries Search Console reports.</p>
 
@@ -1075,7 +1078,7 @@ let stateFilter = "-1";
 /* a legend entry that shows or hides its line(s) on every state chart */
 function chip(k, sw, label, title) {
   const on = k.split(",").every(x => visible[x]);
-  return `<button type="button" class="lgt${on ? "" : " off"}" data-k="${k}" aria-pressed="${on}" title="${title ? title + " " : ""}Click to show or hide on every chart.">${sw}<span>${label}</span></button>`;
+  return `<button type="button" class="lgt${on ? "" : " off"}" data-k="${k}" aria-pressed="${on}"${title ? ` title="${title}"` : ""}>${sw}<span>${label}</span></button>`;
 }
 function buildControls() {
   const c = document.getElementById("controls");
@@ -1808,7 +1811,7 @@ function healthOf(st) {
     const gw = st.gsc && st.gsc.web;
     if (GSC && gw && w.g && gw.i.some(v => v != null)) {
       /* GSC lags ~2 days, so its side stops at its last complete day; demand re-measured on those same days,
-         each against the same number of days just before the window */
+         each against the same number of days immediately before the window */
       const smax = Math.max(0, ...S.filter(v => v != null));
       const pS = prevMean(S, w.a, w.g.n), pI = prevMean(gw.i, w.a, w.g.n), pC = prevMean(gw.c, w.a, w.g.n);
       const baseS = pS == null ? null : Math.max(pS, 0.05 * smax, 0.5);
@@ -1844,7 +1847,7 @@ function lowTip(list) {
       return hs.length ? `<div class="lowg"><b>${title}</b><div class="tnote">${note}</div>` +
         hs.map(h => `<div class="row"><span class="n">${esc(h.st.name)}</span><span class="v">${val(h)}</span></div>`).join("") + `</div>` : "";
     }).join("") +
-    `<div class="tnote">They're left out rather than given a misleading multiple, and come back once the data allows.</div>`;
+    `<div class="tnote">They're left out of the table until there's enough data to compare.</div>`;
 }
 
 /* the likely reason, read off Search Console (impressions = were we shown; clicks = were we chosen) */
@@ -1863,15 +1866,15 @@ function whyOf(h) {
 
 const QPRESETS = {
   dv: { label: "Search demand → our visibility", q: "Did Google show us more as searching rose?",
-        desc: "Each dot is a state. Across: search demand. Up: how often Google showed our pages. Both are compared with the same number of days just before.",
+        desc: "Each dot is a state. Across: search demand. Up: how often Google showed our pages. Both are compared with the same number of days immediately before.",
         x: "Search demand (Trends)", y: "Our impressions (Search Console)", xs: "Search", ys: "Impressions",
         pick: h => h.g && ({ x: h.g.Dg, y: h.g.I, low: h.g.low || h.sparse }) },
   dc: { label: "Search demand → our traffic", q: "Did our traffic rise with search demand?",
-        desc: "Each dot is a state. Across: search demand. Up: our organic traffic. Both are compared with the same number of days just before.",
+        desc: "Each dot is a state. Across: search demand. Up: our organic traffic. Both are compared with the same number of days immediately before.",
         x: "Search demand (Trends)", y: "Our organic traffic", xs: "Search", ys: "Our traffic",
         pick: h => ({ x: h.D, y: h.C, low: h.status === "low" }) },
   vc: { label: "Our visibility → our clicks", q: "When Google showed us, did people click?",
-        desc: "Each dot is a state. Across: how often Google showed our pages. Up: how often people clicked. Both are compared with the same number of days just before.",
+        desc: "Each dot is a state. Across: how often Google showed our pages. Up: how often people clicked. Both are compared with the same number of days immediately before.",
         x: "Our impressions (Search Console)", y: "Our clicks (Search Console)", xs: "Impressions", ys: "Clicks",
         pick: h => h.g && ({ x: h.g.I, y: h.g.C, low: h.g.low }) },
 };
@@ -1911,7 +1914,7 @@ function buildOverview() {
   const w = healthWin();
   const gSpan = GSC && w.g ? spanText(w.a, w.g.b) : null;
   document.getElementById("osub").textContent =
-    `Are our visits from search keeping up with search demand? Each state over ${spanText(w.a, w.b)} (${w.n} complete day${w.n > 1 ? "s" : ""}), compared with the ${daysTxt(w.n)} before${w.a < prevNeed(w.n) ? " (none in the data, so nothing can be judged; pick a shorter range)" : ` (${prevSpan(w)})`}. Visits are organic visits from any search engine (PostHog); clicks are Google Search Console.`;
+    `Are our visits from search keeping up with search demand? Each state over ${spanText(w.a, w.b)} (${w.n} complete day${w.n > 1 ? "s" : ""}), compared with the ${daysTxt(w.n)} before.${w.a < prevNeed(w.n) ? " The data has no earlier days, so nothing can be judged. Pick a shorter range." : ""}`;
 
   const hs = healths.filter(Boolean);
   const by = st => hs.filter(h => h.status === st);
@@ -1951,7 +1954,7 @@ function buildOverview() {
   const keyFirst = PHONE_Q.matches;
   const stCol = `<col style="width:148px">`, keyCol = `<col style="width:120px">`;
   const stTh = `<th class="l">Status</th>`;
-  const keyTh = `<th title="Each as a multiple of its level over the same number of days just before the dates picked at the top (1× = no change). Visits = our organic visits from search engines (PostHog), which track Google's Search Console clicks within a few percent.">Search → visits<span class="thsub">× previous period</span></th>`;
+  const keyTh = `<th title="Each as a multiple of its level over the same number of days immediately before the dates picked at the top (1× = no change). Visits = our organic visits from search engines (PostHog), which track Google's Search Console clicks within a few percent.">Search → visits<span class="thsub">× previous period</span></th>`;
   const stTd = h => `<td class="stcell"><span class="pill ${STATUS[h.status].cls}">${STATUS[h.status].label}</span></td>`;
   const keyTd = h => `<td>${liftFmt(h.D)} → ${liftFmt(h.C)}</td>`;
   let html = rows.length
@@ -1977,7 +1980,7 @@ function buildOverview() {
   /* how this section is calculated (its dates follow the picker) */
   document.getElementById("oabout").innerHTML = `
     <p>Each state's search demand and our visits are averaged over ${spanText(w.a, w.b)} (${w.n} complete day${w.n > 1 ? "s" : ""};
-    the latest day is still partial and left out), then compared with the same number of days just before
+    the latest day is still partial and left out), then compared with the same number of days immediately before
     (${w.a < prevNeed(w.n) ? "none in the data for these dates" : prevSpan(w)}). 1× means no change; 2× means twice the earlier level.
     Change the dates with the date button at the top.</p>
     <p><b>Visits</b> are our organic visits: visitors arriving from a search engine (Google, Bing, DuckDuckGo, Yahoo,
@@ -1989,20 +1992,26 @@ function buildOverview() {
       <dt><span class="pill st-track">Tracking</span></dt><dd>Visits ÷ search is between 0.6 and 1.25.</dd>
       <dt><span class="pill st-out">Outperforming</span></dt><dd>Visits ÷ search is above 1.25.</dd>
       <dt><span class="pill st-low">Can't judge yet</span></dt><dd>Google Trends reports too few searches in the state to judge,
-      our traffic there is too low, or the dates have no earlier period to compare with (e.g. "All data"). These states
-      are held back rather than given a misleading multiple.</dd>
+      our traffic there is too low, or the dates have no earlier period to compare with (for example "All data"). These
+      states are left out of the table, because their multiple would be misleading.</dd>
     </dl>
     <h4>Columns</h4>
     <dl>
       <dt>Missed visits per week</dt><dd>A rough estimate for states missing demand: (search multiple − our multiple) × our average day in the previous period × 7.</dd>` +
     (hasG ? `
-      <dt>What Search Console shows</dt><dd>Our own reading of Search Console (Google doesn't supply these labels)${gSpan ? ` over ${gSpan}` : ""},
-      up to its last complete day; it runs about two days behind. For states missing demand it names the likely reason:
-      <b>losing visibility</b> (Google showed our pages much less than searching changed, impressions ÷ search below 0.6:
-      a ranking or indexing gap), <b>shown, not clicked</b> (clicks fell behind impressions, clicks ÷ impressions below 0.6:
-      a title, snippet or position gap), <b>Google clicks kept pace</b> (our Google clicks rose with searching, so the
-      shortfall is in other engines or tracking), or else <b>visibility and clicks both slipped</b>. For other states it
-      says how often Google showed and clicked us compared with the previous period.</dd>` : "") + `
+      <dt>What Search Console shows</dt><dd>Our own labels (Google doesn't supply them), read from Search Console${gSpan ? ` over ${gSpan}` : ""},
+      up to its last complete day. Search Console runs about two days behind. For states missing demand it names the
+      likely reason:
+      <ul>
+        <li><b>Losing visibility</b>: our impressions fell well behind search (impressions ÷ search below 0.6). Points to
+        a ranking or indexing gap.</li>
+        <li><b>Shown, not clicked</b>: our clicks fell well behind our impressions (clicks ÷ impressions below 0.6). Points
+        to a title, snippet or position gap.</li>
+        <li><b>Google clicks kept pace</b>: our Google clicks rose with searching, so the shortfall is in other search
+        engines or in tracking.</li>
+        <li><b>Visibility and clicks both slipped</b>: none of the above.</li>
+      </ul>
+      For other states it says how often Google showed and clicked us compared with the previous period.</dd>` : "") + `
     </dl>
     <p>Click a row to open that state's chart. Hover it for the exact numbers.</p>`;
 
@@ -2071,15 +2080,15 @@ function renderQuad(healths) {
     <li>${mk("miss")}<span>Missing demand <span class="lbl">(${nOf("miss")}), well below the dashed line</span></span></li>
     <li>${mk("track")}<span>Tracking <span class="lbl">(${nOf("track")}), near it</span></span></li>
     <li>${mk("out")}<span>Outperforming <span class="lbl">(${nOf("out")}), well above it</span></span></li>` : "";
-  const gT = gTxt || "Search Console's complete days (none in these dates yet)";
+  const gT = gTxt ? `${gTxt} (Search Console's complete days)` : "Search Console's complete days (none in these dates yet)";
   document.getElementById("oqnote").innerHTML = {
-      dv: `<p>x = search demand, y = how often Google showed our pages (Search Console impressions), over ${gT} (Search Console's
-        complete days), each as a multiple of the same number of days just before. Below the diagonal = searching grew but our
-        visibility didn't keep up: a ranking or indexing gap.</p>`,
-      dc: `<p>x = search demand, y = our organic traffic, over ${wTxt}, each as a multiple of the same number of days just before. Below the
-        diagonal = searching grew more than our traffic did.</p>`,
-      vc: `<p>x = impressions, y = clicks (Search Console, ${gT}). Below the diagonal = we were seen more but chosen
-        proportionally less: a title, snippet or position problem.</p>`,
+      dv: `<p>x = search demand, y = how often Google showed our pages (Search Console impressions), over ${gT}, each as a
+        multiple of the same number of days immediately before. Below the diagonal, our visibility fell behind searching, which
+        points to a ranking or indexing gap.</p>`,
+      dc: `<p>x = search demand, y = our organic traffic, over ${wTxt}, each as a multiple of the same number of days immediately before. Below the
+        diagonal, our traffic fell behind searching.</p>`,
+      vc: `<p>x = impressions, y = clicks, both from Search Console, over ${gT}. Below the diagonal, clicks fell behind
+        impressions (fewer clicks per impression than before), which points to a title, snippet or position problem.</p>`,
     }[qpreset] + `<p>The 1× lines mark no change from the previous period. Each dot's color and shape come from this chart's own ratio
     (y ÷ x), using the same 0.6 and 1.25 cut-offs as the table. A state past ${CAP}× is drawn scaled down along its own
     line from the origin, so it stays on the correct side of the diagonal, and is labelled with both values. States whose
@@ -2146,7 +2155,7 @@ function renderQuad(healths) {
           <tr><td class="n">${P.xs}</td><td>${liftFmt(pt.x)}</td></tr>
           <tr><td class="n">${P.ys}</td><td>${liftFmt(pt.y)}</td></tr>
         </tbody></table>
-        <div class="tnote">${qpreset === "dc" ? wTxt : gTxt}, vs the same number of days just before</div>`;
+        <div class="tnote">${qpreset === "dc" ? wTxt : gTxt}, vs the same number of days immediately before</div>`;
       placeTip(e);
     });
     d.addEventListener("pointerleave", () => { tip.style.display = "none"; });
@@ -2756,7 +2765,7 @@ function initTabs() {
   const COLS = [
     { k: "name", label: "State", short: "State", tip: "Click a row to open Fire Page Health for that state, which counts only its fire pages." },
     { k: "d", label: "Search demand", short: "Demand", tip: `Google Trends interest, averaged over the dates (each day is the mean of the 4 terms). National: ${NAT_KWS.join(", ")} (US). State: the same terms after the state's name, ${EX_KWS ? `e.g. ${EX_KWS.join(", ")}` : ST_KWS.join(", ")} (searches made in the state). Each area has its own 0–100 scale (100 = its busiest term-day since ${fdate(T0)}), so compare a state with itself across periods, not with other states. 0 = below Google's reporting threshold on every day. Grey italic = reported on fewer than half the days.` },
-    { k: "i", label: "Impressions", short: "Impr.", tip: "Search Console impressions (web search), summed over the dates, for all of the state's pages: its state page plus its fire pages. National = the whole site." },
+    { k: "i", label: "Impressions", short: "Impr.", tip: "Search Console impressions (web search), summed over the dates, for the state page and all the state's fire pages. National = the whole site." },
     { k: "ctr", label: "CTR", short: "CTR", tip: "Click-through rate: search traffic ÷ impressions" },
     { k: "c", label: "Search traffic", short: "Traffic", tip: "Search Console clicks (web search), summed over the dates, for the same pages" },
     { k: "pos", label: "Avg position", short: "Pos.", tip: "Average position in Google results over the dates, weighted by impressions (1 = the top result)" },
@@ -2798,7 +2807,7 @@ function initTabs() {
   const numCell = (k, v, fmt = x => x.toLocaleString()) => v == null ? td(k, "lbl", "–") : td(k, "", fmt(v));
   function demCell(a, s) {
     if (s.d == null) return td("d", "lbl", "–", `No Google Trends data for ${a.dem ? "these dates" : "this area"}`);
-    if (!s.dnz) return td("d", "lbl", "0", `0 ${s.dn > 1 ? `on all ${s.dn} days` : "that day"}: below Google's reporting threshold`);
+    if (!s.dnz) return td("d", "lbl", "0", `Below Google's reporting threshold ${s.dn > 1 ? `on all ${s.dn} days` : "that day"}`);
     const v = s.d < 0.05 ? "&lt;0.1" : s.d.toFixed(1);
     return s.dnz < s.dn / 2
       ? td("d", "lbl sp", v, `Google reported these terms on ${s.dnz} of ${s.dn} days; the rest were below its reporting threshold (0)`)
@@ -2829,12 +2838,12 @@ function initTabs() {
   }
 
   const dates = (r0, r1) => r0 === r1 ? fdate(DATA.dates[r0]) : `${fdate(DATA.dates[r0])} – ${fdate(DATA.dates[r1])}`;
-  const span = (r0, r1) => `${dates(r0, r1)} · ${plural(r1 - r0 + 1, "day")}`;
+  const span = (r0, r1) => `${dates(r0, r1)}, ${plural(r1 - r0 + 1, "day")}`;
   /* what the dates leave out: Search Console's ~2-day lag, Google Trends' partial last day (one short sentence each) */
   function lagNotes(r0, r1) {
     const t = [];
     if (!GSC || GSC_LAST == null) t.push("No Search Console data.");
-    else if (r0 > GSC_LAST) t.push("No Search Console days yet. It runs about 2 days behind.");
+    else if (r0 > GSC_LAST) t.push("No Search Console days yet. It runs about two days behind.");
     else if (r1 > GSC_LAST) t.push(`Search Console covers ${gdays(r0, r1)} of these ${r1 - r0 + 1} days (through ${fdate(DATA.dates[GSC_LAST])}).`);
     if (DEM && r1 === N - 1) t.push(`Google Trends is partial for ${fdate(DATA.dates[N - 1])}.`);
     return t;
@@ -2853,7 +2862,7 @@ function initTabs() {
     const none = prev && m.r0 === 0;
     const sc = none ? statsAll(1, 0) : statsAll(c.r0, c.r1);
     pane.querySelector(".st-desc").textContent = "Where people searched for wildfire info, and how often Google showed and sent us "
-      + `visitors, ${rankTxt()} (click a column to re-rank).`;
+      + `visitors, ${rankTxt()}. Click a column to re-rank.`;
     pane.querySelector(".st-sub").innerHTML = subHtml(span(m.r0, m.r1), [...lagNotes(m.r0, m.r1),
       ...(sort.k === "d" ? ["Search demand is scored within each state, so this order is not a ranking by search volume."] : [])]);
     const gm = gdays(m.r0, m.r1), gc = none ? 0 : gdays(c.r0, c.r1), len = c.r1 - c.r0 + 1;
@@ -2902,10 +2911,10 @@ function initTabs() {
           ? `for example ${kws(EX_KWS)}` : kws(ST_KWS)} (searches made in the state).</li>
       </ul>
       ${DEM ? "" : `<p>Google Trends demand data is not available in this build.</p>`}
-      <h4>Search demand is an index, not a search count</h4>
+      <h4>How search demand is scored</h4>
       <p>Each area's four terms come from one Google Trends request and share one 0–100 scale, where 100 is that area's
-      busiest term-day since ${fdate(T0)}. Compare a state's number with its own number in another period (the Comparison
-      table), not with other states.</p>
+      busiest term-day since ${fdate(T0)}. The numbers are an index, not search counts. Compare a state's number with its
+      own number in another period (the Comparison table), not with other states.</p>
       <p><b>0</b> means below Google's reporting threshold on every day, which is common for these in-state terms in smaller
       states. A grey italic number means Google reported the terms on fewer than half the days. Days when Google Trends
       returned zeros for many areas at once are treated as missing.</p>
@@ -2914,7 +2923,7 @@ function initTabs() {
       day${gl ? ` (${gl})` : ""}, so every column covers the same complete days. Days after that are left out of the Search
       Console columns, and Previous period then spans as many days as Search Console has, so totals compare like for like.
       Google Trends is daily, and its latest day is partial.</p>
-      <p>Search Console counts all of a state's pages: its state page plus its fire pages. <b>National</b> is the whole
+      <p>For each state, Search Console counts its state page and all its fire pages. <b>National</b> is the whole
       site (every page, including the homepage), shown next to the national search terms.</p>
     </div></details>`;
   }
@@ -2938,15 +2947,15 @@ function initTabs() {
     if (window.ResizeObserver) new ResizeObserver(pinH).observe(bar, { box: "border-box" });
     const preset = (key, label, days) => ({ key, label, get: () => [END - days + 1, END] });
     main = makeRangePicker(bar, {
-      title: `Presets end at Search Console's last complete day${gl ? ` (${gl})` : ""}. It runs about 2 days behind. Pick any dates on the calendars.`,
+      title: `Presets end at Search Console's last complete day${gl ? ` (${gl})` : ""}. It runs about two days behind.`,
       presets: [preset("7", "Last 7 days", 7), preset("14", "Last 14 days", 14), preset("30", "Last 30 days", 30), preset("90", "Last 90 days", 90)],
       initial: "7", storageKey: "wdo-states-range", minDays: 1,
       onChange: () => { cmp.refresh(); render(); },
     });
     bar.insertAdjacentHTML("beforeend", `<span class="tlabel">${gl ? `Search Console complete through ${gl}` : "No Search Console data"}${
-      DEM ? ` · Google Trends through ${fdate(DATA.dates[N - 1])} (last day partial)` : " · No Google Trends data"}</span>`);
+      DEM ? `, Google Trends through ${fdate(DATA.dates[N - 1])} (last day partial)` : ", no Google Trends data"}</span>`);
     cmp = makeRangePicker(pane.querySelectorAll(".sthead")[1], {
-      title: "Dates to compare with. Previous period is the same number of days just before the Top states dates, and moves with them. If those dates run past Search Console's last complete day, it covers as many days as Search Console has in them.",
+      title: "Previous period is the same number of days immediately before the Top states dates, and moves with them. If those dates run past Search Console's last complete day, it covers as many days as Search Console has in them.",
       presets: [{ key: "prev", label: "Previous period", get: () => { const m = main.get(); return [Math.max(0, m.r0 - prevLen(m)), m.r0 - 1]; } }],
       initial: "prev", storageKey: "wdo-states-cmp", minDays: 1,
       onChange: render,
@@ -3492,7 +3501,7 @@ function makeHealthTab(key, scope) {
     /* the two charts stack below 860px (health.css), so the impressions chart is above, not to the left */
     capture(7, capT, { nm: "impressions on these searches", src: GT, noun: "share",
       gauge: `Our impressions on these searches (${matchMedia("(max-width: 860px)").matches ? "above" : "left"}) are the best gauge here` +
-        (scope === "page" ? ": on page 1 they come close to the number of searches." : ".") });
+        (scope === "page" ? ", since on page 1 they come close to the number of searches." : ".") });
     lastW = cells[0].clientWidth;
   }
 
@@ -3502,7 +3511,7 @@ function makeHealthTab(key, scope) {
   function renderTracked(a, r0, r1) {
     const row = pane.querySelector(".htrack"), T = a.trk, ts = a.ts, top = ts && ts.top || [];
     const eg = top.slice(0, 2).map(q => `“${esc(q[0])}”`).join(", ");
-    row.querySelector(".psub").innerHTML = `Search Console numbers for exactly the searches Google Trends counts: any search with all the words of one of the four terms, in any order${eg ? ` (e.g. ${eg})` : ""}, that showed ${esc(a.where)}.`;
+    row.querySelector(".psub").innerHTML = `Search Console numbers for the same searches Google Trends counts: any search with all the words of one of the four terms, in any order${eg ? ` (e.g. ${eg})` : ""}, that showed ${esc(a.where)}.`;
     const box = row.querySelector(".htrk");
     const terms = T ? T.terms : a.kws;
     if (!terms) { box.innerHTML = `<div class="mempty">No Google Trends terms for ${esc(a.name)}, so no tracked searches.</div>`; return; }
@@ -3530,8 +3539,8 @@ function makeHealthTab(key, scope) {
     const tf = T ? fdate(T.topFrom) : "", tl = GSC ? fdate(GSC.lastComplete) : "";
     /* the biggest searches cover the export's fixed window (its last 90 complete days), not the picked dates */
     const topDays = T && GSC ? Math.round((Date.parse(GSC.lastComplete) - Date.parse(T.topFrom)) / 864e5) + 1 : 0;
-    const topCap = `${esc(a.st ? a.st.name : "National")}, ${tf} – ${tl}: the last ${topDays} days of complete Search Console data. `
-      + "This list uses a fixed window and doesn't follow the date picker.";
+    const topCap = `${esc(a.st ? a.st.name : "National")}, ${tf} – ${tl}, the last ${topDays} complete days in Search Console. `
+      + "The date picker doesn't change this list.";
     const topBody = !ts ? `<div class="mempty">No Search Console data on these searches for ${esc(a.short)}.</div>`
       : top.length ? `<div class="httw"><table class="mtab htq"><colgroup><col class="qc"><col><col></colgroup>
           <thead><tr><th class="l">Search</th><th>Impressions</th><th>Clicks</th></tr></thead><tbody>` +
@@ -3619,7 +3628,7 @@ function makeHealthTab(key, scope) {
   /* everything about method and sources, closed by default at the end of the tab */
   function renderNotes(a) {
     const tf = DATA.demand && DATA.demand.timeframe ? fdate(DATA.demand.timeframe.split(" ")[0]) : null;
-    const nm = a.st ? esc(a.st.name) : "National", box = pane.querySelector(".hnotes");
+    const nm = a.st ? esc(a.st.name) : "the US", box = pane.querySelector(".hnotes");
     const open = !!box.querySelector("details.about[open]");   /* a re-render (area, dates, resize) keeps it open */
     box.innerHTML = `<details class="about"${open ? " open" : ""}><summary>About this data</summary><div class="about-body">
       <h4>Search demand</h4>
@@ -3634,15 +3643,15 @@ function makeHealthTab(key, scope) {
       so its lines and the 7-day rate charts stop at its last complete day${GSC ? ` (${fdateY(GSC.lastComplete)})` : ""}.</p>
       <h4>Impressions vs demand and traffic vs demand</h4>
       <p>Google Trends is relative, so impressions per unit of search demand mean little on their own. Each point adds up
-      the 7 days to it, divides impressions (or clicks) by search demand and compares that with this area's typical: the
+      the 7 days to it, divides impressions (or clicks) by search demand and compares that with this area's typical rate, the
       median since ${fdate(DATA.dates[0])}. 1× = typical. Below 1× = shown less than demand predicts (a ranking or indexing
       gap); above 1× = more. The log scale makes halving and doubling look equally big.</p>
       <p>A gap means too thin a signal: a week counts only when Google Trends is above zero on at least ${CAP_DAYS} of its
       days, its four terms add up to at least ${CAP_SIG}, and it has at least ${CAP_X.impressions} impressions
       (${CAP_X.clicks} clicks for traffic). A typical needs ${CAP_MIN} such days.</p>
-      <p>These terms miss fire-name searches, which bring much of our traffic; the tracked searches section measures
-      exactly the searches they count. In the weekly table, impressions vs demand is the requested search demand ÷
-      impressions, flipped.</p>
+      <p>These terms miss fire-name searches, which bring much of our traffic; the tracked searches section covers
+      the searches they do count. In the weekly table, impressions vs demand is impressions ÷ search demand, the inverse
+      of the demand ÷ impressions that was requested.</p>
       <h4>CTR</h4>
       <p>Clicks ÷ impressions over the same trailing 7 days, left blank where those days had fewer than ${CTR_MIN}
       impressions. 7-day smoothing averages the two-line charts over a centered week; the 7-day rate charts and the
@@ -3656,7 +3665,7 @@ function makeHealthTab(key, scope) {
       <h4>Terms for ${nm}</h4>
       <p>${a.geo[0].toUpperCase() + a.geo.slice(1)}: ${a.kws ? a.kws.map(k => `“${esc(k)}”`).join(", ") : "no Google Trends data for this area"}.</p>
       <h4>Coming later</h4>
-      <p>Structures threatened, smoke impact and evacuations can be layered in once collected.</p>
+      <p>Structures threatened, smoke impact and evacuations can be added once collected.</p>
     </div></details>`;
   }
 

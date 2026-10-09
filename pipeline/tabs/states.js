@@ -25,7 +25,7 @@
   const COLS = [
     { k: "name", label: "State", short: "State", tip: "Click a row to open Fire Page Health for that state, which counts only its fire pages." },
     { k: "d", label: "Search demand", short: "Demand", tip: `Google Trends interest, averaged over the dates (each day is the mean of the 4 terms). National: ${NAT_KWS.join(", ")} (US). State: the same terms after the state's name, ${EX_KWS ? `e.g. ${EX_KWS.join(", ")}` : ST_KWS.join(", ")} (searches made in the state). Each area has its own 0–100 scale (100 = its busiest term-day since ${fdate(T0)}), so compare a state with itself across periods, not with other states. 0 = below Google's reporting threshold on every day. Grey italic = reported on fewer than half the days.` },
-    { k: "i", label: "Impressions", short: "Impr.", tip: "Search Console impressions (web search), summed over the dates, for all of the state's pages: its state page plus its fire pages. National = the whole site." },
+    { k: "i", label: "Impressions", short: "Impr.", tip: "Search Console impressions (web search), summed over the dates, for the state page and all the state's fire pages. National = the whole site." },
     { k: "ctr", label: "CTR", short: "CTR", tip: "Click-through rate: search traffic ÷ impressions" },
     { k: "c", label: "Search traffic", short: "Traffic", tip: "Search Console clicks (web search), summed over the dates, for the same pages" },
     { k: "pos", label: "Avg position", short: "Pos.", tip: "Average position in Google results over the dates, weighted by impressions (1 = the top result)" },
@@ -67,7 +67,7 @@
   const numCell = (k, v, fmt = x => x.toLocaleString()) => v == null ? td(k, "lbl", "–") : td(k, "", fmt(v));
   function demCell(a, s) {
     if (s.d == null) return td("d", "lbl", "–", `No Google Trends data for ${a.dem ? "these dates" : "this area"}`);
-    if (!s.dnz) return td("d", "lbl", "0", `0 ${s.dn > 1 ? `on all ${s.dn} days` : "that day"}: below Google's reporting threshold`);
+    if (!s.dnz) return td("d", "lbl", "0", `Below Google's reporting threshold ${s.dn > 1 ? `on all ${s.dn} days` : "that day"}`);
     const v = s.d < 0.05 ? "&lt;0.1" : s.d.toFixed(1);
     return s.dnz < s.dn / 2
       ? td("d", "lbl sp", v, `Google reported these terms on ${s.dnz} of ${s.dn} days; the rest were below its reporting threshold (0)`)
@@ -98,12 +98,12 @@
   }
 
   const dates = (r0, r1) => r0 === r1 ? fdate(DATA.dates[r0]) : `${fdate(DATA.dates[r0])} – ${fdate(DATA.dates[r1])}`;
-  const span = (r0, r1) => `${dates(r0, r1)} · ${plural(r1 - r0 + 1, "day")}`;
+  const span = (r0, r1) => `${dates(r0, r1)}, ${plural(r1 - r0 + 1, "day")}`;
   /* what the dates leave out: Search Console's ~2-day lag, Google Trends' partial last day (one short sentence each) */
   function lagNotes(r0, r1) {
     const t = [];
     if (!GSC || GSC_LAST == null) t.push("No Search Console data.");
-    else if (r0 > GSC_LAST) t.push("No Search Console days yet. It runs about 2 days behind.");
+    else if (r0 > GSC_LAST) t.push("No Search Console days yet. It runs about two days behind.");
     else if (r1 > GSC_LAST) t.push(`Search Console covers ${gdays(r0, r1)} of these ${r1 - r0 + 1} days (through ${fdate(DATA.dates[GSC_LAST])}).`);
     if (DEM && r1 === N - 1) t.push(`Google Trends is partial for ${fdate(DATA.dates[N - 1])}.`);
     return t;
@@ -122,7 +122,7 @@
     const none = prev && m.r0 === 0;
     const sc = none ? statsAll(1, 0) : statsAll(c.r0, c.r1);
     pane.querySelector(".st-desc").textContent = "Where people searched for wildfire info, and how often Google showed and sent us "
-      + `visitors, ${rankTxt()} (click a column to re-rank).`;
+      + `visitors, ${rankTxt()}. Click a column to re-rank.`;
     pane.querySelector(".st-sub").innerHTML = subHtml(span(m.r0, m.r1), [...lagNotes(m.r0, m.r1),
       ...(sort.k === "d" ? ["Search demand is scored within each state, so this order is not a ranking by search volume."] : [])]);
     const gm = gdays(m.r0, m.r1), gc = none ? 0 : gdays(c.r0, c.r1), len = c.r1 - c.r0 + 1;
@@ -171,10 +171,10 @@
           ? `for example ${kws(EX_KWS)}` : kws(ST_KWS)} (searches made in the state).</li>
       </ul>
       ${DEM ? "" : `<p>Google Trends demand data is not available in this build.</p>`}
-      <h4>Search demand is an index, not a search count</h4>
+      <h4>How search demand is scored</h4>
       <p>Each area's four terms come from one Google Trends request and share one 0–100 scale, where 100 is that area's
-      busiest term-day since ${fdate(T0)}. Compare a state's number with its own number in another period (the Comparison
-      table), not with other states.</p>
+      busiest term-day since ${fdate(T0)}. The numbers are an index, not search counts. Compare a state's number with its
+      own number in another period (the Comparison table), not with other states.</p>
       <p><b>0</b> means below Google's reporting threshold on every day, which is common for these in-state terms in smaller
       states. A grey italic number means Google reported the terms on fewer than half the days. Days when Google Trends
       returned zeros for many areas at once are treated as missing.</p>
@@ -183,7 +183,7 @@
       day${gl ? ` (${gl})` : ""}, so every column covers the same complete days. Days after that are left out of the Search
       Console columns, and Previous period then spans as many days as Search Console has, so totals compare like for like.
       Google Trends is daily, and its latest day is partial.</p>
-      <p>Search Console counts all of a state's pages: its state page plus its fire pages. <b>National</b> is the whole
+      <p>For each state, Search Console counts its state page and all its fire pages. <b>National</b> is the whole
       site (every page, including the homepage), shown next to the national search terms.</p>
     </div></details>`;
   }
@@ -207,15 +207,15 @@
     if (window.ResizeObserver) new ResizeObserver(pinH).observe(bar, { box: "border-box" });
     const preset = (key, label, days) => ({ key, label, get: () => [END - days + 1, END] });
     main = makeRangePicker(bar, {
-      title: `Presets end at Search Console's last complete day${gl ? ` (${gl})` : ""}. It runs about 2 days behind. Pick any dates on the calendars.`,
+      title: `Presets end at Search Console's last complete day${gl ? ` (${gl})` : ""}. It runs about two days behind.`,
       presets: [preset("7", "Last 7 days", 7), preset("14", "Last 14 days", 14), preset("30", "Last 30 days", 30), preset("90", "Last 90 days", 90)],
       initial: "7", storageKey: "wdo-states-range", minDays: 1,
       onChange: () => { cmp.refresh(); render(); },
     });
     bar.insertAdjacentHTML("beforeend", `<span class="tlabel">${gl ? `Search Console complete through ${gl}` : "No Search Console data"}${
-      DEM ? ` · Google Trends through ${fdate(DATA.dates[N - 1])} (last day partial)` : " · No Google Trends data"}</span>`);
+      DEM ? `, Google Trends through ${fdate(DATA.dates[N - 1])} (last day partial)` : ", no Google Trends data"}</span>`);
     cmp = makeRangePicker(pane.querySelectorAll(".sthead")[1], {
-      title: "Dates to compare with. Previous period is the same number of days just before the Top states dates, and moves with them. If those dates run past Search Console's last complete day, it covers as many days as Search Console has in them.",
+      title: "Previous period is the same number of days immediately before the Top states dates, and moves with them. If those dates run past Search Console's last complete day, it covers as many days as Search Console has in them.",
       presets: [{ key: "prev", label: "Previous period", get: () => { const m = main.get(); return [Math.max(0, m.r0 - prevLen(m)), m.r0 - 1]; } }],
       initial: "prev", storageKey: "wdo-states-cmp", minDays: 1,
       onChange: render,

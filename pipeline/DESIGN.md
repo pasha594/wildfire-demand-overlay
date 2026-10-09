@@ -41,7 +41,7 @@ except the page title and section titles (Bricolage Grotesque). Single light the
 | `--line` | `#eee6da` | Table row hairlines, tooltip header rule. |
 | `--control-border` | `#d5c8b5` | Edges of buttons, chips, selects, inputs, calendar nav. |
 | `--grid` | `#ece4d8` | Chart gridlines (1px, solid). |
-| `--axis` | `#cfc2af` | Chart baseline / zero line, "1x" reference lines, dashed low-signal outlines, group-header rules. |
+| `--axis` | `#cfc2af` | Chart baseline / zero line, "1x" reference lines, group-header rules. |
 | `--chip-bg` | `rgba(110,86,56,.07)` | Translucent warm tint: row hover, highlighted row, tab hover. Works on bg and surface. Not a button fill. |
 | `--tooltip-bg` | `#fffcf7` | Hover readout and popover background. |
 | `--shadow-card` | `0 1px 2px rgba(74,56,36,.05)` | Cards only. |
@@ -73,7 +73,7 @@ Never use the accent for data, status, or decoration. Never use a chart or statu
 | `--neutral-ink` | `#5c5248` | Text on `--neutral-soft` (6.2:1). |
 
 Good vs bad collapse for red-green colorblind readers (deutan ΔE 1.5), like every red/green pair. So status is
-**never color alone**: pills carry a label and a dot; arrows carry ↑/↓; chart marks carry a shape (see §7).
+**never color alone**: pills carry a label; arrows carry ↑/↓; chart marks carry a shape (see §7).
 
 ### Chart series (meaning unchanged, names unchanged)
 | Token | Value | Series | Mark |
@@ -209,8 +209,9 @@ Summary/total row: `--surface-2` background + 600 weight (see `.sttab tr.nat`, s
 Plain data tables (chart "Data table" views) use bare `<table>` inside `.tblwrap`.
 
 **Status pills — `.pill`** + one of: `st-out` (good: "Outperforming", "Capturing"), `st-miss` (bad: "Missing demand",
-"Not capturing", "Page 2+"), `st-track` (neutral: "Tracking", "New demand"), `st-low` (dashed outline + hollow dot:
-"Low signal", "Old page"). Soft tint + darker text + a 6px dot drawn by CSS. Labels in sentence case.
+"Not capturing", "Page 2+"), `st-track` (neutral: "Tracking", "New demand"), `st-low` (thin `--line` outline, no fill:
+"Low signal", "Old page", "Can't judge yet"). Soft tint + darker text, no dot or icon: the label carries the state.
+Labels in sentence case.
 
 **Hover readout — `#tip`.** Paper, radius 10, `--shadow-pop`, 13px. First line `.d` (14px/600: what + when).
 Rows: `.row > .n` (swatch + name, ink-2) and `.v` (value, ink 600, tabular). Tables inside: `table.tt` (header 12px/600
@@ -230,7 +231,7 @@ would make something appear.
 - One sentence under each section heading saying what it answers. Everything longer goes in `details.about`.
 - No em-dash asides, no "not X but Y", no scare quotes, no "worth noting". Prefer two short sentences.
 - Fewer `·` chains: at most one `·` between two short facts; otherwise use separate labels or a line break.
-- No decorative glyphs: no "ⓘ", "⚙", "▸". `▾` only on a real dropdown button (and not on `<select>`s, which have their
+- No decorative glyphs: no "ⓘ", "⚙", "▸", no dots inside pills. `▾` only on a real dropdown button (and not on `<select>`s, which have their
   own chevron). Arrows ↑ ↓ → are fine where they carry meaning (deltas, "search → clicks").
 - Sentence case for every label, header, button, chip, pill and tab content heading.
 - Spell out abbreviations on first use in a section ("Search Console (GSC)") or avoid them; "GSC" alone is jargon.

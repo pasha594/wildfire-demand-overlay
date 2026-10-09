@@ -503,7 +503,7 @@ function makeHealthTab(key, scope) {
     /* the two charts stack below 860px (health.css), so the impressions chart is above, not to the left */
     capture(7, capT, { nm: "impressions on these searches", src: GT, noun: "share",
       gauge: `Our impressions on these searches (${matchMedia("(max-width: 860px)").matches ? "above" : "left"}) are the best gauge here` +
-        (scope === "page" ? ": on page 1 they come close to the number of searches." : ".") });
+        (scope === "page" ? ", since on page 1 they come close to the number of searches." : ".") });
     lastW = cells[0].clientWidth;
   }
 
@@ -513,7 +513,7 @@ function makeHealthTab(key, scope) {
   function renderTracked(a, r0, r1) {
     const row = pane.querySelector(".htrack"), T = a.trk, ts = a.ts, top = ts && ts.top || [];
     const eg = top.slice(0, 2).map(q => `“${esc(q[0])}”`).join(", ");
-    row.querySelector(".psub").innerHTML = `Search Console numbers for exactly the searches Google Trends counts: any search with all the words of one of the four terms, in any order${eg ? ` (e.g. ${eg})` : ""}, that showed ${esc(a.where)}.`;
+    row.querySelector(".psub").innerHTML = `Search Console numbers for the same searches Google Trends counts: any search with all the words of one of the four terms, in any order${eg ? ` (e.g. ${eg})` : ""}, that showed ${esc(a.where)}.`;
     const box = row.querySelector(".htrk");
     const terms = T ? T.terms : a.kws;
     if (!terms) { box.innerHTML = `<div class="mempty">No Google Trends terms for ${esc(a.name)}, so no tracked searches.</div>`; return; }
@@ -541,8 +541,8 @@ function makeHealthTab(key, scope) {
     const tf = T ? fdate(T.topFrom) : "", tl = GSC ? fdate(GSC.lastComplete) : "";
     /* the biggest searches cover the export's fixed window (its last 90 complete days), not the picked dates */
     const topDays = T && GSC ? Math.round((Date.parse(GSC.lastComplete) - Date.parse(T.topFrom)) / 864e5) + 1 : 0;
-    const topCap = `${esc(a.st ? a.st.name : "National")}, ${tf} – ${tl}: the last ${topDays} days of complete Search Console data. `
-      + "This list uses a fixed window and doesn't follow the date picker.";
+    const topCap = `${esc(a.st ? a.st.name : "National")}, ${tf} – ${tl}, the last ${topDays} complete days in Search Console. `
+      + "The date picker doesn't change this list.";
     const topBody = !ts ? `<div class="mempty">No Search Console data on these searches for ${esc(a.short)}.</div>`
       : top.length ? `<div class="httw"><table class="mtab htq"><colgroup><col class="qc"><col><col></colgroup>
           <thead><tr><th class="l">Search</th><th>Impressions</th><th>Clicks</th></tr></thead><tbody>` +
@@ -630,7 +630,7 @@ function makeHealthTab(key, scope) {
   /* everything about method and sources, closed by default at the end of the tab */
   function renderNotes(a) {
     const tf = DATA.demand && DATA.demand.timeframe ? fdate(DATA.demand.timeframe.split(" ")[0]) : null;
-    const nm = a.st ? esc(a.st.name) : "National", box = pane.querySelector(".hnotes");
+    const nm = a.st ? esc(a.st.name) : "the US", box = pane.querySelector(".hnotes");
     const open = !!box.querySelector("details.about[open]");   /* a re-render (area, dates, resize) keeps it open */
     box.innerHTML = `<details class="about"${open ? " open" : ""}><summary>About this data</summary><div class="about-body">
       <h4>Search demand</h4>
@@ -645,15 +645,15 @@ function makeHealthTab(key, scope) {
       so its lines and the 7-day rate charts stop at its last complete day${GSC ? ` (${fdateY(GSC.lastComplete)})` : ""}.</p>
       <h4>Impressions vs demand and traffic vs demand</h4>
       <p>Google Trends is relative, so impressions per unit of search demand mean little on their own. Each point adds up
-      the 7 days to it, divides impressions (or clicks) by search demand and compares that with this area's typical: the
+      the 7 days to it, divides impressions (or clicks) by search demand and compares that with this area's typical rate, the
       median since ${fdate(DATA.dates[0])}. 1× = typical. Below 1× = shown less than demand predicts (a ranking or indexing
       gap); above 1× = more. The log scale makes halving and doubling look equally big.</p>
       <p>A gap means too thin a signal: a week counts only when Google Trends is above zero on at least ${CAP_DAYS} of its
       days, its four terms add up to at least ${CAP_SIG}, and it has at least ${CAP_X.impressions} impressions
       (${CAP_X.clicks} clicks for traffic). A typical needs ${CAP_MIN} such days.</p>
-      <p>These terms miss fire-name searches, which bring much of our traffic; the tracked searches section measures
-      exactly the searches they count. In the weekly table, impressions vs demand is the requested search demand ÷
-      impressions, flipped.</p>
+      <p>These terms miss fire-name searches, which bring much of our traffic; the tracked searches section covers
+      the searches they do count. In the weekly table, impressions vs demand is impressions ÷ search demand, the inverse
+      of the demand ÷ impressions that was requested.</p>
       <h4>CTR</h4>
       <p>Clicks ÷ impressions over the same trailing 7 days, left blank where those days had fewer than ${CTR_MIN}
       impressions. 7-day smoothing averages the two-line charts over a centered week; the 7-day rate charts and the
@@ -667,7 +667,7 @@ function makeHealthTab(key, scope) {
       <h4>Terms for ${nm}</h4>
       <p>${a.geo[0].toUpperCase() + a.geo.slice(1)}: ${a.kws ? a.kws.map(k => `“${esc(k)}”`).join(", ") : "no Google Trends data for this area"}.</p>
       <h4>Coming later</h4>
-      <p>Structures threatened, smoke impact and evacuations can be layered in once collected.</p>
+      <p>Structures threatened, smoke impact and evacuations can be added once collected.</p>
     </div></details>`;
   }
 
