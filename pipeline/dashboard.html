@@ -360,6 +360,11 @@
   .ssum .slead { color: var(--ink-2); font-size: 14px; font-weight: 600; margin-right: var(--sp-1); }
   .ssum .pill { font-size: 13px; padding: 3px 12px 3px 10px; }
   .ssum .pill.st-low { padding: 2px 11px 2px 9px; }
+  .ssum .sumlow { cursor: help; }
+  .ssum .sumlow:hover { border-color: var(--muted); }
+  .ssum .sumlow:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #tip .lowg { margin-top: var(--sp-2); }
+  #tip .lowg .tnote { margin: 0 0 var(--sp-1); max-width: 320px; }
   .ssum .snone { color: var(--ink-2); font-size: 14px; }
   .quad .qbody { display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-6); align-items: flex-start; }
   .quad #oquad { flex: 0 1 470px; min-width: 0; }
@@ -1776,10 +1781,12 @@ function statusOf(x, y, low) {
    reports older low-volume days as 0. A series that was mostly zero before that tail has
    no reliable level to compare, so its lift can't be judged. */
 const FRESH0 = N - 15;
-function sparseSearch(S) {
+/* share of days (before that fresh tail) on which Google Trends reported any searches */
+function trendsShare(S) {
   const v = S.slice(0, FRESH0).filter(x => x != null);
-  return !v.length || v.filter(x => x > 0).length / v.length < 0.5;
+  return v.length ? v.filter(x => x > 0).length / v.length : 0;
 }
+const sparseSearch = S => trendsShare(S) < 0.5;
 /* cached per state for the current health window; a new date pick starts a fresh cache */
 const _health = new Map();
 let _healthKey = "";
@@ -1815,10 +1822,29 @@ function healthOf(st) {
     }
     const sparse = sparseSearch(S);
     h = { st, D, C, ratio: D > 0 && C != null ? C / D : null, status: statusOf(D, C, totalT < 300 || sparse || noPrev),
-          sparse, noPrev, totalT, tSum: Math.round((rollN(T, w.b, w.n) || 0) * w.n), missed: sparse ? 0 : missed, g };
+          sparse, share: trendsShare(S), noPrev, totalT, tSum: Math.round((rollN(T, w.b, w.n) || 0) * w.n), missed: sparse ? 0 : missed, g };
   }
   _health.set(st.key, h);
   return h;
+}
+
+/* why states are held back as "can't judge yet", grouped by reason, for the summary pill's tooltip */
+function lowTip(list) {
+  const why = h => h.noPrev ? "prev" : h.sparse ? "sparse" : h.totalT < 300 ? "traffic" : "none";
+  const groups = {
+    sparse: ["Too few searches in Google Trends", "Searches are reported on only this share of days; a state needs at least half to have a reliable level to compare against.",
+      h => `${Math.round(h.share * 100)}% of days`],
+    traffic: ["Too little traffic", "Visits from search since " + fdate(DATA.dates[0]) + "; a state needs at least 300.", h => fmt(h.totalT) + " visits"],
+    prev: ["No earlier period", "These dates start at the beginning of the data, so there is nothing before them to compare with. Pick a shorter range.", () => ""],
+    none: ["No search signal in these dates", "Google Trends reported no searches for the state over the picked dates.", () => ""],
+  };
+  return `<div class="d">Can't judge yet<span class="lbl">${list.length} state${list.length === 1 ? "" : "s"}</span></div>` +
+    Object.entries(groups).map(([k, [title, note, val]]) => {
+      const hs = list.filter(h => why(h) === k);
+      return hs.length ? `<div class="lowg"><b>${title}</b><div class="tnote">${note}</div>` +
+        hs.map(h => `<div class="row"><span class="n">${esc(h.st.name)}</span><span class="v">${val(h)}</span></div>`).join("") + `</div>` : "";
+    }).join("") +
+    `<div class="tnote">They're left out rather than given a misleading multiple, and come back once the data allows.</div>`;
 }
 
 /* the likely reason, read off Search Console (impressions = were we shown; clicks = were we chosen) */
@@ -1896,10 +1922,24 @@ function buildOverview() {
   let sum = `<span class="slead">${hs.length} state${hs.length === 1 ? "" : "s"}</span>`;
   [["miss", "missing demand"], ["track", "tracking"], ["out", "outperforming"], ["low", "can't judge yet"]].forEach(([k, l]) => {
     const n = by(k).length;
-    if (n) sum += `<span class="pill ${STATUS[k].cls}">${n} ${l}</span>`;
+    if (n) sum += k === "low"
+      ? `<span class="pill ${STATUS[k].cls} sumlow" tabindex="0" role="button" aria-label="${n} can't judge yet: show why">${n} ${l}</span>`
+      : `<span class="pill ${STATUS[k].cls}">${n} ${l}</span>`;
   });
   if (!miss.length) sum += `<span class="snone">No state is missing demand.</span>`;
   document.getElementById("ssum").innerHTML = sum;
+  const lowPill = document.querySelector("#ssum .sumlow");
+  if (lowPill) {
+    const show = e => {
+      tip.innerHTML = lowTip(by("low"));
+      const r = lowPill.getBoundingClientRect();
+      placeTip(e && e.type === "pointermove" ? e : { clientX: r.left, clientY: r.bottom });
+    };
+    lowPill.addEventListener("pointermove", show);
+    lowPill.addEventListener("click", show);   /* touch screens have no hover */
+    lowPill.addEventListener("focus", show);
+    ["pointerleave", "blur"].forEach(ev => lowPill.addEventListener(ev, () => { tip.style.display = "none"; }));
+  }
 
   /* one table: states behind demand first (biggest shortfall on top), then ahead of it, then in line */
   const rows = [...miss, ...by("out").sort((a, b) => b.ratio - a.ratio), ...by("track").sort((a, b) => b.ratio - a.ratio)];
