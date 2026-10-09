@@ -398,21 +398,17 @@ HTML = r"""<meta charset="utf-8">
   .wrap { max-width: 1440px; margin: 0 auto; padding-block: var(--sp-6) 72px; padding-inline: clamp(16px, 3vw, 32px); }
 
   /* ---- page header + top-level tabs ---- */
-  header.page { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: var(--sp-4); }
+  /* the title and the tabs stay pinned at the top; on wide screens they share one row */
+  .topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 7; display: flex; flex-wrap: wrap;
+    align-items: flex-end; gap: 0 var(--sp-6); margin: calc(-1 * var(--sp-6)) calc(-1 * var(--sp-4)) var(--sp-5);
+    padding: var(--sp-4) var(--sp-4) 0; background: var(--bg); border-bottom: 1px solid var(--border); }
   h1 { font-family: var(--font-display); font-size: var(--fs-h1); font-weight: 700; letter-spacing: -0.015em;
-    line-height: 1.2; margin: 0; color: var(--ink); }
-  header.page .lede { margin: 0; color: var(--ink-2); max-width: var(--read); }
-  /* data freshness: quiet facts separated by thin rules, not a chain of dots */
-  header.page .fresh { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3);
-    margin: var(--sp-1) 0 0; color: var(--muted); font-size: var(--fs-small); font-variant-numeric: tabular-nums; }
-  header.page .fresh:empty { display: none; }
-  header.page .fresh span + span::before { content: ""; display: inline-block; width: 1px; height: 11px;
-    background: var(--control-border); margin-right: var(--sp-3); vertical-align: -1px; }
-  @media (max-width: 600px) {
-    header.page .fresh { flex-direction: column; align-items: flex-start; gap: 0; }
-    header.page .fresh span + span::before { display: none; }
+    line-height: 1.2; margin: 0; padding-bottom: 12px; color: var(--ink); }
+  @media (max-width: 899px) {
+    .topbar { padding-top: var(--sp-3); }
+    .topbar h1 { flex-basis: 100%; font-size: 21px; padding-bottom: 2px; }
   }
-  nav.tabs { display: flex; gap: var(--sp-1); border-bottom: 1px solid var(--border); margin: 0 0 var(--sp-5);
+  nav.tabs { display: flex; gap: var(--sp-1); min-width: 0; max-width: 100%;
     overflow-x: auto; scrollbar-width: none; }
   nav.tabs::-webkit-scrollbar { display: none; }
   nav.tabs button { font: inherit; font-size: 15px; font-weight: 600; color: var(--ink-2); background: none; border: 0;
@@ -424,7 +420,7 @@ HTML = r"""<meta charset="utf-8">
 
   /* ---- buttons, chips, selects ---- */
   .controls {
-    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--top-h, 0px)); z-index: 5;
     display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
     padding: var(--sp-3) var(--sp-4); margin: 0 calc(-1 * var(--sp-4)) var(--sp-5);
     background: var(--bg);
@@ -458,7 +454,7 @@ HTML = r"""<meta charset="utf-8">
   .lgbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
     padding: var(--sp-3) var(--sp-4); margin: 0 calc(-1 * var(--sp-4)) var(--sp-4);
     background: var(--bg); border-bottom: 1px solid var(--border); }
-  @media (min-width: 701px) { .lgbar { position: sticky; top: var(--ctrl-h, 0px); z-index: 4; } }
+  @media (min-width: 701px) { .lgbar { position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--top-h, 0px) + var(--ctrl-h, 0px)); z-index: 4; } }
   .lgbar .lgkey { color: var(--ink-2); font-size: 14px; font-weight: 600; margin-right: var(--sp-1); }
   .lgt { display: inline-flex; align-items: center; gap: var(--sp-2); min-height: 34px; padding: 5px 14px 5px 11px;
     border: 1px solid var(--control-border); border-radius: var(--r-pill); background: var(--surface); color: var(--ink);
@@ -558,7 +554,8 @@ HTML = r"""<meta charset="utf-8">
   .dday.rs.re, .dday.pick { border-radius: 8px; }
   .dday.pick { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
   .dday:focus-visible, .dnav:focus-visible, .dpresets button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .card, .mapcard { scroll-margin-top: calc(var(--ctrl-h, 0px) + var(--lg-h, 0px) + 12px); }
+  .card, .mapcard { scroll-margin-top: calc(var(--top-h, 0px) + var(--ctrl-h, 0px) + var(--lg-h, 0px) + 12px); }
+  .tabpane { scroll-margin-top: var(--top-h, 0px); }
   @media (max-width: 700px) {
     .controls, .lgbar { position: relative; }
     /* phone: a control's popover spans the bar's content width under its button, so it never runs off-screen */
@@ -675,7 +672,7 @@ HTML = r"""<meta charset="utf-8">
   .qlegend svg { flex: none; overflow: visible; }
   .qhead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); margin-bottom: var(--sp-3); }
   .qhead h3 { margin: 0; }
-  .qhead .qsel { display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--muted); font-size: var(--fs-small); margin-left: auto; }
+  .qhead .qsel { display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--muted); font-size: var(--fs-small); }
   /* wide tables scroll sideways inside .hsin; .hscroll fades the right edge while there's more to see */
   .hscroll { position: relative; }
   .hsin { overflow-x: auto; }
@@ -729,7 +726,6 @@ HTML = r"""<meta charset="utf-8">
       position: sticky; left: 0; z-index: 1; background: var(--surface); box-shadow: 1px 0 0 var(--line); }
     .mtab.score tr.mrow:hover td.mn { background: linear-gradient(var(--chip-bg), var(--chip-bg)), var(--surface); }
     .movers .mhead .mterm { margin-left: 0; }
-    .qhead .qsel { margin-left: 0; }
   }
   .mcols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3) var(--sp-6); margin-top: var(--sp-2); }
   @media (max-width: 900px) { .mcols { grid-template-columns: 1fr; } }
@@ -890,12 +886,10 @@ HTML = r"""<meta charset="utf-8">
 </style>
 
 <div class="wrap">
-  <header class="page">
+  <div class="topbar" id="topbar">
     <h1>WFE SEO Dashboard</h1>
-    <p class="lede">Where people are searching for wildfire information, whether Google shows our pages for it, and whether that turns into visits.</p>
-    <p class="fresh" id="fresh"></p>
-  </header>
-  <nav class="tabs" id="tabs" role="tablist" aria-label="Dashboard views"></nav>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Dashboard views"></nav>
+  </div>
 
   <div class="tabpane" id="pane-main" role="tabpanel" aria-labelledby="tab-main">
   <div class="controls" id="controls"></div>
@@ -988,23 +982,23 @@ HTML = r"""<meta charset="utf-8">
     <p>Everything that judges health uses the dates picked with the date button at the top, less the latest day, which is
     still partial. For example, "Last 14 days" judges the 13 complete days in it.</p>
     <dl>
-      <dt>Search</dt><dd>The average of an area's keyword indices over those days, as a multiple of its typical (median)
-      day across all the data.</dd>
+      <dt>Search</dt><dd>The average of an area's keyword indices over those days, as a multiple of its average over the
+      same number of days just before (1× = no change). "All data" has no earlier period, so it can't be judged.</dd>
       <dt>Visits</dt><dd>In the table and on the cards ("Search → visits"): the same for our organic visits, i.e. visitors arriving
       from a search engine (Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave), counted by PostHog. They track Search Console
       clicks within a few percent. "Clicks" on this page always means Google Search Console clicks.</dd>
       <dt>Status</dt><dd>Visits ÷ search, whether search rose or fell. Below 0.6× = missing demand (our traffic fell behind
       search), above 1.25× = outperforming, otherwise tracking.</dd>
-      <dt>Missed visits per week (estimate)</dt><dd>(search multiple − our multiple) × our typical day × 7.</dd>
+      <dt>Missed visits per week (estimate)</dt><dd>(search multiple − our multiple) × our average day in the previous period × 7.</dd>
       <dt>What Search Console shows</dt><dd>This dashboard's own reading of Search Console (Google doesn't supply these
       labels) over the same dates, up to Search Console's last complete day, about two days behind. Every multiple is
-      "× a typical day". <b>Losing visibility</b> = Google showed our pages much less than searching fell (impressions ÷
+      "× the previous period". <b>Losing visibility</b> = Google showed our pages much less than searching fell (impressions ÷
       search below 0.6: a ranking or indexing gap). <b>Shown, not clicked</b> = we were shown but clicks fell behind
       impressions (clicks ÷ impressions below 0.6: a title, snippet or position gap). <b>Google clicks kept pace</b> = our
       Google clicks rose with searching, so the shortfall is in other engines or tracking. Otherwise <b>visibility and
       clicks both slipped</b>.</dd>
       <dt>Can't judge yet</dt><dd>Google Trends reports low-volume days as zero except for the most recent ~14 days of each
-      request. For states whose search history is mostly zero there is no reliable typical level, so those states are held
+      request. For states whose search history is mostly zero there is no reliable level to compare, so those states are held
       back rather than given a misleading multiple.</dd>
     </dl>
     <p>Short windows react fastest but flip on noise: 14 days halves how often a status flips compared with 7, while a
@@ -1197,18 +1191,6 @@ function chip(k, sw, label, title) {
   const on = k.split(",").every(x => visible[x]);
   return `<button type="button" class="lgt${on ? "" : " off"}" data-k="${k}" aria-pressed="${on}" title="${title ? title + " " : ""}Click to show or hide on every chart.">${sw}<span>${label}</span></button>`;
 }
-/* the header's data-freshness line */
-function buildFreshness() {
-  const el = document.getElementById("fresh");
-  if (!el) return;
-  const parts = [];
-  const m = DATA.fetchedAt && /^(\d{4}-\d\d-\d\d) (\d\d:\d\d)Z$/.exec(DATA.fetchedAt);
-  if (m) parts.push(`Updated ${fdate(m[1])} at ${m[2]} UTC`);
-  else if (DATA.fetchedAt) parts.push(`Updated ${esc(DATA.fetchedAt)}`);
-  parts.push(`Traffic and Google Trends through ${fdate(DATA.dates[N - 1])}`);
-  if (GSC) parts.push(`Search Console through ${fdate(GSC.lastComplete)}, about two days behind`);
-  el.innerHTML = parts.map(p => `<span>${p}</span>`).join("");
-}
 function buildControls() {
   const c = document.getElementById("controls");
   const both = `<svg width="22" height="12" aria-hidden="true"><line x1="1" y1="3.5" x2="21" y2="3.5" stroke="var(--f)" stroke-width="2"/><line x1="1" y1="8.5" x2="21" y2="8.5" stroke="var(--f)" stroke-width="2" stroke-dasharray="4 3"/></svg>`;
@@ -1295,10 +1277,11 @@ function buildControls() {
   /* keep jump-to-card targets clear of the sticky bar */
   const setCtrlH = () => {
     const st = getComputedStyle(c).position === "sticky";
+    document.documentElement.style.setProperty("--top-h", document.getElementById("topbar").offsetHeight + "px");
     document.documentElement.style.setProperty("--ctrl-h", (st ? c.offsetHeight : 0) + "px");
     document.documentElement.style.setProperty("--lg-h", (getComputedStyle(lgb).position === "sticky" ? lgb.offsetHeight : 0) + "px");
   };
-  if (window.ResizeObserver) { const ro = new ResizeObserver(setCtrlH); ro.observe(c); ro.observe(lgb); }
+  if (window.ResizeObserver) { const ro = new ResizeObserver(setCtrlH); ro.observe(c); ro.observe(lgb); ro.observe(document.getElementById("topbar")); }
   setCtrlH();
   document.getElementById("statef").addEventListener("change", e => {
     stateFilter = e.target.value;
@@ -1351,13 +1334,13 @@ function buildControls() {
     });
     if (resetViews || !calView.start) { calView.start = monthOf(DATA.dates[range.r0]); calView.end = monthOf(DATA.dates[range.r1]); }
     renderCal("start"); renderCal("end");
-    try { localStorage.setItem("wdo-chart-range", JSON.stringify(range.preset === "custom"
+    try { localStorage.setItem("wdo-overview-range", JSON.stringify(range.preset === "custom"
       ? { p: "custom", from: DATA.dates[range.r0], to: DATA.dates[range.r1] } : { p: range.preset })); } catch (e) {}
   };
   /* first index on or after a YYYY-MM-DD date */
   const idxAt = d => { const i = DATA.dates.findIndex(x => x >= d); return i < 0 ? N - 1 : i; };
   try {
-    const saved = JSON.parse(localStorage.getItem("wdo-chart-range") || "null");
+    const saved = JSON.parse(localStorage.getItem("wdo-overview-range") || "null");
     if (saved && saved.p === "custom" && saved.from && saved.to) {
       const [a, b] = saved.from <= saved.to ? [saved.from, saved.to] : [saved.to, saved.from];
       if (b >= D0 && a <= D1) setRange("custom", idxAt(a), idxAt(b));   /* ignore a range the data has moved past */
@@ -1456,7 +1439,7 @@ function setRange(preset, r0, r1) {
   r1 = Math.max(r0 + 1, Math.min(N - 1, r1));   /* at least two days so the x-axis has a span */
   range.r0 = r0; range.r1 = r1;
 }
-setRange("90");
+setRange("14");
 const rangeText = () => `${fdate(DATA.dates[range.r0])} – ${fdate(DATA.dates[range.r1])}`;
 
 /* right-hand axes: Search Console avg position and CTR in their own units */
@@ -1698,19 +1681,22 @@ function meanSeries(kwS) {
     return n ? sum / n : null;
   });
 }
-function medianOf(arr, end) {
-  const a = arr.slice(0, end + 1).filter(v => v != null).sort((x, y) => x - y);
-  return a.length ? a[Math.floor(a.length / 2)] : 0;
+/* the baseline a health window is judged against: the average day over the same number of days just
+   before it (clipped at the data start; null when fewer than min(n, 7) earlier days exist, e.g. "All data") */
+const prevNeed = n => Math.min(n, 7);
+function prevMean(s, a, n) {
+  return a < prevNeed(n) ? null : rollN(s, a - 1, Math.min(n, a));
 }
-/* lift = mean over the health window vs the series' typical (median) day across all the data;
-   baselines floored so a near-zero median can't manufacture a huge multiple */
+const prevSpan = w => spanText(Math.max(0, w.a - w.n), w.a - 1);
+/* lift = mean over the health window vs the previous period's mean; baselines floored so a
+   near-zero earlier period can't manufacture a huge multiple */
 function liftPair(S, T, w = healthWin()) {
-  const end = N - 2;
   const smax = Math.max(0, ...S.filter(v => v != null));
-  const baseS = Math.max(medianOf(S, end), 0.05 * smax, 0.5);
-  const baseT = Math.max(medianOf(T, end), 1);
+  const pS = prevMean(S, w.a, w.n), pT = prevMean(T, w.a, w.n);
+  const baseS = pS == null ? null : Math.max(pS, 0.05 * smax, 0.5);
+  const baseT = pT == null ? null : Math.max(pT, 1);
   const s = rollN(S, w.b, w.n), t = rollN(T, w.b, w.n);
-  return { D: s == null ? null : s / baseS, C: t == null ? null : t / baseT, baseT };
+  return { D: s == null || baseS == null ? null : s / baseS, C: t == null || baseT == null ? null : t / baseT, baseT };
 }
 /* GSC totals over `win` days ending at `end` */
 function gscWin(gs, end, win) {
@@ -1740,9 +1726,9 @@ function modeStatsHtml(st, sel) {
   let h = "";
   if (!sel) {
     const hl = healthOf(st);
-    if (hl) h += hl.sparse
-      ? kpi("Search → our visits", `<span class="na">Can't judge</span>`, "Search too sparse in Google Trends")
-      : kpi("Search → our visits", `${liftFmt(hl.D)} → ${liftFmt(hl.C)}`, `vs a typical day, ${daysTxt(w.n)}`);
+    if (hl) h += hl.sparse || hl.noPrev
+      ? kpi("Search → our visits", `<span class="na">Can't judge</span>`, hl.noPrev ? "No earlier period to compare" : "Search too sparse in Google Trends")
+      : kpi("Search → our visits", `${liftFmt(hl.D)} → ${liftFmt(hl.C)}`, `vs the ${daysTxt(w.n)} before`);
     const T = st.organic && st.organic.some(v => v > 0) ? st.organic : st.traffic;
     if (T) h += kpi("Organic visits", `<span class="u">${fmt(rollN(T, w.b, w.n) * w.n)}</span>`, daysTxt(w.n), "pages");
   } else {
@@ -1750,7 +1736,8 @@ function modeStatsHtml(st, sel) {
     if (S && sel.traffic) {
       const lp = liftPair(S, sel.traffic, w);
       h += sparseSearch(S) ? kpi("Search → our visitors", `<span class="na">Can't judge</span>`, "Metro search too sparse")
-        : kpi("Search → our visitors", `${liftFmt(lp.D)} → ${liftFmt(lp.C)}`, `vs a typical day, ${daysTxt(w.n)}`);
+        : lp.D == null ? kpi("Search → our visitors", `<span class="na">Can't judge</span>`, "No earlier period to compare")
+        : kpi("Search → our visitors", `${liftFmt(lp.D)} → ${liftFmt(lp.C)}`, `vs the ${daysTxt(w.n)} before`);
     } else if (!S) h += kpi("Search", `<span class="na">No data</span>`, "No metro search data");
     if (sel.traffic) h += kpi("Metro visitors", fmt(rollN(sel.traffic, w.b, w.n) * w.n), daysTxt(w.n));
   }
@@ -1903,7 +1890,7 @@ function statusOf(x, y, low) {
 
 /* Google Trends returns small values only for the most recent ~14 days of each fetch and
    reports older low-volume days as 0. A series that was mostly zero before that tail has
-   no usable "typical day", so its lift can't be judged. */
+   no reliable level to compare, so its lift can't be judged. */
 const FRESH0 = N - 15;
 function sparseSearch(S) {
   const v = S.slice(0, FRESH0).filter(x => x != null);
@@ -1920,29 +1907,31 @@ function healthOf(st) {
   const T = st.organic && st.organic.some(v => v > 0) ? st.organic : st.traffic;
   let h = null;
   if (kwS && T) {
-    const end = N - 2;
     const S = meanSeries(kwS);
     const { D, C, baseT } = liftPair(S, T, w);
+    const noPrev = w.a < prevNeed(w.n);
     const totalT = T.reduce((a, b) => a + (b || 0), 0);
     /* rough visits/week we'd have had if our traffic had risen as much as search did */
     const missed = D != null && C != null && D > C ? (D - C) * baseT * 7 : 0;
     let g = null;
     const gw = st.gsc && st.gsc.web;
     if (GSC && gw && w.g && gw.i.some(v => v != null)) {
-      /* GSC lags ~2 days, so its side stops at its last complete day; demand re-measured on those same days */
+      /* GSC lags ~2 days, so its side stops at its last complete day; demand re-measured on those same days,
+         each against the same number of days just before the window */
       const smax = Math.max(0, ...S.filter(v => v != null));
-      const baseS = Math.max(medianOf(S, end), 0.05 * smax, 0.5);
+      const pS = prevMean(S, w.a, w.g.n), pI = prevMean(gw.i, w.a, w.g.n), pC = prevMean(gw.c, w.a, w.g.n);
+      const baseS = pS == null ? null : Math.max(pS, 0.05 * smax, 0.5);
       const sw = rollN(S, w.g.b, w.g.n);
       const iw = rollN(gw.i, w.g.b, w.g.n), cw = rollN(gw.c, w.g.b, w.g.n);
       const now = gscWin(gw, w.g.b, w.g.n);
-      g = { I: iw == null ? null : iw / Math.max(medianOf(gw.i, GSC_LAST), 1),
-            C: cw == null ? null : cw / Math.max(medianOf(gw.c, GSC_LAST), 1),
-            Dg: sw == null ? null : sw / baseS, ctr: now && now.ctr, pos: now && now.pos,
+      g = { I: iw == null || pI == null ? null : iw / Math.max(pI, 1),
+            C: cw == null || pC == null ? null : cw / Math.max(pC, 1),
+            Dg: sw == null || baseS == null ? null : sw / baseS, ctr: now && now.ctr, pos: now && now.pos,
             low: gw.i.reduce((a, v) => a + (v || 0), 0) < 300 };
     }
     const sparse = sparseSearch(S);
-    h = { st, D, C, ratio: D > 0 && C != null ? C / D : null, status: statusOf(D, C, totalT < 300 || sparse),
-          sparse, totalT, tSum: Math.round((rollN(T, w.b, w.n) || 0) * w.n), missed: sparse ? 0 : missed, g };
+    h = { st, D, C, ratio: D > 0 && C != null ? C / D : null, status: statusOf(D, C, totalT < 300 || sparse || noPrev),
+          sparse, noPrev, totalT, tSum: Math.round((rollN(T, w.b, w.n) || 0) * w.n), missed: sparse ? 0 : missed, g };
   }
   _health.set(st.key, h);
   return h;
@@ -1954,25 +1943,25 @@ function whyOf(h) {
   if (!g || g.low || g.Dg == null || g.I == null) return `<span class="lbl">No Search Console signal</span>`;
   const why = (k, d) => `<span class="whyk">${k}</span><span class="whyd">${d}</span>`;
   if (g.I / g.Dg < 0.6)
-    return why("Losing visibility", `Google showed us ${liftFmt(g.I)} as often as usual while searches ran ${liftFmt(g.Dg)} usual`);
+    return why("Losing visibility", `Google showed us ${liftFmt(g.I)} as often as before while searches ran ${liftFmt(g.Dg)} their earlier level`);
   if (g.C != null && g.I > 0 && g.C / g.I < 0.6)
-    return why("Shown, not clicked", `Shown ${liftFmt(g.I)} as often as usual but clicked ${liftFmt(g.C)} as often`);
+    return why("Shown, not clicked", `Shown ${liftFmt(g.I)} as often as before but clicked ${liftFmt(g.C)} as often`);
   if (g.C != null && h.D != null && g.C >= 0.8 * h.D)
-    return why("Google clicks kept pace", `Clicks ${liftFmt(g.C)} usual, in line with searches; the gap is outside Google search`);
-  return why("Visibility and clicks both slipped", `Shown ${liftFmt(g.I)} as often as usual, clicked ${liftFmt(g.C)} as often`);
+    return why("Google clicks kept pace", `Clicks ${liftFmt(g.C)} their earlier level, in line with searches; the gap is outside Google search`);
+  return why("Visibility and clicks both slipped", `Shown ${liftFmt(g.I)} as often as before, clicked ${liftFmt(g.C)} as often`);
 }
 
 const QPRESETS = {
   dv: { label: "Search demand → our visibility", q: "Did Google show us more as searching rose?",
-        desc: "Each dot is a state. Across: search demand. Up: how often Google showed our pages. Both are compared with a typical day.",
+        desc: "Each dot is a state. Across: search demand. Up: how often Google showed our pages. Both are compared with the same number of days just before.",
         x: "Search demand (Trends)", y: "Our impressions (Search Console)", xs: "Search", ys: "Impressions",
         pick: h => h.g && ({ x: h.g.Dg, y: h.g.I, low: h.g.low || h.sparse }) },
   dc: { label: "Search demand → our traffic", q: "Did our traffic rise with search demand?",
-        desc: "Each dot is a state. Across: search demand. Up: our organic traffic. Both are compared with a typical day.",
+        desc: "Each dot is a state. Across: search demand. Up: our organic traffic. Both are compared with the same number of days just before.",
         x: "Search demand (Trends)", y: "Our organic traffic", xs: "Search", ys: "Our traffic",
         pick: h => ({ x: h.D, y: h.C, low: h.status === "low" }) },
   vc: { label: "Our visibility → our clicks", q: "When Google showed us, did people click?",
-        desc: "Each dot is a state. Across: how often Google showed our pages. Up: how often people clicked. Both are compared with a typical day.",
+        desc: "Each dot is a state. Across: how often Google showed our pages. Up: how often people clicked. Both are compared with the same number of days just before.",
         x: "Our impressions (Search Console)", y: "Our clicks (Search Console)", xs: "Impressions", ys: "Clicks",
         pick: h => h.g && ({ x: h.g.I, y: h.g.C, low: h.g.low }) },
 };
@@ -2012,7 +2001,7 @@ function buildOverview() {
   const w = healthWin();
   const gSpan = GSC && w.g ? spanText(w.a, w.g.b) : null;
   document.getElementById("osub").textContent =
-    `Are our visits from search keeping up with search demand? Each state over ${spanText(w.a, w.b)} (${w.n} complete day${w.n > 1 ? "s" : ""}), compared with its typical day. Visits are organic visits from any search engine (PostHog); clicks are Google Search Console.`;
+    `Are our visits from search keeping up with search demand? Each state over ${spanText(w.a, w.b)} (${w.n} complete day${w.n > 1 ? "s" : ""}), compared with the ${daysTxt(w.n)} before${w.a < prevNeed(w.n) ? " (none in the data, so nothing can be judged; pick a shorter range)" : ` (${prevSpan(w)})`}. Visits are organic visits from any search engine (PostHog); clicks are Google Search Console.`;
 
   const hs = healths.filter(Boolean);
   const by = st => hs.filter(h => h.status === st);
@@ -2032,13 +2021,13 @@ function buildOverview() {
   const rows = [...miss, ...by("out").sort((a, b) => b.ratio - a.ratio), ...by("track").sort((a, b) => b.ratio - a.ratio)];
   /* for states that aren't behind there's no gap to explain: just describe what Search Console saw */
   const gscRead = h => !h.g || h.g.low || h.g.I == null ? `<span class="lbl">No Search Console signal</span>`
-    : `<span class="whys">Shown ${liftFmt(h.g.I)} as often as usual${h.g.C != null ? `, clicked ${liftFmt(h.g.C)} as often` : ""}</span>`;
+    : `<span class="whys">Shown ${liftFmt(h.g.I)} as often as before${h.g.C != null ? `, clicked ${liftFmt(h.g.C)} as often` : ""}</span>`;
 
   /* phones: the key number sits right after the pinned state name, so it shows before any sideways scrolling */
   const keyFirst = PHONE_Q.matches;
   const stCol = `<col style="width:148px">`, keyCol = `<col style="width:120px">`;
   const stTh = `<th class="l">Status</th>`;
-  const keyTh = `<th title="Each as a multiple of a typical day, over the dates picked at the top. Visits = our organic visits from search engines (PostHog), which track Google's Search Console clicks within a few percent.">Search → visits<span class="thsub">× a typical day</span></th>`;
+  const keyTh = `<th title="Each as a multiple of its level over the same number of days just before the dates picked at the top (1× = no change). Visits = our organic visits from search engines (PostHog), which track Google's Search Console clicks within a few percent.">Search → visits<span class="thsub">× previous period</span></th>`;
   const stTd = h => `<td class="stcell"><span class="pill ${STATUS[h.status].cls}">${STATUS[h.status].label}</span></td>`;
   const keyTd = h => `<td>${liftFmt(h.D)} → ${liftFmt(h.C)}</td>`;
   let html = rows.length
@@ -2056,16 +2045,17 @@ function buildOverview() {
   const low = by("low");
   if (low.length)
     html += `<details class="sline squiet"><summary><span class="slabel">Can't judge yet</span>
-      <span class="lbl">${low.length} state${low.length > 1 ? "s" : ""} with too few searches in Google Trends, or too little traffic, to set a typical level</span></summary>
-      ${low.map(h => stateChip(h, h.sparse ? "sparse search" : "low traffic")).join("")}</details>`;
+      <span class="lbl">${low.length} state${low.length > 1 ? "s" : ""} with too few searches in Google Trends, too little traffic, or no earlier period to compare with</span></summary>
+      ${low.map(h => stateChip(h, h.noPrev ? "no earlier period" : h.sparse ? "sparse search" : "low traffic")).join("")}</details>`;
   document.getElementById("oscore").innerHTML = html;
   wireHScroll(document.getElementById("oscore"));
 
   /* how this section is calculated (its dates follow the picker) */
   document.getElementById("oabout").innerHTML = `
     <p>Each state's search demand and our visits are averaged over ${spanText(w.a, w.b)} (${w.n} complete day${w.n > 1 ? "s" : ""};
-    the latest day is still partial and left out), then compared with that state's typical (median) day across all the
-    data. 1× is an ordinary day. Change the dates with the date button at the top.</p>
+    the latest day is still partial and left out), then compared with the same number of days just before
+    (${w.a < prevNeed(w.n) ? "none in the data for these dates" : prevSpan(w)}). 1× means no change; 2× means twice the earlier level.
+    Change the dates with the date button at the top.</p>
     <p><b>Visits</b> are our organic visits: visitors arriving from a search engine (Google, Bing, DuckDuckGo, Yahoo,
     Ecosia, Brave), counted by PostHog. They track Google's Search Console clicks within a few percent. <b>Clicks</b> on
     this page always mean Search Console clicks from Google.</p>
@@ -2074,12 +2064,13 @@ function buildOverview() {
       <dt><span class="pill st-miss">Missing demand</span></dt><dd>Visits ÷ search is below 0.6: our traffic fell behind search, whether search rose or fell.</dd>
       <dt><span class="pill st-track">Tracking</span></dt><dd>Visits ÷ search is between 0.6 and 1.25.</dd>
       <dt><span class="pill st-out">Outperforming</span></dt><dd>Visits ÷ search is above 1.25.</dd>
-      <dt><span class="pill st-low">Can't judge yet</span></dt><dd>Google Trends reports too few searches in the state to set a
-      typical level, or our traffic there is too low. These states are held back rather than given a misleading multiple.</dd>
+      <dt><span class="pill st-low">Can't judge yet</span></dt><dd>Google Trends reports too few searches in the state to judge,
+      our traffic there is too low, or the dates have no earlier period to compare with (e.g. "All data"). These states
+      are held back rather than given a misleading multiple.</dd>
     </dl>
     <h4>Columns</h4>
     <dl>
-      <dt>Missed visits per week</dt><dd>A rough estimate for states missing demand: (search multiple − our multiple) × our typical day × 7.</dd>` +
+      <dt>Missed visits per week</dt><dd>A rough estimate for states missing demand: (search multiple − our multiple) × our average day in the previous period × 7.</dd>` +
     (hasG ? `
       <dt>What Search Console shows</dt><dd>Our own reading of Search Console (Google doesn't supply these labels)${gSpan ? ` over ${gSpan}` : ""},
       up to its last complete day; it runs about two days behind. For states missing demand it names the likely reason:
@@ -2087,7 +2078,7 @@ function buildOverview() {
       a ranking or indexing gap), <b>shown, not clicked</b> (clicks fell behind impressions, clicks ÷ impressions below 0.6:
       a title, snippet or position gap), <b>Google clicks kept pace</b> (our Google clicks rose with searching, so the
       shortfall is in other engines or tracking), or else <b>visibility and clicks both slipped</b>. For other states it
-      says how often Google showed and clicked us compared with usual.</dd>` : "") + `
+      says how often Google showed and clicked us compared with the previous period.</dd>` : "") + `
     </dl>
     <p>Click a row to open that state's chart. Hover it for the exact numbers.</p>`;
 
@@ -2106,7 +2097,7 @@ function buildOverview() {
     el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openState(el.dataset.key); } });
     el.addEventListener("pointermove", e => {
       const g = h.g;
-      tip.innerHTML = `<div class="d">${h.st.name}<span class="lbl">${spanText(w.a, w.b)} vs typical</span></div>
+      tip.innerHTML = `<div class="d">${h.st.name}<span class="lbl">${spanText(w.a, w.b)} vs the ${daysTxt(w.n)} before</span></div>
         <table class="tt"><tbody>
         <tr><td class="n">Search demand</td><td>${liftFmt(h.D)}</td></tr>
         <tr><td class="n">Our visits from search</td><td>${liftFmt(h.C)}</td></tr>
@@ -2158,14 +2149,14 @@ function renderQuad(healths) {
     <li>${mk("out")}<span>Outperforming <span class="lbl">(${nOf("out")}), well above it</span></span></li>` : "";
   const gT = gTxt || "Search Console's complete days (none in these dates yet)";
   document.getElementById("oqnote").innerHTML = {
-      dv: `<p>x = search demand, y = how often Google showed our pages (Search Console impressions), each as a multiple
-        of its typical day over ${gT} (Search Console's complete days). Below the diagonal = searching grew but our
+      dv: `<p>x = search demand, y = how often Google showed our pages (Search Console impressions), over ${gT} (Search Console's
+        complete days), each as a multiple of the same number of days just before. Below the diagonal = searching grew but our
         visibility didn't keep up: a ranking or indexing gap.</p>`,
-      dc: `<p>x = search demand, y = our organic traffic, each as a multiple of its typical day over ${wTxt}. Below the
+      dc: `<p>x = search demand, y = our organic traffic, over ${wTxt}, each as a multiple of the same number of days just before. Below the
         diagonal = searching grew more than our traffic did.</p>`,
       vc: `<p>x = impressions, y = clicks (Search Console, ${gT}). Below the diagonal = we were seen more but chosen
         proportionally less: a title, snippet or position problem.</p>`,
-    }[qpreset] + `<p>The 1× lines mark an ordinary stretch. Each dot's color and shape come from this chart's own ratio
+    }[qpreset] + `<p>The 1× lines mark no change from the previous period. Each dot's color and shape come from this chart's own ratio
     (y ÷ x), using the same 0.6 and 1.25 cut-offs as the table. A state past ${CAP}× is drawn scaled down along its own
     line from the origin, so it stays on the correct side of the diagonal, and is labelled with both values. States whose
     search is too sparse to judge are left off.</p>
@@ -2197,8 +2188,8 @@ function renderQuad(healths) {
   g += `<text x="${QW - QR}" y="${QH - QB - 8}" text-anchor="end" font-size="11.5" font-weight="600" fill="var(--bad-ink)" ${ui}>↓ Falling behind</text>`;
   /* above the plot, where no dot or dot label can reach it */
   g += `<text x="${QL}" y="${QT - 12}" font-size="11.5" font-weight="600" fill="var(--good-ink)" ${ui}>↑ Outperforming</text>`;
-  g += `<text x="${(QL + QW - QR) / 2}" y="${QH - 6}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--muted)" ${ui}>${P.x}, × typical</text>`;
-  g += `<text x="13" y="${(QT + QH - QB) / 2}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--muted)" ${ui} transform="rotate(-90 13 ${(QT + QH - QB) / 2})">${P.y}, × typical</text>`;
+  g += `<text x="${(QL + QW - QR) / 2}" y="${QH - 6}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--muted)" ${ui}>${P.x}, × previous period</text>`;
+  g += `<text x="13" y="${(QT + QH - QB) / 2}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--muted)" ${ui} transform="rotate(-90 13 ${(QT + QH - QB) / 2})">${P.y}, × previous period</text>`;
 
   /* red dots always get a label; the rest are placed greedily so labels never overlap */
   const placed = [];
@@ -2231,7 +2222,7 @@ function renderQuad(healths) {
           <tr><td class="n">${P.xs}</td><td>${liftFmt(pt.x)}</td></tr>
           <tr><td class="n">${P.ys}</td><td>${liftFmt(pt.y)}</td></tr>
         </tbody></table>
-        <div class="tnote">vs a typical day, ${qpreset === "dc" ? wTxt : gTxt}</div>`;
+        <div class="tnote">${qpreset === "dc" ? wTxt : gTxt}, vs the same number of days just before</div>`;
       placeTip(e);
     });
     d.addEventListener("pointerleave", () => { tip.style.display = "none"; });
@@ -2817,7 +2808,6 @@ function initTabs() {
 /*__TABS_JS__*/
 
 /* ---------- boot ---------- */
-buildFreshness();
 buildControls();
 buildCards();
 buildOverview();
