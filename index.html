@@ -1158,9 +1158,12 @@ function buildControls() {
   /* keep jump-to-card targets clear of the sticky bar */
   const setCtrlH = () => {
     const st = getComputedStyle(c).position === "sticky";
-    document.documentElement.style.setProperty("--top-h", document.getElementById("topbar").offsetHeight + "px");
-    document.documentElement.style.setProperty("--ctrl-h", (st ? c.offsetHeight : 0) + "px");
-    document.documentElement.style.setProperty("--lg-h", (getComputedStyle(lgb).position === "sticky" ? lgb.offsetHeight : 0) + "px");
+    /* heights rounded DOWN: a bar pinned under another may tuck a fraction of a pixel beneath it, but never leaves a
+       sliver of scrolled content showing between them (offsetHeight rounds 60.5 up to 61) */
+    const hOf = el => Math.floor(el.getBoundingClientRect().height);
+    document.documentElement.style.setProperty("--top-h", hOf(document.getElementById("topbar")) + "px");
+    document.documentElement.style.setProperty("--ctrl-h", (st ? hOf(c) : 0) + "px");
+    document.documentElement.style.setProperty("--lg-h", (getComputedStyle(lgb).position === "sticky" ? hOf(lgb) : 0) + "px");
   };
   if (window.ResizeObserver) { const ro = new ResizeObserver(setCtrlH); ro.observe(c); ro.observe(lgb); ro.observe(document.getElementById("topbar")); }
   setCtrlH();
