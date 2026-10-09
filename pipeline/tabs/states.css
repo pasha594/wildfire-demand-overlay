@@ -1,5 +1,17 @@
   /* ---- tab: States in Play ---- */
   #pane-states .tbar { margin-bottom: var(--sp-3); }
+  /* wide screens pin the bar under the title and tabs: a focused row or control scrolls clear of both
+     (--tbar-h = the bar's height while pinned, 0 on phones; set in states.js) */
+  #pane-states > :not(.tbar) :is(a, button, input, select, summary, [tabindex]) {
+    scroll-margin-top: calc(var(--top-h, 0px) + var(--tbar-h, 0px) + var(--sp-2)); }
+  /* 701–799px: too narrow for the presets beside two calendars, so both date pickers put their presets on a
+     row above them and stay on screen */
+  @media (min-width: 701px) and (max-width: 799px) {
+    #pane-states details.pop.dpick .popbody { flex-direction: column; }
+    #pane-states details.pop.dpick .dpresets { flex-direction: row; flex-wrap: wrap; }
+    #pane-states details.pop.dpick .dcals { border-left: 0; padding-left: 0;
+      border-top: 1px solid var(--border); padding-top: var(--sp-3); }
+  }
   .stlede { color: var(--ink-2); font-size: var(--fs-table); line-height: 1.5; max-width: var(--read); margin: 0 0 var(--sp-5); text-wrap: pretty; }
   /* the two panels share subgrid rows, so their header, subtitle and table rows line up side by side */
   .stgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--sp-5); }

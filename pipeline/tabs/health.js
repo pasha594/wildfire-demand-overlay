@@ -1,7 +1,8 @@
-/* ---------- Review Health tabs ----------
+/* ---------- State Page Health and Fire Page Health tabs ----------
    One implementation, two scopes for Search Console: "page" = a state's own page (national: the
-   homepage), "all" = every page of the state (national: the whole site). Search demand is the same in
-   both: Google Trends, the mean of the area's four terms each day (meanSeries). */
+   homepage), "fire" = the state's fire pages only, not its state page (national: every fire page, no
+   state pages or homepage). Search demand is the same in both: Google Trends, the mean of the area's
+   four terms each day (meanSeries). */
 (() => {
 /* every chart keeps the right-axis margin, so all eight share one x scale (and one set of date ticks);
    HMT leaves room above the plot for the axis titles */
@@ -136,18 +137,21 @@ function log2Axis(lines, r0, r1, ih) {
 function areaData(scope, key) {
   const st = key === "national" ? null : DATA.states.find(s => s.key === key) || null;
   const dm = DATA.demand ? (st ? DATA.demand.states[st.key] : DATA.demand.national) : null;
-  const gs = !GSC ? null : scope === "page" ? (st ? st.gscPage : GSC.home) : (st ? st.gsc && st.gsc.web : GSC.site);
+  /* "page": the state page (national: the homepage); "fire": the state's fire pages (national: every fire page) */
+  const gs = !GSC ? null : scope === "page" ? (st ? st.gscPage : GSC.home) : (st ? st.gscFire : GSC.fireNational);
   const trk = !GSC ? null : (st ? st.gscTracked : GSC.trackedNational) || null;
+  const pg = scope === "page";
   return {
     st, scope, name: st ? st.name : "the US", hasDm: !!dm, kws: dm ? dm.kws : null, terms: dm ? dm.s : null,
     D: dm ? meanSeries(dm.s) : null, gs: gs || null,
     trk, ts: trk && trk[scope] || null,   /* tracked searches: the area's terms, and this scope's numbers */
     geo: st ? `searches made in ${st.name} (geo US-${st.abbr})` : "searches across the US (geo US)",
     searches: st ? `searches made in ${st.name}` : "searches across the US",
-    covers: scope === "page" ? (st ? `only the ${st.name} state page (fires.cornea.is/state/${st.key})` : "only the fires.cornea.is homepage")
-      : (st ? `every ${st.name} page (/state/${st.key} and its fire pages)` : "every page on fires.cornea.is"),
-    short: scope === "page" ? (st ? `the ${st.name} state page` : "the homepage") : (st ? `${st.name}'s pages` : "the site"),
-    where: scope === "page" ? (st ? `the ${st.name} state page` : "the homepage") : (st ? `any ${st.name} page` : "any page on the site"),
+    covers: pg ? (st ? `only the ${st.name} state page (fires.cornea.is/state/${st.key})` : "only the fires.cornea.is homepage")
+      : (st ? `only ${st.name}'s fire pages (fires.cornea.is/fire/${st.key}_…), not its state page`
+        : "every fire page on fires.cornea.is (no state pages or homepage)"),
+    short: pg ? (st ? `the ${st.name} state page` : "the homepage") : (st ? `${st.name}'s fire pages` : "our fire pages"),
+    where: pg ? (st ? `the ${st.name} state page` : "the homepage") : (st ? `one of ${st.name}'s fire pages` : "any fire page"),
   };
 }
 
@@ -246,7 +250,7 @@ function plot(box, o) {
 
 function makeHealthTab(key, scope) {
   const pane = document.getElementById("pane-" + key), skey = `wdo-${key}-state`;
-  const natLabel = scope === "page" ? "National (homepage)" : "National (whole site)";
+  const natLabel = scope === "page" ? "National (homepage)" : "National (all fire pages)";
   const valid = k => k === "national" || DATA.states.some(s => s.key === k);
   let built = false, picker, sel, live, smoothOn = false, area = "national", charts = [], cells = [], hoverI = null, hov = null, lastW = 0;
   try { const s = localStorage.getItem(skey); if (valid(s)) area = s; } catch (e) {}
@@ -286,6 +290,9 @@ function makeHealthTab(key, scope) {
         <div class="hhint">Swipe sideways for every column.</div><div class="htw"></div></section>
       <div class="tabnotes hnotes"></div><div class="hsr" aria-live="polite"></div>`;
     const bar = pane.querySelector(".tbar");
+    /* the bar's height while it's pinned (wide screens), so a focused chart or control scrolls clear of it (health.css) */
+    const pinH = () => pane.style.setProperty("--tbar-h", (getComputedStyle(bar).position === "sticky" ? bar.offsetHeight : 0) + "px");
+    if (window.ResizeObserver) new ResizeObserver(pinH).observe(bar, { box: "border-box" });
     picker = makeRangePicker(bar, { title: "Dates for every chart and the table on this tab", presets: PRESETS, initial: "90",
       storageKey: `wdo-${key}-range`, minDays: 7, onChange: render });
     bar.prepend(picker.el);
@@ -334,7 +341,8 @@ function makeHealthTab(key, scope) {
     let zero = 0, miss = 0;
     for (let i = r0; i <= r1; i++) { if (!D || D[i] == null) miss++; else if (!D[i]) zero++; }
     const sparse = hasD && zero + miss > n / 2;
-    pane.querySelector(".hscope").textContent = `Comparing ${a.covers} with ${a.searches}` +
+    /* a state's fire-page phrase ends in an aside ("…, not its state page"), closed by a comma here */
+    pane.querySelector(".hscope").textContent = `Comparing ${a.covers}${a.st && scope === "fire" ? "," : ""} with ${a.searches}` +
       (GSC ? `, using Search Console data through ${fdate(GSC.lastComplete)}.` : ".");
     /* capture over the area's whole history (its typical rate doesn't depend on the picked dates) */
     const capI = D && gs ? capture7(gs.i, a, CAP_X.impressions) : null, capC = D && gs ? capture7(gs.c, a, CAP_X.clicks) : null;
@@ -494,7 +502,8 @@ function makeHealthTab(key, scope) {
     dual(6, [dem, timp], true, GT);
     /* the two charts stack below 860px (health.css), so the impressions chart is above, not to the left */
     capture(7, capT, { nm: "impressions on these searches", src: GT, noun: "share",
-      gauge: `Our impressions on these searches (${matchMedia("(max-width: 860px)").matches ? "above" : "left"}) are the best gauge here: on page 1 they come close to the number of searches.` });
+      gauge: `Our impressions on these searches (${matchMedia("(max-width: 860px)").matches ? "above" : "left"}) are the best gauge here` +
+        (scope === "page" ? ": on page 1 they come close to the number of searches." : ".") });
     lastW = cells[0].clientWidth;
   }
 
@@ -532,7 +541,8 @@ function makeHealthTab(key, scope) {
     const tf = T ? fdate(T.topFrom) : "", tl = GSC ? fdate(GSC.lastComplete) : "";
     /* the biggest searches cover the export's fixed window (its last 90 complete days), not the picked dates */
     const topDays = T && GSC ? Math.round((Date.parse(GSC.lastComplete) - Date.parse(T.topFrom)) / 864e5) + 1 : 0;
-    const topCap = `${esc(a.st ? a.st.name : "National")}, last ${topDays} days (${tf} – ${tl}), whatever dates are picked`;
+    const topCap = `${esc(a.st ? a.st.name : "National")}, ${tf} – ${tl}: the last ${topDays} days of complete Search Console data. `
+      + "This list uses a fixed window and doesn't follow the date picker.";
     const topBody = !ts ? `<div class="mempty">No Search Console data on these searches for ${esc(a.short)}.</div>`
       : top.length ? `<div class="httw"><table class="mtab htq"><colgroup><col class="qc"><col><col></colgroup>
           <thead><tr><th class="l">Search</th><th>Impressions</th><th>Clicks</th></tr></thead><tbody>` +
@@ -544,7 +554,8 @@ function makeHealthTab(key, scope) {
       <div class="httw"><table class="mtab htt"><colgroup><col class="tc"><col><col><col><col><col></colgroup>
       <thead><tr><th class="l">Search term</th>
       <th title="Google Trends index on the area's own 0–100 scale, averaged over these dates (Any of the four: the mean of the four terms)">Search demand</th>
-      <th title="Searches that showed one of our pages (on page 1, nearly every search for the term)">Impressions</th>
+      <th title="${a.scope === "page" ? `Searches that showed ${esc(a.where)} (on page 1, nearly every search for the term)`
+        : `Times ${esc(a.where)} showed on these searches. A search that showed two of them counts twice.`}">Impressions</th>
       <th title="Search Console clicks">Clicks</th>
       <th title="Share of those searches that clicked us">CTR</th>
       <th title="Impression-weighted average position (1 = top result)">Avg position</th></tr></thead>
@@ -648,10 +659,11 @@ function makeHealthTab(key, scope) {
       impressions. 7-day smoothing averages the two-line charts over a centered week; the 7-day rate charts and the
       tables are unaffected.</p>
       <h4>Tracked searches</h4>
-      <p>Searches containing every word of one of the four terms, in any order, as Trends counts them. On page 1 nearly
-      every such search shows us, so impressions ≈ searches and CTR is our click share. Absolute share isn't available
-      (Search Console skips searches we didn't appear in; Google Trends has no absolute volume), so share is relative to
-      typical. A search counts twice when two of our pages show (0–3% here). Search Console omits rare ones.</p>
+      <p>Searches containing every word of one of the four terms, in any order, as Trends counts them. ${a.scope === "page"
+        ? "On page 1 nearly every such search shows us, so impressions ≈ searches and CTR is our click share."
+        : "Impressions are added up over the fire pages. A search that shows two of them counts twice, so impressions can run above the number of searches."}
+      Absolute share isn't available (Search Console skips searches we didn't appear in; Google Trends has no absolute
+      volume), so share is relative to typical. Search Console omits rare ones.</p>
       <h4>Terms for ${nm}</h4>
       <p>${a.geo[0].toUpperCase() + a.geo.slice(1)}: ${a.kws ? a.kws.map(k => `“${esc(k)}”`).join(", ") : "no Google Trends data for this area"}.</p>
       <h4>Coming later</h4>
@@ -675,5 +687,5 @@ function makeHealthTab(key, scope) {
 }
 
 tabHooks.hpage = makeHealthTab("hpage", "page");
-tabHooks.hall = makeHealthTab("hall", "all");
+tabHooks.hall = makeHealthTab("hall", "fire");
 })();

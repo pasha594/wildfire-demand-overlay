@@ -20,7 +20,7 @@ stored by this script.
 
 Two request shapes per day, because Google drops privacy-filtered queries
 whenever the query dimension is requested:
-    page_daily   dims date+page        -> complete totals (state series, state pages alone, homepage)
+    page_daily   dims date+page        -> complete totals (state series, state pages alone, fire pages alone, homepage)
     query_daily  dims date+query+page  -> query detail (city slices, top queries)
 Discover and Google News cannot be grouped by query, so they only get page_daily.
 
@@ -273,6 +273,7 @@ def export(con):
     states = collections.defaultdict(lambda: collections.defaultdict(blank))
     site = collections.defaultdict(blank)
     landing = collections.defaultdict(blank)
+    fire = collections.defaultdict(blank)   # fire pages only (web): per state, and "national" = every fire page
     for t, day, page, c, i, pos in con.execute(
             "SELECT search_type, date, page, clicks, impressions, position FROM page_daily WHERE date >= ?",
             (EXPORT_START,)):
@@ -280,8 +281,10 @@ def export(con):
         if k is None:
             continue
         lp = landing_of(page) if t == "web" else None
+        fp = t == "web" and page.startswith("fire/")
         for bucket in filter(None, [site[t], states[st_of(page)][t] if st_of(page) else None,
-                                    landing[lp] if lp else None]):
+                                    landing[lp] if lp else None, fire["national"] if fp else None,
+                                    fire[st_of(page)] if fp and st_of(page) else None]):
             bucket["c"][k] += c
             bucket["i"][k] += i
             bucket["pw"][k] += (pos or 0) * i
@@ -293,7 +296,8 @@ def export(con):
 
     # tracked searches (web): queries containing every word of one of an area's Google Trends demand terms, in any
     # order (the way Trends counts a term, e.g. "oregon wildfires 2026", "fires in oregon"), landing on the area's
-    # pages — scope "all" = the state's pages / the whole site, "page" = the state page / the homepage. Per term,
+    # pages — scope "all" = the state's pages / the whole site, "page" = the state page / the homepage, "fire" =
+    # the state's fire pages / every fire page. Per term,
     # plus "any" (a query matching several terms counts once). Summed over landing pages: when two of our pages
     # show in one search both count, which adds 0-3% here.
     term_toks = {a: [frozenset(re.findall(r"[a-z0-9]+", t)) for t in demand_terms(None if a == "national" else a)]
@@ -319,7 +323,7 @@ def export(con):
                 if not hits:
                     continue
                 on_page = lp == ("home" if area == "national" else area)
-                for scope in ("all", "page") if on_page else ("all",):
+                for scope in ("all", *(("page",) if on_page else ()), *(("fire",) if page.startswith("fire/") else ())):
                     for key in ("any", *hits):
                         b = tracked[(area, scope)][key]
                         b["c"][k] += c
@@ -516,7 +520,7 @@ def export(con):
     def tracked_out(area):
         """{terms, top_from, scope: {any, terms: [4], top: [[query, impressions, clicks] x 8, last 90 complete days]}}"""
         out = {"terms": demand_terms(None if area == "national" else area), "top_from": t90}
-        for scope in ("all", "page"):
+        for scope in ("all", "page", "fire"):
             b = tracked.get((area, scope))
             if not b:
                 continue
@@ -536,6 +540,8 @@ def export(con):
         out_states[s] = {"types": types, "metros": ms}
         if s in landing and (sp := finish(landing[s])):
             out_states[s]["state_page"] = sp
+        if s in fire and (fpg := finish(fire[s])):
+            out_states[s]["fire_pages"] = fpg
         out_states[s]["tracked"] = tracked_out(s)
 
 
@@ -550,6 +556,7 @@ def export(con):
                  "dates": dates},
         "site": {t: v for t in SEARCH_TYPES if (v := finish(site[t]))},
         "home": finish(landing["home"]) if "home" in landing else None,
+        "fire_pages": finish(fire["national"]) if "national" in fire else None,
         "tracked": tracked_out("national"),
         "states": out_states,
         "top_queries": top,

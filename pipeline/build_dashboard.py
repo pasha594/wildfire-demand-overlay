@@ -3,7 +3,7 @@
 Inputs: site_traffic.json (per-state daily users), trends_data.json (Google
 Trends, geo=US-{abbr}, in-state), trends_data_national.json (geo=US),
 trends_demand.json (the newer tabs' Google Trends terms), gsc_daily.json (Search Console).
-Output: dashboard.html. The "States in Play" and "Review Health" tabs' code lives in
+Output: dashboard.html. The "States in Play", "State Page Health" and "Fire Page Health" tabs' code lives in
 tabs/{states,health}.{js,css} and is inlined here. DASHBOARD_OUT / DASHBOARD_TABS env vars
 redirect the output / limit which tab files are inlined (for test builds).
 """
@@ -263,9 +263,9 @@ if gsc_raw:
 
     def tracked_align(tr):
         """tracked searches (queries containing all the words of one of the area's demand terms) on the
-        dashboard axis: {terms, topFrom, all|page: {any, terms: [4], top: [[query, impressions, clicks]]}}"""
+        dashboard axis: {terms, topFrom, all|page|fire: {any, terms: [4], top: [[query, impressions, clicks]]}}"""
         out = {"terms": tr["terms"], "topFrom": tr["top_from"]}
-        for scope in ("all", "page"):
+        for scope in ("all", "page", "fire"):
             if tr.get(scope):
                 out[scope] = {"any": galign(tr[scope]["any"]) if tr[scope]["any"] else None,
                               "terms": [galign(t) if t else None for t in tr[scope]["terms"]],
@@ -278,6 +278,8 @@ if gsc_raw:
         sp["gsc"] = {t: galign(v) for t, v in g["types"].items() if in_window(v)}
         if g.get("state_page"):
             sp["gscPage"] = galign(g["state_page"])   # the state's own page alone (web)
+        if g.get("fire_pages"):
+            sp["gscFire"] = galign(g["fire_pages"])   # the state's fire pages alone, no state page (web)
         if g.get("tracked"):
             sp["gscTracked"] = tracked_align(g["tracked"])
         for mp in sp["metros"]:
@@ -294,6 +296,7 @@ if gsc_raw:
         "topQueries": gsc_raw["top_queries"],
         "site": galign(gsc_raw["site"]["web"]) if gsc_raw["site"].get("web") else None,   # every page (web)
         "home": galign(gsc_raw["home"]) if gsc_raw.get("home") else None,                 # homepage alone (web)
+        "fireNational": galign(gsc_raw["fire_pages"]) if gsc_raw.get("fire_pages") else None,  # every fire page (web)
         "trackedNational": tracked_align(gsc_raw["tracked"]) if gsc_raw.get("tracked") else None,
     }
     print(f"search console: {gm['property']} through {gm['last_date']} (complete through {gm['last_complete_date']}), "
@@ -614,6 +617,12 @@ HTML = r"""<meta charset="utf-8">
   .panel h3, .ocol h3, .mcol h3 { font-family: var(--font-ui); font-size: var(--fs-h3); font-weight: 600; color: var(--ink);
     margin: 0 0 var(--sp-2); text-transform: none; letter-spacing: 0; }
   .tbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin: 0 0 var(--sp-5); }
+  /* the newer tabs' filter bars pin under the title and tabs, like the Overview's controls (desktop; phones scroll them away) */
+  @media (min-width: 701px) {
+    :is(#pane-states, #pane-hpage, #pane-hall) > .tbar { position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--top-h, 0px));
+      z-index: 5; margin-inline: calc(-1 * var(--sp-4)); padding: var(--sp-3) var(--sp-4); background: var(--bg);
+      border-bottom: 1px solid var(--border); }
+  }
   .tbar .tlabel { color: var(--muted); font-size: var(--fs-small); }
   .tabnotes { margin-top: var(--sp-5); color: var(--ink-2); font-size: 14px; line-height: 1.6; max-width: var(--read); }
   .tabnotes p { margin: 0 0 var(--sp-3); }
@@ -2761,9 +2770,9 @@ function makeRangePicker(host, opts) {
    the tab opens (build lazily on the first call), resize() when the window width changes while it's open. */
 const TABS = [
   { key: "main",   label: "Overview" },
-  { key: "states", label: "States in play" },
-  { key: "hpage",  label: "Review health: state page" },
-  { key: "hall",   label: "Review health: all pages" },
+  { key: "states", label: "States in Play" },
+  { key: "hpage",  label: "State Page Health" },
+  { key: "hall",   label: "Fire Page Health" },
 ];
 const tabHooks = {};
 let curTab = "main";

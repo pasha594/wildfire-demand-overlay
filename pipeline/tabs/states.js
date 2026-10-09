@@ -23,7 +23,7 @@
   ];
   const AREA = Object.fromEntries(AREAS.map(a => [a.key, a]));
   const COLS = [
-    { k: "name", label: "State", short: "State", tip: "Click a row to open Review health: all pages for that state" },
+    { k: "name", label: "State", short: "State", tip: "Click a row to open Fire Page Health for that state, which counts only its fire pages." },
     { k: "d", label: "Search demand", short: "Demand", tip: `Google Trends interest, averaged over the dates (each day is the mean of the 4 terms). National: ${NAT_KWS.join(", ")} (US). State: the same terms after the state's name, ${EX_KWS ? `e.g. ${EX_KWS.join(", ")}` : ST_KWS.join(", ")} (searches made in the state). Each area has its own 0–100 scale (100 = its busiest term-day since ${fdate(T0)}), so compare a state with itself across periods, not with other states. 0 = below Google's reporting threshold on every day. Grey italic = reported on fewer than half the days.` },
     { k: "i", label: "Impressions", short: "Impr.", tip: "Search Console impressions (web search), summed over the dates, for all of the state's pages: its state page plus its fire pages. National = the whole site." },
     { k: "ctr", label: "CTR", short: "CTR", tip: "Click-through rate: search traffic ÷ impressions" },
@@ -163,7 +163,7 @@
         <li><b>Avg position</b>: average position in Google results, weighted by impressions (1 = the top result).</li>
       </ul>
       <p>The Comparison table keeps the Top states row order, so the two tables line up row for row.
-      Click a row to open Review health: all pages for that state.</p>
+      Click a row to open Fire Page Health for that state, which counts only its fire pages.</p>
       <h4>Google Trends search terms</h4>
       <ul>
         <li><b>National</b>: ${kws(NAT_KWS)} (US&#8209;wide searches).</li>
@@ -202,6 +202,9 @@
       </div>
       <div class="tabnotes">${aboutHtml(gl)}</div>`;
     const bar = pane.querySelector(".tbar");
+    /* the bar's height while it's pinned (wide screens), so a focused row or control scrolls clear of it (states.css) */
+    const pinH = () => pane.style.setProperty("--tbar-h", (getComputedStyle(bar).position === "sticky" ? bar.offsetHeight : 0) + "px");
+    if (window.ResizeObserver) new ResizeObserver(pinH).observe(bar, { box: "border-box" });
     const preset = (key, label, days) => ({ key, label, get: () => [END - days + 1, END] });
     main = makeRangePicker(bar, {
       title: `Presets end at Search Console's last complete day${gl ? ` (${gl})` : ""}. It runs about 2 days behind. Pick any dates on the calendars.`,

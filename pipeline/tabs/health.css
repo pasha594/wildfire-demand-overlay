@@ -1,6 +1,18 @@
-  /* ---- Review Health tabs (both scopes) ---- */
+  /* ---- State Page Health and Fire Page Health tabs (both scopes) ---- */
   /* picker bar: the coverage sentence sits quietly on its own line under the controls */
   .tbar .hscope { flex-basis: 100%; margin: 0; }
+  /* wide screens pin the bar under the title and tabs: a focused chart or control scrolls clear of both
+     (--tbar-h = the bar's height while pinned, 0 on phones; set in health.js) */
+  :is(#pane-hpage, #pane-hall) > :not(.tbar) :is(a, button, input, select, summary, [tabindex]) {
+    scroll-margin-top: calc(var(--top-h, 0px) + var(--tbar-h, 0px) + var(--sp-2)); }
+  /* 701–799px: the bar is pinned but too narrow for the presets beside two calendars, so the date picker
+     puts its presets on a row above them and stays on screen */
+  @media (min-width: 701px) and (max-width: 799px) {
+    :is(#pane-hpage, #pane-hall) details.pop.dpick .popbody { flex-direction: column; }
+    :is(#pane-hpage, #pane-hall) details.pop.dpick .dpresets { flex-direction: row; flex-wrap: wrap; }
+    :is(#pane-hpage, #pane-hall) details.pop.dpick .dcals { border-left: 0; padding-left: 0;
+      border-top: 1px solid var(--border); padding-top: var(--sp-3); }
+  }
   .hnote { text-wrap: pretty; }
 
   /* two charts side by side; each chart's header / plot / note share rows, so a wrapped legend can't
@@ -81,5 +93,5 @@
   /* capture readouts: let a long row label wrap rather than push the readout past a phone's edge */
   #tip table.tt.hcap td.n { white-space: normal; min-width: 9em; }
   #tip table.tt.hcap td { vertical-align: top; }
-  /* a Review Health readout never runs past a phone's edge: 8px gutter each side (place() keeps left >= 8) */
+  /* a readout on these tabs never runs past a phone's edge: 8px gutter each side (place() keeps left >= 8) */
   #tip.htip { max-width: min(420px, calc(100vw - 16px)); }
