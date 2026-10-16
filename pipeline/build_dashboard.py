@@ -882,6 +882,11 @@ HTML = r"""<meta charset="utf-8">
   }
   #tip table.tt td.n { text-align: left; padding-left: 0; color: var(--ink-2); font-variant-numeric: normal; }
   #tip table.tt td.n span.sw { display: inline-flex; vertical-align: -1px; margin-right: 6px; }
+  /* a message spanning the whole table wraps; only number columns stay on one line */
+  #tip table.tt td[colspan] { white-space: normal; }
+  #tip .tsc { display: flex; align-items: baseline; gap: 6px; margin-top: var(--sp-2); padding-top: var(--sp-2);
+    border-top: 1px solid var(--line); color: var(--ink-2); }
+  #tip .tsc .sw { display: inline-flex; flex: none; transform: translateY(1px); }
   #tip table.tt td:not(.n) { font-weight: 600; }
   #tip table.tt .pos { color: var(--good); }
   #tip table.tt .zero { color: var(--muted); font-weight: 400; }
@@ -2425,11 +2430,12 @@ function renderMap(st, map) {
         });
       }
       const g7 = GSC ? gscWin(m.gsc && m.gsc[gscType], GSC_LAST, 7) : null;
-      if (g7 && g7.i > 0)
-        body += `<tr><td class="n" colspan="3" style="padding-top:6px"><span class="sw">${legendSwatch({ color: "var(--gi)" })}</span>Search Console, “${esc(m.city)}” queries, 7 days: <b>${fmt(g7.i)}</b> impressions, <b>${fmt(g7.c)}</b> clicks</td></tr>`;
+      /* below the table, so the sentence wraps instead of stretching the table past the readout's edge */
+      const gsc = g7 && g7.i > 0 ? `<div class="tsc"><span class="sw">${legendSwatch({ color: "var(--gi)" })}</span><span>Search Console,
+        “${esc(m.city)}” queries, 7 days: <b>${fmt(g7.i)}</b> impressions, <b>${fmt(g7.c)}</b> clicks</span></div>` : "";
       tip.innerHTML = `<div class="d">${m.name} metro</div>
         <table class="tt"><thead><tr><th></th><th>${fdate(DATA.dates[i])}</th><th>Change, 7 days</th></tr></thead>
-        <tbody>${body}</tbody></table>`;
+        <tbody>${body}</tbody></table>${gsc}`;
       tip.style.display = "block";
       const tw = tip.offsetWidth, th = tip.offsetHeight;
       let tx = e.clientX + 14, ty = e.clientY + 12;
