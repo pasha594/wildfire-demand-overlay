@@ -145,14 +145,31 @@ print(f"  {len(rows)} rows", flush=True)
 # ---- per-metro: true daily uniques for the state's pages near the metro ----
 metro_traffic = collections.defaultdict(dict)
 radius_m = int(RADIUS_MI * 1609.34)
+# a metro whose geo query keeps timing out keeps its previous run's series (or is left out) instead of
+# killing the run: the state-level numbers above are worth saving on their own
+try:
+    with open(OUT) as f:
+        prev_states = json.load(f).get("states", {})
+except (OSError, ValueError):
+    prev_states = {}
+metro_failed = []
 for state, metros in METROS.items():
     for m in metros:
-        rows = hogql(
-            f"SELECT toDate(timestamp) AS day, count(DISTINCT person_id) AS users "
-            f"FROM events WHERE {BASE_WHERE} AND {STATE_EXPR} = '{state}' "
-            f"AND greatCircleDistance(toFloat(properties.$geoip_longitude), "
-            f"toFloat(properties.$geoip_latitude), {m['lon']}, {m['lat']}) < {radius_m} "
-            f"GROUP BY day ORDER BY day", chunk_days=190)
+        try:
+            rows = hogql(
+                f"SELECT toDate(timestamp) AS day, count(DISTINCT person_id) AS users "
+                f"FROM events WHERE {BASE_WHERE} AND {STATE_EXPR} = '{state}' "
+                f"AND greatCircleDistance(toFloat(properties.$geoip_longitude), "
+                f"toFloat(properties.$geoip_latitude), {m['lon']}, {m['lat']}) < {radius_m} "
+                f"GROUP BY day ORDER BY day", chunk_days=190)
+        except Exception as e:
+            old = (prev_states.get(state, {}).get("metros") or {}).get(m["key"])
+            metro_failed.append(f"{state}/{m['key']}")
+            print(f"  {state}/{m['key']}: FAILED ({type(e).__name__}); "
+                  + ("keeping the previous run's series" if old else "left out"), flush=True)
+            if old:
+                metro_traffic[state][m["key"]] = dict(old, total=(old["total"] + [0] * len(dates))[:len(dates)])
+            continue
         series = [0.0] * len(dates)
         for day, users in rows:
             day = str(day)[:10]
@@ -178,4 +195,5 @@ out = {
 }
 with open(OUT, "w") as f:
     json.dump(out, f)
-print(f"wrote {OUT}: {len(dates)} days ({dates[0]}..{dates[-1]}), {len(state_total)} states")
+print(f"wrote {OUT}: {len(dates)} days ({dates[0]}..{dates[-1]}), {len(state_total)} states"
+      + (f"; {len(metro_failed)} metro queries failed: {', '.join(metro_failed)}" if metro_failed else ""))
