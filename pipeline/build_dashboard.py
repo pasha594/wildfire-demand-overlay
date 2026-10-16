@@ -77,20 +77,26 @@ def mode_payload(entry, total_series):
         return None
     kws = entry["keywords"]
     if entry["dates"] != dates:
+        # days the fetch doesn't cover are missing (None), not zero: an area kept from an earlier day's
+        # fetch (fetch_trends keeps it when Google throttles the refresh) simply lacks the newest day
         idx = {d: i for i, d in enumerate(entry["dates"])}
         for kw in kws:
             s = entry["series"][kw]
-            entry["series"][kw] = [s[idx[d]] if d in idx and idx[d] < len(s) else 0 for d in dates]
+            entry["series"][kw] = [s[idx[d]] if d in idx and idx[d] < len(s) else None for d in dates]
     kw_series = [entry["series"].get(k) or [0] * len(dates) for k in kws]
     best_kw, best_val, best_day = None, -1, 0
     for k, s in zip(kws, kw_series):
         for i, v in enumerate(s):
-            if v > best_val:
+            if v is not None and v > best_val:
                 best_kw, best_val, best_day = k, v, i
-    mean_kw = [sum(s[i] for s in kw_series) / len(kw_series) for i in range(len(dates))]
-    r = pearson(total_series, mean_kw) if total_series else None
+    def day_mean(i):
+        vals = [s[i] for s in kw_series if s[i] is not None]
+        return sum(vals) / len(vals) if vals else None
+    mean_kw = [day_mean(i) for i in range(len(dates))]
+    pairs = [(t, m) for t, m in zip(total_series or [], mean_kw) if m is not None]
+    r = pearson([t for t, _ in pairs], [m for _, m in pairs]) if total_series else None
     return {
-        "kwSeries": [[round(float(v), 1) for v in s] for s in kw_series],
+        "kwSeries": [[round(float(v), 1) if v is not None else None for v in s] for s in kw_series],
         "searchPeakDate": dates[best_day] if best_val > 0 else None,
         "searchPeakKw": best_kw if best_val > 0 else None,
         "r": round(r, 2) if r is not None else None,

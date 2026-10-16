@@ -10,7 +10,8 @@ import json, math, os
 
 import shapefile  # pyshp
 from shapely.geometry import shape as shp_shape, MultiPolygon, Polygon
-from shapely.ops import unary_union
+from shapely.ops import unary_union, transform
+import numpy as np
 
 from metros import METROS, STATE_ABBR
 
@@ -72,6 +73,12 @@ state_shapes = {}
 for sr in sf.shapeRecords():
     rec = dict(zip(fields, sr.record))
     state_shapes[rec["STUSPS"]] = shp_shape(sr.shape.__geo_interface__).buffer(0)
+# Alaska's Aleutians cross the 180th meridian: put them at -180..-190 so the state projects in one piece
+state_shapes["AK"] = transform(lambda x, y: (np.where(np.asarray(x) > 0, np.asarray(x) - 360, x), y), state_shapes["AK"])
+# DMAs that are a whole state but absent from the lower-48 Nielsen TopoJSON (Honolulu = all of Hawaii)
+WHOLE_STATE_DMA = {744: "HI"}
+for dma, ab in WHOLE_STATE_DMA.items():
+    dma_shapes.setdefault(dma, state_shapes[ab])
 
 def to_path(geom, project):
     """Multipolygon -> compact SVG path string."""

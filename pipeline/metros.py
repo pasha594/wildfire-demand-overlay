@@ -27,4 +27,12 @@ STATE_ABBR = {
     "wyoming": "WY", "oklahoma": "OK", "nevada": "NV", "texas": "TX",
     "wisconsin": "WI", "nebraska": "NE", "new-mexico": "NM",
     "south-dakota": "SD", "arkansas": "AR",
+    # added 2026-10-16: the remaining 29 states
+    "alabama": "AL", "alaska": "AK", "connecticut": "CT", "delaware": "DE", "hawaii": "HI",
+    "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS", "kentucky": "KY",
+    "louisiana": "LA", "maine": "ME", "maryland": "MD", "massachusetts": "MA", "mississippi": "MS",
+    "missouri": "MO", "new-hampshire": "NH", "new-jersey": "NJ", "new-york": "NY",
+    "north-carolina": "NC", "north-dakota": "ND", "ohio": "OH", "pennsylvania": "PA",
+    "rhode-island": "RI", "south-carolina": "SC", "tennessee": "TN", "vermont": "VT",
+    "virginia": "VA", "west-virginia": "WV",
 }

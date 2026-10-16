@@ -995,6 +995,649 @@
     "lat": 34.75,
     "lon": -92.29
    }
+  ],
+  "alabama": [
+   {
+    "key": "birmingham",
+    "name": "Birmingham",
+    "geo": "US-AL-630",
+    "dma": 630,
+    "city": "birmingham",
+    "lat": 33.52,
+    "lon": -86.8
+   },
+   {
+    "key": "huntsville-decatur-florence",
+    "name": "Huntsville\u2013Decatur\u2013Florence",
+    "geo": "US-AL-691",
+    "dma": 691,
+    "city": "huntsville",
+    "lat": 34.73,
+    "lon": -86.59
+   },
+   {
+    "key": "mobile-pensacola-ft-walton-beach",
+    "name": "Mobile\u2013Pensacola\u2013Ft. Walton Beach",
+    "geo": "US-AL-686",
+    "dma": 686,
+    "city": "mobile",
+    "lat": 30.69,
+    "lon": -88.04
+   }
+  ],
+  "alaska": [
+   {
+    "key": "anchorage",
+    "name": "Anchorage",
+    "geo": "US-AK-743",
+    "dma": 743,
+    "city": "anchorage",
+    "lat": 61.22,
+    "lon": -149.9
+   },
+   {
+    "key": "fairbanks",
+    "name": "Fairbanks",
+    "geo": "US-AK-745",
+    "dma": 745,
+    "city": "fairbanks",
+    "lat": 64.84,
+    "lon": -147.72
+   }
+  ],
+  "connecticut": [
+   {
+    "key": "hartford-new-haven",
+    "name": "Hartford\u2013New Haven",
+    "geo": "US-CT-533",
+    "dma": 533,
+    "city": "new haven",
+    "lat": 41.31,
+    "lon": -72.92
+   }
+  ],
+  "delaware": [
+   {
+    "key": "philadelphia",
+    "name": "Philadelphia",
+    "geo": "US-PA-504",
+    "dma": 504,
+    "city": "philadelphia",
+    "lat": 39.95,
+    "lon": -75.17
+   },
+   {
+    "key": "salisbury",
+    "name": "Salisbury",
+    "geo": "US-MD-576",
+    "dma": 576,
+    "city": "salisbury",
+    "lat": 38.36,
+    "lon": -75.6
+   }
+  ],
+  "hawaii": [
+   {
+    "key": "honolulu",
+    "name": "Honolulu",
+    "geo": "US-HI-744",
+    "dma": 744,
+    "city": "honolulu",
+    "lat": 21.31,
+    "lon": -157.86
+   }
+  ],
+  "illinois": [
+   {
+    "key": "chicago",
+    "name": "Chicago",
+    "geo": "US-IL-602",
+    "dma": 602,
+    "city": "chicago",
+    "lat": 41.88,
+    "lon": -87.63
+   },
+   {
+    "key": "st-louis",
+    "name": "St. Louis",
+    "geo": "US-MO-609",
+    "dma": 609,
+    "city": "st louis",
+    "lat": 38.63,
+    "lon": -90.2
+   },
+   {
+    "key": "peoria-bloomington",
+    "name": "Peoria\u2013Bloomington",
+    "geo": "US-IL-675",
+    "dma": 675,
+    "city": "peoria",
+    "lat": 40.69,
+    "lon": -89.59
+   }
+  ],
+  "indiana": [
+   {
+    "key": "indianapolis",
+    "name": "Indianapolis",
+    "geo": "US-IN-527",
+    "dma": 527,
+    "city": "indianapolis",
+    "lat": 39.77,
+    "lon": -86.16
+   },
+   {
+    "key": "ft-wayne",
+    "name": "Ft. Wayne",
+    "geo": "US-IN-509",
+    "dma": 509,
+    "city": "fort wayne",
+    "lat": 41.08,
+    "lon": -85.14
+   },
+   {
+    "key": "south-bend-elkhart",
+    "name": "South Bend\u2013Elkhart",
+    "geo": "US-IN-588",
+    "dma": 588,
+    "city": "south bend",
+    "lat": 41.68,
+    "lon": -86.25
+   }
+  ],
+  "iowa": [
+   {
+    "key": "des-moines-ames",
+    "name": "Des Moines\u2013Ames",
+    "geo": "US-IA-679",
+    "dma": 679,
+    "city": "des moines",
+    "lat": 41.59,
+    "lon": -93.62
+   },
+   {
+    "key": "cedar-rapids-waterloo-iowa-city-dubuque",
+    "name": "Cedar Rapids\u2013Waterloo\u2013Iowa City\u2013Dubuque",
+    "geo": "US-IA-637",
+    "dma": 637,
+    "city": "cedar rapids",
+    "lat": 41.98,
+    "lon": -91.67
+   },
+   {
+    "key": "davenport-rock-island-moline",
+    "name": "Davenport\u2013Rock Island\u2013Moline",
+    "geo": "US-IA-682",
+    "dma": 682,
+    "city": "davenport",
+    "lat": 41.52,
+    "lon": -90.58
+   }
+  ],
+  "kansas": [
+   {
+    "key": "kansas-city",
+    "name": "Kansas City",
+    "geo": "US-MO-616",
+    "dma": 616,
+    "city": "kansas city",
+    "lat": 39.1,
+    "lon": -94.58
+   },
+   {
+    "key": "wichita-hutchinson",
+    "name": "Wichita\u2013Hutchinson",
+    "geo": "US-KS-678",
+    "dma": 678,
+    "city": "wichita",
+    "lat": 37.69,
+    "lon": -97.34
+   },
+   {
+    "key": "topeka",
+    "name": "Topeka",
+    "geo": "US-KS-605",
+    "dma": 605,
+    "city": "topeka",
+    "lat": 39.05,
+    "lon": -95.68
+   }
+  ],
+  "kentucky": [
+   {
+    "key": "louisville",
+    "name": "Louisville",
+    "geo": "US-KY-529",
+    "dma": 529,
+    "city": "louisville",
+    "lat": 38.25,
+    "lon": -85.76
+   },
+   {
+    "key": "lexington",
+    "name": "Lexington",
+    "geo": "US-KY-541",
+    "dma": 541,
+    "city": "lexington",
+    "lat": 38.04,
+    "lon": -84.5
+   }
+  ],
+  "louisiana": [
+   {
+    "key": "new-orleans",
+    "name": "New Orleans",
+    "geo": "US-LA-622",
+    "dma": 622,
+    "city": "new orleans",
+    "lat": 29.95,
+    "lon": -90.07
+   },
+   {
+    "key": "baton-rouge",
+    "name": "Baton Rouge",
+    "geo": "US-LA-716",
+    "dma": 716,
+    "city": "baton rouge",
+    "lat": 30.45,
+    "lon": -91.15
+   },
+   {
+    "key": "shreveport",
+    "name": "Shreveport",
+    "geo": "US-LA-612",
+    "dma": 612,
+    "city": "shreveport",
+    "lat": 32.53,
+    "lon": -93.75
+   }
+  ],
+  "maine": [
+   {
+    "key": "portland-auburn",
+    "name": "Portland\u2013Auburn",
+    "geo": "US-ME-500",
+    "dma": 500,
+    "city": "portland",
+    "lat": 43.66,
+    "lon": -70.26
+   },
+   {
+    "key": "bangor",
+    "name": "Bangor",
+    "geo": "US-ME-537",
+    "dma": 537,
+    "city": "bangor",
+    "lat": 44.8,
+    "lon": -68.77
+   }
+  ],
+  "maryland": [
+   {
+    "key": "baltimore",
+    "name": "Baltimore",
+    "geo": "US-MD-512",
+    "dma": 512,
+    "city": "baltimore",
+    "lat": 39.29,
+    "lon": -76.61
+   },
+   {
+    "key": "washington-hagerstown",
+    "name": "Washington DC\u2013Hagerstown",
+    "geo": "US-DC-511",
+    "dma": 511,
+    "city": "washington dc",
+    "lat": 38.91,
+    "lon": -77.04
+   }
+  ],
+  "massachusetts": [
+   {
+    "key": "boston-manchester",
+    "name": "Boston\u2013Manchester",
+    "geo": "US-MA-506",
+    "dma": 506,
+    "city": "boston",
+    "lat": 42.36,
+    "lon": -71.06
+   },
+   {
+    "key": "springfield-holyoke",
+    "name": "Springfield\u2013Holyoke",
+    "geo": "US-MA-543",
+    "dma": 543,
+    "city": "springfield",
+    "lat": 42.1,
+    "lon": -72.59
+   }
+  ],
+  "mississippi": [
+   {
+    "key": "jackson",
+    "name": "Jackson",
+    "geo": "US-MS-718",
+    "dma": 718,
+    "city": "jackson",
+    "lat": 32.3,
+    "lon": -90.18
+   },
+   {
+    "key": "biloxi-gulfport",
+    "name": "Biloxi\u2013Gulfport",
+    "geo": "US-MS-746",
+    "dma": 746,
+    "city": "gulfport",
+    "lat": 30.37,
+    "lon": -89.09
+   }
+  ],
+  "missouri": [
+   {
+    "key": "st-louis",
+    "name": "St. Louis",
+    "geo": "US-MO-609",
+    "dma": 609,
+    "city": "st louis",
+    "lat": 38.63,
+    "lon": -90.2
+   },
+   {
+    "key": "kansas-city",
+    "name": "Kansas City",
+    "geo": "US-MO-616",
+    "dma": 616,
+    "city": "kansas city",
+    "lat": 39.1,
+    "lon": -94.58
+   },
+   {
+    "key": "springfield",
+    "name": "Springfield",
+    "geo": "US-MO-619",
+    "dma": 619,
+    "city": "springfield",
+    "lat": 37.21,
+    "lon": -93.29
+   }
+  ],
+  "new-hampshire": [
+   {
+    "key": "boston-manchester",
+    "name": "Boston\u2013Manchester",
+    "geo": "US-MA-506",
+    "dma": 506,
+    "city": "boston",
+    "lat": 42.36,
+    "lon": -71.06
+   }
+  ],
+  "new-jersey": [
+   {
+    "key": "new-york",
+    "name": "New York",
+    "geo": "US-NY-501",
+    "dma": 501,
+    "city": "new york",
+    "lat": 40.71,
+    "lon": -74.01
+   },
+   {
+    "key": "philadelphia",
+    "name": "Philadelphia",
+    "geo": "US-PA-504",
+    "dma": 504,
+    "city": "philadelphia",
+    "lat": 39.95,
+    "lon": -75.17
+   }
+  ],
+  "new-york": [
+   {
+    "key": "new-york",
+    "name": "New York",
+    "geo": "US-NY-501",
+    "dma": 501,
+    "city": "new york",
+    "lat": 40.71,
+    "lon": -74.01
+   },
+   {
+    "key": "buffalo",
+    "name": "Buffalo",
+    "geo": "US-NY-514",
+    "dma": 514,
+    "city": "buffalo",
+    "lat": 42.89,
+    "lon": -78.88
+   },
+   {
+    "key": "albany-schenectady-troy",
+    "name": "Albany\u2013Schenectady\u2013Troy",
+    "geo": "US-NY-532",
+    "dma": 532,
+    "city": "albany",
+    "lat": 42.65,
+    "lon": -73.76
+   }
+  ],
+  "north-carolina": [
+   {
+    "key": "charlotte",
+    "name": "Charlotte",
+    "geo": "US-NC-517",
+    "dma": 517,
+    "city": "charlotte",
+    "lat": 35.23,
+    "lon": -80.84
+   },
+   {
+    "key": "raleigh-durham-fayetteville",
+    "name": "Raleigh\u2013Durham\u2013Fayetteville",
+    "geo": "US-NC-560",
+    "dma": 560,
+    "city": "raleigh",
+    "lat": 35.78,
+    "lon": -78.64
+   },
+   {
+    "key": "greensboro-high-point-winston-salem",
+    "name": "Greensboro\u2013High Point\u2013Winston Salem",
+    "geo": "US-NC-518",
+    "dma": 518,
+    "city": "greensboro",
+    "lat": 36.07,
+    "lon": -79.79
+   }
+  ],
+  "north-dakota": [
+   {
+    "key": "fargo-valley-city",
+    "name": "Fargo\u2013Valley City",
+    "geo": "US-ND-724",
+    "dma": 724,
+    "city": "fargo",
+    "lat": 46.88,
+    "lon": -96.79
+   },
+   {
+    "key": "minot-bismarck-dickinson-williston",
+    "name": "Minot\u2013Bismarck\u2013Dickinson\u2013Williston",
+    "geo": "US-ND-687",
+    "dma": 687,
+    "city": "bismarck",
+    "lat": 46.81,
+    "lon": -100.78
+   }
+  ],
+  "ohio": [
+   {
+    "key": "cleveland-akron-canton",
+    "name": "Cleveland\u2013Akron\u2013Canton",
+    "geo": "US-OH-510",
+    "dma": 510,
+    "city": "cleveland",
+    "lat": 41.5,
+    "lon": -81.69
+   },
+   {
+    "key": "columbus",
+    "name": "Columbus",
+    "geo": "US-OH-535",
+    "dma": 535,
+    "city": "columbus",
+    "lat": 39.96,
+    "lon": -83.0
+   },
+   {
+    "key": "cincinnati",
+    "name": "Cincinnati",
+    "geo": "US-OH-515",
+    "dma": 515,
+    "city": "cincinnati",
+    "lat": 39.1,
+    "lon": -84.51
+   }
+  ],
+  "pennsylvania": [
+   {
+    "key": "philadelphia",
+    "name": "Philadelphia",
+    "geo": "US-PA-504",
+    "dma": 504,
+    "city": "philadelphia",
+    "lat": 39.95,
+    "lon": -75.17
+   },
+   {
+    "key": "pittsburgh",
+    "name": "Pittsburgh",
+    "geo": "US-PA-508",
+    "dma": 508,
+    "city": "pittsburgh",
+    "lat": 40.44,
+    "lon": -80.0
+   }
+  ],
+  "rhode-island": [
+   {
+    "key": "providence-new-bedford",
+    "name": "Providence\u2013New Bedford",
+    "geo": "US-RI-521",
+    "dma": 521,
+    "city": "providence",
+    "lat": 41.82,
+    "lon": -71.41
+   }
+  ],
+  "south-carolina": [
+   {
+    "key": "greenville-spartanburg-asheville-anderson",
+    "name": "Greenville\u2013Spartanburg\u2013Asheville\u2013Anderson",
+    "geo": "US-SC-567",
+    "dma": 567,
+    "city": "greenville",
+    "lat": 34.85,
+    "lon": -82.4
+   },
+   {
+    "key": "columbia",
+    "name": "Columbia",
+    "geo": "US-SC-546",
+    "dma": 546,
+    "city": "columbia",
+    "lat": 34.0,
+    "lon": -81.03
+   },
+   {
+    "key": "charleston",
+    "name": "Charleston",
+    "geo": "US-SC-519",
+    "dma": 519,
+    "city": "charleston",
+    "lat": 32.78,
+    "lon": -79.93
+   }
+  ],
+  "tennessee": [
+   {
+    "key": "nashville",
+    "name": "Nashville",
+    "geo": "US-TN-659",
+    "dma": 659,
+    "city": "nashville",
+    "lat": 36.16,
+    "lon": -86.78
+   },
+   {
+    "key": "memphis",
+    "name": "Memphis",
+    "geo": "US-TN-640",
+    "dma": 640,
+    "city": "memphis",
+    "lat": 35.15,
+    "lon": -90.05
+   },
+   {
+    "key": "knoxville",
+    "name": "Knoxville",
+    "geo": "US-TN-557",
+    "dma": 557,
+    "city": "knoxville",
+    "lat": 35.96,
+    "lon": -83.92
+   }
+  ],
+  "vermont": [
+   {
+    "key": "burlington-plattsburgh",
+    "name": "Burlington\u2013Plattsburgh",
+    "geo": "US-VT-523",
+    "dma": 523,
+    "city": "burlington",
+    "lat": 44.48,
+    "lon": -73.21
+   }
+  ],
+  "virginia": [
+   {
+    "key": "washington-hagerstown",
+    "name": "Washington DC\u2013Hagerstown",
+    "geo": "US-DC-511",
+    "dma": 511,
+    "city": "washington dc",
+    "lat": 38.91,
+    "lon": -77.04
+   },
+   {
+    "key": "norfolk-portsmouth-newport-news",
+    "name": "Norfolk\u2013Portsmouth\u2013Newport News",
+    "geo": "US-VA-544",
+    "dma": 544,
+    "city": "virginia beach",
+    "lat": 36.85,
+    "lon": -75.98
+   },
+   {
+    "key": "richmond-petersburg",
+    "name": "Richmond\u2013Petersburg",
+    "geo": "US-VA-556",
+    "dma": 556,
+    "city": "richmond",
+    "lat": 37.54,
+    "lon": -77.44
+   }
+  ],
+  "west-virginia": [
+   {
+    "key": "charleston-huntington",
+    "name": "Charleston\u2013Huntington",
+    "geo": "US-WV-564",
+    "dma": 564,
+    "city": "charleston",
+    "lat": 38.35,
+    "lon": -81.63
+   }
   ]
  }
 }

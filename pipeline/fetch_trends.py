@@ -17,9 +17,9 @@ terms share a single normalization (top term-day = 100; values never exceed
 
 Window: Feb 26 of the year through "today" shifted into that year. Progress is
 saved after every job (resumable); a stored file with a different timeframe or
-keyword version is wiped and refetched (demand mode: when only the window moved,
-each area keeps its previous fetch until it is refetched, so throttling leaves it
-stale rather than missing). A geo Google rejects outright is skipped with a
+keyword version is wiped and refetched; when only the window moved, each area
+keeps its previous fetch until it is refetched, so throttling leaves it a day
+stale rather than missing. A geo Google rejects outright is skipped with a
 warning instead of killing the run.
 """
 import datetime, json, os, random, sys, time
@@ -103,13 +103,14 @@ def main():
         with open(OUT) as f:
             data = json.load(f)
     meta = data.get("meta", {})
-    if meta and MODE == "demand" and meta.get("kwv") == KWV and meta.get("timeframe") != TIMEFRAME:
-        # demand runs last in the bot and is the first to be throttled: keep each area's previous fetch
-        # (its own request, its own scale) until it is refetched, so a 429 leaves it a day stale, not missing
-        print(f"stored window {meta.get('timeframe')} != {TIMEFRAME}; refetching each area, keeping the old one until then",
+    stored_tf = meta.get("timeframe")   # entries without their own "timeframe" were fetched for this window
+    if meta and meta.get("kwv") == KWV and stored_tf != TIMEFRAME:
+        # each area is its own request on its own scale, so keep its previous fetch until it is refetched:
+        # a throttled run (429s) then leaves some areas a day stale instead of missing
+        print(f"stored window {stored_tf} != {TIMEFRAME}; refetching each area, keeping the old one until then",
               flush=True)
         meta["timeframe"] = TIMEFRAME
-    elif meta and (meta.get("timeframe") != TIMEFRAME or meta.get("kwv") != KWV):
+    elif meta and meta.get("kwv") != KWV:
         print(f"stored meta {meta.get('timeframe')}/kwv{meta.get('kwv')} != "
               f"{TIMEFRAME}/kwv{KWV}; starting fresh", flush=True)
         data = {}
@@ -119,7 +120,7 @@ def main():
 
     for job_key, state, geo, label, city in jobs:
         prev = data.get("states", {}).get(job_key)
-        if prev and prev.get("timeframe", TIMEFRAME if MODE != "demand" else None) == TIMEFRAME:
+        if prev and (prev.get("timeframe") or stored_tf) == TIMEFRAME:
             print(f"{job_key}: already fetched, skipping", flush=True)
             continue
         kws = keywords(state, city)
