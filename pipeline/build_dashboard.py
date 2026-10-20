@@ -2048,13 +2048,13 @@ function placeTip(e) {
 const PHONE_Q = matchMedia("(max-width: 700px)");
 function buildOverview() {
   const sec = document.getElementById("overview");
-  const healths = DATA.states.map(healthOf);
-  if (!healths.some(Boolean)) { sec.hidden = true; return; }
+  const healths = overviewHealths();
+  if (!DATA.states.map(healthOf).some(Boolean)) { sec.hidden = true; return; }
   sec.hidden = false;
   const w = healthWin();
   const gSpan = GSC && w.g ? spanText(w.a, w.g.b) : null;
   document.getElementById("osub").textContent =
-    `Are our visits from search keeping up with search demand? Each state over ${spanText(w.a, w.b)} (${w.n} complete day${w.n > 1 ? "s" : ""}), compared with the ${daysTxt(w.n)} before.${w.a < prevNeed(w.n) ? " The data has no earlier days, so nothing can be judged. Pick a shorter range." : ""}`;
+    `Are our visits from search keeping up with search demand? Each state over ${spanText(w.a, w.b)} (${w.n} complete day${w.n > 1 ? "s" : ""}), compared with the ${daysTxt(w.n)} before.${w.a < prevNeed(w.n) ? " The data has no earlier days, so nothing can be judged. Pick a shorter range." : ""}${filterName() ? ` Showing ${filterName()} only; choose All states at the top to compare.` : ""}`;
 
   const hs = healths.filter(Boolean);
   const by = st => hs.filter(h => h.status === st);
@@ -2062,14 +2062,14 @@ function buildOverview() {
   const hasG = GSC && hs.some(h => h.g);
 
   /* the status counts, most actionable first */
-  let sum = `<span class="slead">${hs.length} state${hs.length === 1 ? "" : "s"}</span>`;
+  let sum = `<span class="slead">${filterName() ? esc(filterName()) : `${hs.length} state${hs.length === 1 ? "" : "s"}`}</span>`;
   [["miss", "missing demand"], ["track", "tracking"], ["out", "outperforming"], ["low", "can't judge yet"]].forEach(([k, l]) => {
     const n = by(k).length;
     if (n) sum += k === "low"
       ? `<span class="pill ${STATUS[k].cls} sumlow" tabindex="0" role="button" aria-label="${n} can't judge yet: show why">${n} ${l}</span>`
       : `<span class="pill ${STATUS[k].cls}">${n} ${l}</span>`;
   });
-  if (!miss.length) sum += `<span class="snone">No state is missing demand.</span>`;
+  if (!miss.length && !filterName()) sum += `<span class="snone">No state is missing demand.</span>`;
   document.getElementById("ssum").innerHTML = sum;
   const lowPill = document.querySelector("#ssum .sumlow");
   if (lowPill) {
@@ -2107,7 +2107,7 @@ function buildOverview() {
         ${keyFirst ? keyTd(h) + stTd(h) : stTd(h) + keyTd(h)}
         ${h.status === "miss" ? `<td class="bad">${fmt(h.missed)}</td>` : `<td class="lbl">–</td>`}
         <td class="kw why">${!hasG ? "" : h.status === "miss" ? whyOf(h) : gscRead(h)}</td></tr>`).join("") + `</tbody></table>`)
-    : `<div class="mempty">No state has enough search and traffic over these dates to judge.</div>`;
+    : `<div class="mempty">${filterName() ? `${filterName()} doesn't have` : "No state has"} enough search and traffic over these dates to judge.</div>`;
 
   const low = by("low");
   if (low.length)
@@ -2160,7 +2160,7 @@ function buildOverview() {
     qsel.innerHTML = Object.entries(QPRESETS).filter(([k]) => k === "dc" || hasG)
       .map(([k, v]) => `<option value="${k}">${v.label}</option>`).join("");
     qsel.value = qpreset;
-    qsel.addEventListener("change", e => { qpreset = e.target.value; renderQuad(DATA.states.map(healthOf)); });
+    qsel.addEventListener("change", e => { qpreset = e.target.value; renderQuad(overviewHealths()); });
   }
   renderQuad(healths);
 
@@ -2237,7 +2237,7 @@ function renderQuad(healths) {
   if (!pts.length) {
     document.getElementById("oquad").innerHTML = `<div class="mempty">${qpreset !== "dc" && !gTxt
       ? "Search Console has no complete days in these dates yet. It runs about two days behind."
-      : "No state has enough data over these dates to plot."}</div>`;
+      : `${filterName() ? `${filterName()} doesn't have` : "No state has"} enough data over these dates to plot.`}</div>`;
     return;
   }
   const allLifts = pts.flatMap(p => [p.x, p.y]).filter(v => v > 0);
@@ -2308,7 +2308,13 @@ const mapEl = document.createElement("div");
 mapEl.className = "card mapcard";
 mapEl.hidden = true;
 
+/* the Overview's summary sections (SEO health table + quadrant, metros surging) follow the state filter too */
+const inFilter = st => stateFilter === "-1" || st.key === stateFilter;
+const filterName = () => stateFilter === "-1" ? null : (DATA.states.find(s => s.key === stateFilter) || {}).name;
+const overviewHealths = () => DATA.states.filter(inFilter).map(healthOf);
 function applyStateFilter() {
+  buildOverview();
+  buildMovers();
   document.querySelectorAll(".card[data-si]").forEach(card => {
     const st = DATA.states[+card.dataset.si];
     card.hidden = stateFilter !== "-1" && st.key !== stateFilter;
@@ -2476,9 +2482,9 @@ function allMetros() {
    ~14 days that Google Trends reports consistently; the term must average 5+ this week */
 const SURGE_WIN = 7, SURGE_FLOOR = 5, SURGE_MIN = 1.5;
 function buildMovers() {
-  const metros = allMetros();
+  const all = allMetros(), metros = all.filter(e => inFilter(e.st));
   const sec = document.getElementById("movers");
-  if (!metros.length) { sec.hidden = true; return; }
+  if (!all.length) { sec.hidden = true; return; }
   sec.hidden = false;
   const end = N - 2, prevEnd = end - SURGE_WIN;
   const kwFilter = +document.getElementById("mkw").value;
@@ -2525,7 +2531,7 @@ function buildMovers() {
         <td>${v(r.tPrev)} → ${v(r.tNow)}</td>
         <td class="stcell"><span class="pill ${r.captured ? "st-out" : "st-miss"}">${r.captured ? "Capturing" : "Not capturing"}</span></td></tr>`).join("") +
       `</tbody></table>`)
-    : `<div class="mempty">No metro's search jumped 1.5× or more this week with meaningful volume.</div>`;
+    : `<div class="mempty">No ${filterName() ? filterName() + " " : ""}metro's search jumped 1.5× or more this week with meaningful volume.</div>`;
   wireHScroll(document.getElementById("msurge"));
 
   sec.querySelectorAll(".mrow").forEach(row => {
@@ -2859,7 +2865,7 @@ function showTab(key) {
   }
   try { localStorage.setItem("wdo-tab", key); } catch (e) {}
   try { history.replaceState(null, "", "#" + key); } catch (e) {}
-  if (key === "main") { if (chartGeom().w !== renderedW) renderAll(); if (quadW() !== renderedQW) renderQuad(DATA.states.map(healthOf)); }
+  if (key === "main") { if (chartGeom().w !== renderedW) renderAll(); if (quadW() !== renderedQW) renderQuad(overviewHealths()); }
   else if (tabHooks[key] && tabHooks[key].show) tabHooks[key].show();
 }
 function initTabs() {
@@ -2894,7 +2900,7 @@ let resizeRaf = 0;
 addEventListener("resize", () => {
   cancelAnimationFrame(resizeRaf);
   resizeRaf = requestAnimationFrame(() => {
-    if (curTab === "main") { if (chartGeom().w !== renderedW) renderAll(); if (quadW() !== renderedQW) renderQuad(DATA.states.map(healthOf)); }
+    if (curTab === "main") { if (chartGeom().w !== renderedW) renderAll(); if (quadW() !== renderedQW) renderQuad(overviewHealths()); }
     else if (tabHooks[curTab] && tabHooks[curTab].resize) tabHooks[curTab].resize();
   });
 });
