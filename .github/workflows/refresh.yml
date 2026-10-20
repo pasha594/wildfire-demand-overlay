@@ -75,4 +75,6 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add -A
           git commit -m "Scheduled data refresh" || echo "no changes to commit"
-          git push
+          # the daily Search Console sync (run on the maintainer's Mac) can push pipeline/gsc_daily.json while
+          # this run is building; it touches no file this step commits, so rebase onto it and push once more
+          git push || { git pull --rebase && git push; }
