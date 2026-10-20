@@ -43,7 +43,8 @@ RETENTION_DAYS = 486                     # Search Console keeps ~16 months
 DEFAULT_DAYS = 7
 PAGE_SIZE = 25000
 EXPORT_START = "2026-02-26"              # dashboard window start
-TOP_N = 8                                # opportunity rows shown
+TOP_N = 8                                # opportunity rows the page shows unfiltered (every ranked page is exported,
+                                         # so the state filter can list a state's own pages)
 WIN = 14                                 # dashboard health window (days)
 TARGET_POS = 5                           # "if this page-2 query ranked here" benchmark
 BEST_MIN_IMPR = 20                       # "best position": only queries with this many impressions in the window
@@ -452,7 +453,7 @@ def export(con):
                      "pos0": round(ppos0, 1) if ppos0 is not None else None, "pot": round(wk, 1), "tags": tags,
                      "n": len(g["q"]), "queries": sorted(g["q"], key=lambda x: -x["pot"])[:6]})
     rows.sort(key=lambda r: -r["pot"])
-    top = {"web": {"groups": rows[:TOP_N], "curve": {k: round(v, 4) for k, v in curve.items()},
+    top = {"web": {"groups": rows, "show": TOP_N, "curve": {k: round(v, 4) for k, v in curve.items()},
                    "automated": sorted(automated, key=lambda q: -q28[q][1])[:10],
                    "automated_impr": sum(q28[q][1] for q in automated)}}
     log.info("top opportunities: %d pages ranked; %d likely-automated queries excluded (%d impressions)",

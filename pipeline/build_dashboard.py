@@ -2336,6 +2336,7 @@ const overviewHealths = () => DATA.states.filter(inFilter).map(healthOf);
 function applyStateFilter() {
   buildOverview();
   buildMovers();
+  buildTopQueries();
   document.querySelectorAll(".card[data-si]").forEach(card => {
     const st = DATA.states[+card.dataset.si];
     card.hidden = stateFilter !== "-1" && st.key !== stateFilter;
@@ -2596,8 +2597,10 @@ function buildTopQueries() {
   const tq = GSC && GSC.topQueries && GSC.topQueries.web;
   if (!tq || !tq.groups) { sec.hidden = true; return; }
   sec.hidden = false;
+  /* every ranked page is exported: all states show the top few, a picked state shows its own */
+  const G = tq.groups.filter(g => stateFilter === "-1" || g.state === stateFilter).slice(0, stateFilter === "-1" ? (tq.show || 8) : 20);
   document.getElementById("tqnote").textContent =
-    `Pages that could earn more clicks from searches they already show up in, biggest gain first. Google web search, ${fdate(GSC.topWindow[0])} – ${fdate(GSC.topWindow[1])}, compared with the ${WIN} days before.`;
+    `Pages that could earn more clicks from searches they already show up in, biggest gain first. Google web search, ${fdate(GSC.topWindow[0])} – ${fdate(GSC.topWindow[1])}, compared with the ${WIN} days before.${filterName() ? ` Showing ${filterName()} only.` : ""}`;
   const known = new Set(DATA.states.map(x => x.key));
   const TAG = { "page 2+": "st-miss", "weak snippet": "st-low", "new demand": "st-track", "old page": "st-low" };
   const trend = g => {
@@ -2610,10 +2613,10 @@ function buildTopQueries() {
   const ph = PHONE_Q.matches;
   const potCol = '<col style="width:96px">', potTh = '<th>Extra clicks<span class="thsub">per week</span></th>';
   const potTd = g => `<td class="xv">${fmt(g.pot)}</td>`;
-  document.getElementById("tqlist").innerHTML = tq.groups.length
+  document.getElementById("tqlist").innerHTML = G.length
     ? hwrap(`<table class="mtab tqtab"><colgroup><col style="width:24%">${ph ? potCol : ""}<col><col style="width:84px"><col style="width:124px">${ph ? "" : potCol}<col style="width:200px"></colgroup>
        <thead><tr><th class="l">Page</th>${ph ? potTh : ""}<th class="l">Biggest query</th><th class="l">Queries</th><th>Page impressions<span class="thsub">last ${WIN} days</span></th>${ph ? "" : potTh}<th class="l">Reason</th></tr></thead>` +
-      tq.groups.map((g, gi) => `<tbody class="tqg">
+      G.map((g, gi) => `<tbody class="tqg">
         <tr class="${known.has(g.state) ? "mrow tqrow" : "tqrow-x"}" data-key="${g.state || ""}" data-gi="${gi}" tabindex="0">
           <td class="mn">${esc(g.label)}${g.state_label ? `<span class="ab">${g.state_label}</span>` : ""}</td>
           ${ph ? potTd(g) : ""}
@@ -2638,7 +2641,7 @@ function buildTopQueries() {
           ${g.n > g.queries.length ? `<div class="qmore lbl">+${fmt(g.n - g.queries.length)} smaller queries not shown</div>` : ""}
         </td></tr>
         </tbody>`).join("") + `</table>`)
-    : `<div class="mempty">No page has a meaningful click opportunity right now.</div>`;
+    : `<div class="mempty">${filterName() ? `No ${esc(filterName())} page` : "No page"} has a meaningful click opportunity right now (3 or more extra clicks a week).</div>`;
   wireHScroll(document.getElementById("tqlist"));
 
   const tbl = document.getElementById("tqlist");
@@ -2649,7 +2652,7 @@ function buildTopQueries() {
     tbl.querySelectorAll(`tr.sub[data-gi="${btn.dataset.gi}"]`).forEach(r => { r.hidden = !open; });
   }));
   tbl.querySelectorAll("tr.tqrow, tr.tqrow-x").forEach(row => {
-    const g = tq.groups[+row.dataset.gi];
+    const g = G[+row.dataset.gi];
     if (row.classList.contains("tqrow")) {
       row.addEventListener("click", e => { if (!e.target.closest("button")) openState(row.dataset.key); });
       row.addEventListener("keydown", e => {
