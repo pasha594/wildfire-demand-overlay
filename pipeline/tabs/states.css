@@ -33,9 +33,17 @@
 
   /* ---- the two tables ---- */
   table.sttab { min-width: 470px; }
-  .sttab col.c0 { width: 20%; } .sttab col.c1 { width: 16%; } .sttab col.c2 { width: 20%; }
-  .sttab col.c3 { width: 12%; } .sttab col.c4 { width: 16%; } .sttab col.c5 { width: 16%; }
+  .sttab col.c0 { width: 18%; } .sttab col.c1 { width: 14%; } .sttab col.c2 { width: 17%; }
+  .sttab col.c3 { width: 11%; } .sttab col.c4 { width: 14%; } .sttab col.c5 { width: 13%; } .sttab col.c6 { width: 13%; }
   .sttab .ls { display: none; }
+  /* side by side (or on a narrow stacked screen), a table is too narrow for seven full headers: headers
+     switch to their short labels (the header's title still gives the full name); state names keep full width */
+  @media (min-width: 1150px) and (max-width: 1599px), (min-width: 561px) and (max-width: 760px) {
+    .sttab th .lf { display: none; }
+    .sttab th .ls { display: inline; }
+    .sttab col.c0 { width: 20%; } .sttab col.c1 { width: 15%; } .sttab col.c2 { width: 15%; }
+    .sttab col.c3 { width: 10%; } .sttab col.c4 { width: 13%; } .sttab col.c5 { width: 13.5%; } .sttab col.c6 { width: 13.5%; }
+  }
   .sttab th { white-space: normal; }
   .sttab th[title] { cursor: help; }
   /* group captions ("Google Trends", "Search Console"): quiet text over a soft rule spanning their columns */
@@ -75,8 +83,8 @@
     .sttab th, .sttab td { padding-left: 6px; }
     .sttab th.l, .sttab td.mn { padding-left: 0; }
     .sttab td { padding-top: 8px; padding-bottom: 8px; }
-    .sttab col.c0 { width: 13.5%; } .sttab col.c1 { width: 20.5%; } .sttab col.c2 { width: 19.5%; }
-    .sttab col.c3 { width: 14%; } .sttab col.c4 { width: 18%; } .sttab col.c5 { width: 14.5%; }
+    .sttab col.c0 { width: 12%; } .sttab col.c1 { width: 17%; } .sttab col.c2 { width: 17%; }
+    .sttab col.c3 { width: 12%; } .sttab col.c4 { width: 15%; } .sttab col.c5 { width: 13.5%; } .sttab col.c6 { width: 13.5%; }
     .sttab tr.grp th { font-size: 12px; }
     .sttab tr.grp th.gt span { margin-left: -38px; }
     .sthead .dpick { margin-left: 0; }

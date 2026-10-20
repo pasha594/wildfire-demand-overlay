@@ -28,13 +28,14 @@
     { k: "i", label: "Impressions", short: "Impr.", tip: "Search Console impressions (web search), summed over the dates, for the state page and all the state's fire pages. National = the whole site." },
     { k: "ctr", label: "CTR", short: "CTR", tip: "Click-through rate: search traffic ÷ impressions" },
     { k: "c", label: "Search traffic", short: "Traffic", tip: "Search Console clicks (web search), summed over the dates, for the same pages" },
+    { k: "best", label: "Best position", short: "Best", tip: "The best position any one search reached during these dates: each day's value is a query's average position over the 7 days ending that day, among queries with at least 20 impressions in those 7 days (brand and likely-automated queries left out), the same measure as the Overview charts. Hover a value for the query. National = the best across all states." },
     { k: "pos", label: "Avg position", short: "Pos.", tip: "Average position in Google results over the dates, weighted by impressions (1 = the top result)" },
   ];
   let sort = { k: "i", dir: -1 }, main, cmp, built = false;
   /* the Top states sentence names the current order, so it stays true after a re-rank */
-  const RANK = { d: "search demand", i: "impressions", ctr: "CTR", c: "search traffic", pos: "avg position" };
+  const RANK = { d: "search demand", i: "impressions", ctr: "CTR", c: "search traffic", best: "best position", pos: "avg position" };
   const rankTxt = () => sort.k === "name" ? `listed ${sort.dir === 1 ? "A to Z" : "Z to A"}`
-    : `ranked by ${RANK[sort.k]}${sort.k === "pos" ? (sort.dir === 1 ? ", best first" : ", worst first") : sort.dir === 1 ? ", lowest first" : ""}`;
+    : `ranked by ${RANK[sort.k]}${sort.k === "pos" || sort.k === "best" ? (sort.dir === 1 ? ", best first" : ", worst first") : sort.dir === 1 ? ", lowest first" : ""}`;
   try {
     const s = JSON.parse(localStorage.getItem("wdo-states-sort") || "null");
     if (s && COLS.some(c => c.k === s.k) && (s.dir === 1 || s.dir === -1)) sort = s;
@@ -44,10 +45,23 @@
     let sum = 0, n = 0, nz = 0;
     if (a.dem) for (let i = r0; i <= r1; i++) if (a.dem[i] != null) { sum += a.dem[i]; n++; if (a.dem[i] > 0) nz++; }
     const g = a.gs && r1 >= r0 ? gscWin(a.gs, r1, r1 - r0 + 1) : null;
+    /* best position: the lowest daily "best 7-day position" in the dates, with its query */
+    let best = null;
+    if (a.gs && a.gs.b) for (let i = r0; i <= Math.min(r1, GSC_LAST == null ? -1 : GSC_LAST); i++) {
+      const v = a.gs.b[i];
+      if (v != null && (!best || v < best.v)) best = { v, q: a.gs.bq && a.gs.bq[i], day: DATA.dates[i] };
+    }
     return { name: a.name, d: n ? sum / n : null, dn: n, dnz: nz,
-             i: g && g.i, c: g && g.c, ctr: g && g.ctr, pos: g && g.pos };
+             i: g && g.i, c: g && g.c, ctr: g && g.ctr, best: best && best.v, bestQ: best, pos: g && g.pos };
   }
-  const statsAll = (r0, r1) => new Map(AREAS.map(a => [a.key, statsOf(a, r0, r1)]));
+  function statsAll(r0, r1) {
+    const m = new Map(AREAS.map(a => [a.key, statsOf(a, r0, r1)]));
+    /* the site-wide series has no best position of its own: National takes the best state's */
+    const nat = m.get("national"), top = [...m.entries()].filter(([k, x]) => k !== "national" && x.bestQ)
+      .sort((x, y) => x[1].best - y[1].best)[0];
+    if (nat && top) { nat.best = top[1].best; nat.bestQ = { ...top[1].bestQ, st: top[1].name }; }
+    return m;
+  }
   /* State sorts A→Z first; numbers biggest first; missing values always last */
   function orderOf(stats) {
     const byName = (x, y) => stats.get(x).name.localeCompare(stats.get(y).name);
@@ -65,6 +79,8 @@
     return `<td${c ? ` class="${c}"` : ""}${title ? ` title="${esc(title)}"` : ""}>${v}</td>`;
   };
   const numCell = (k, v, fmt = x => x.toLocaleString()) => v == null ? td(k, "lbl", "–") : td(k, "", fmt(v));
+  const bestCell = s => s.best == null ? td("best", "lbl", "–", "No query reached 20 impressions in a 7-day stretch of these dates")
+    : td("best", "", fposn(s.best), `“${s.bestQ.q || "?"}”${s.bestQ.st ? ` (${s.bestQ.st})` : ""}, 7 days to ${fdate(s.bestQ.day)}`);
   function demCell(a, s) {
     if (s.d == null) return td("d", "lbl", "–", `No Google Trends data for ${a.dem ? "these dates" : "this area"}`);
     if (!s.dnz) return td("d", "lbl", "0", `Below Google's reporting threshold ${s.dn > 1 ? `on all ${s.dn} days` : "that day"}`);
@@ -88,11 +104,11 @@
       return `<tr class="mrow${a.nat ? " nat" : ""}" data-key="${key}" tabindex="0"${a.nat
           ? ` title="National: US-wide Google Trends searches, and Search Console for the whole site"` : ""}>
         <td class="mn"><span class="lf">${esc(a.name)}</span><span class="ls">${esc(a.abbr)}</span></td>${demCell(a, s)}${
-        numCell("i", s.i)}${numCell("ctr", s.ctr, v => `${(v * 100).toFixed(1)}%`)}${numCell("c", s.c)}${numCell("pos", s.pos, fposn)}</tr>`;
+        numCell("i", s.i)}${numCell("ctr", s.ctr, v => `${(v * 100).toFixed(1)}%`)}${numCell("c", s.c)}${bestCell(s)}${numCell("pos", s.pos, fposn)}</tr>`;
     };
     return `<table class="mtab sttab" aria-label="${esc(label)}">
       <colgroup>${COLS.map((c, i) => `<col class="c${i}">`).join("")}</colgroup>
-      <thead><tr class="grp"><th class="l"></th><th class="gt"><span>Google Trends</span></th><th colspan="4"><span>Search Console</span></th></tr>
+      <thead><tr class="grp"><th class="l"></th><th class="gt"><span>Google Trends</span></th><th colspan="5"><span>Search Console</span></th></tr>
       <tr>${COLS.map(th).join("")}</tr></thead>
       <tbody>${row("national")}${order.map(row).join("")}</tbody></table>`;
   }
@@ -160,6 +176,7 @@
         <li><b>Search demand</b>: Google Trends interest in four search terms, averaged over the dates (each day is the mean of the four).</li>
         <li><b>Impressions</b> and <b>search traffic</b>: Search Console impressions and clicks from Google web search, summed over the dates.</li>
         <li><b>CTR</b>: click-through rate, clicks ÷ impressions.</li>
+        <li><b>Best position</b>: the best position any one search reached during the dates, as a 7-day average for that query (queries with at least 20 impressions in the week; brand and likely-automated queries left out). Hover a value for the query. National shows the best across all states.</li>
         <li><b>Avg position</b>: average position in Google results, weighted by impressions (1 = the top result).</li>
       </ul>
       <p>The Comparison table keeps the Top states row order, so the two tables line up row for row.
