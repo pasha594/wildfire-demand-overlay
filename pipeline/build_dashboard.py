@@ -890,6 +890,8 @@ HTML = r"""<meta charset="utf-8">
   #tip table.tt td.n span.sw { display: inline-flex; vertical-align: -1px; margin-right: 6px; }
   /* a message spanning the whole table wraps; only number columns stay on one line */
   #tip table.tt td[colspan] { white-space: normal; }
+  #tip .thtip { color: var(--ink-2); font-size: var(--fs-small); line-height: 1.5; max-width: 340px; }
+  th[title], th[data-tip] { cursor: help; }
   #tip .tsc { display: flex; align-items: baseline; gap: 6px; margin-top: var(--sp-2); padding-top: var(--sp-2);
     border-top: 1px solid var(--line); color: var(--ink-2); }
   #tip .tsc .sw { display: inline-flex; flex: none; transform: translateY(1px); }
@@ -2035,6 +2037,25 @@ function wireHScroll(root) {
     upd();
   });
 }
+
+/* column-header explanations: any th with a title shows it in the dashboard's own tooltip on hover, tap or
+   keyboard focus (the browser's native title tooltip is slow and doesn't show in some app views). The title
+   moves to data-tip on first hover so the two never show together. Covers tables built later too. */
+function thTip(th, e) {
+  if (th.hasAttribute("title")) { th.dataset.tip = th.getAttribute("title"); th.removeAttribute("title"); }
+  if (!th.dataset.tip) return;
+  tip.innerHTML = `<div class="thtip">${esc(th.dataset.tip)}</div>`;
+  const r = th.getBoundingClientRect();
+  placeTip(e && e.clientX != null ? e : { clientX: r.left, clientY: r.bottom });
+}
+document.addEventListener("pointerover", e => { const th = e.target.closest && e.target.closest("th[title], th[data-tip]"); if (th) thTip(th, e); });
+document.addEventListener("pointermove", e => { const th = e.target.closest && e.target.closest("th[data-tip]"); if (th && tip.style.display === "block") placeTip(e); });
+document.addEventListener("pointerout", e => {
+  const th = e.target.closest && e.target.closest("th[data-tip]");
+  if (th && !th.contains(e.relatedTarget)) tip.style.display = "none";
+});
+document.addEventListener("focusin", e => { const th = e.target.closest && e.target.closest("th[title], th[data-tip]"); if (th) thTip(th); });
+document.addEventListener("focusout", e => { if (e.target.closest && e.target.closest("th[data-tip]")) tip.style.display = "none"; });
 
 /* tooltip placement shared by the overview's hover readouts */
 function placeTip(e) {
