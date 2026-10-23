@@ -303,6 +303,9 @@ if gsc_raw:
         "site": galign(gsc_raw["site"]["web"]) if gsc_raw["site"].get("web") else None,   # every page (web)
         "home": galign(gsc_raw["home"]) if gsc_raw.get("home") else None,                 # homepage alone (web)
         "fireNational": galign(gsc_raw["fire_pages"]) if gsc_raw.get("fire_pages") else None,  # every fire page (web)
+        # Overview "Top queries": candidate queries per scope with daily series; day k = dates[k] (both axes
+        # start at the window start, checked below)
+        "queries": gsc_raw.get("queries") if gsc_raw.get("queries") and gm["dates"][0] == dates[0] else None,
         "trackedNational": tracked_align(gsc_raw["tracked"]) if gsc_raw.get("tracked") else None,
     }
     print(f"search console: {gm['property']} through {gm['last_date']} (complete through {gm['last_complete_date']}), "
@@ -802,7 +805,30 @@ HTML = r"""<meta charset="utf-8">
   .mtab.surge th, .mtab.surge td.mn { white-space: normal; line-height: 1.3; }
   .mtab.surge .nw { white-space: nowrap; }
   .mtab.surge th:last-child, .mtab.surge td.stcell { padding-left: 22px; text-align: left; }
-  #msurge, #tqlist { margin-top: var(--sp-2); }
+  #msurge, #tqlist, #sqlist { margin-top: var(--sp-2); }
+  /* Top search queries: two tables side by side on wide screens, stacked below that */
+  .sqcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-5) var(--sp-6); }
+  @media (max-width: 1150px) { .sqcols { grid-template-columns: minmax(0, 1fr); } }
+  .sqcol { min-width: 0; }
+  .sqcol h3 { font-size: var(--fs-h3); font-weight: 600; color: var(--ink); margin: 0; }
+  .sqcol .sqcap { color: var(--muted); font-size: var(--fs-small); line-height: 1.4; margin: 2px 0 var(--sp-3); }
+  .mtab.sqtab { min-width: 520px; }
+  .mtab.sqtab td.q { text-align: left; padding-left: 0; white-space: normal; }
+  .mtab.sqtab td.q span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    line-height: 1.35; overflow-wrap: anywhere; }
+  .mtab.sqtab td.pg { text-align: left; color: var(--ink-2); white-space: normal; }
+  .mtab.sqtab td.pg span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
+  .mtab.sqtab td.pg.none { color: var(--muted); }
+  .mtab.sqtab td.pg .nw { white-space: nowrap; }
+  .mtab.sqtab td.sp { padding: 4px 0 4px var(--sp-2); line-height: 0; }
+  .mtab.sqtab td.sp svg { display: block; margin-left: auto; overflow: visible; }
+  .mtab.sqtab tbody tr:hover td { background: var(--chip-bg); }
+  .sqcol .mempty { background: var(--surface-2); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); }
+  @media (max-width: 700px) {
+    .mtab.sqtab th:first-child, .mtab.sqtab td.q {
+      position: sticky; left: 0; z-index: 1; background: var(--surface); box-shadow: 1px 0 0 var(--line); }
+    .mtab.sqtab tbody tr:hover td.q { background: linear-gradient(var(--chip-bg), var(--chip-bg)), var(--surface); }
+  }
   /* key numbers that are neither good nor bad news (a search surge, clicks we could gain): ink, not a status color */
   .mtab td.xv { color: var(--ink); font-weight: 600; }
   /* plain data tables (chart "show the numbers" views) */
@@ -895,6 +921,7 @@ HTML = r"""<meta charset="utf-8">
   #tip .tsc { display: flex; align-items: baseline; gap: 6px; margin-top: var(--sp-2); padding-top: var(--sp-2);
     border-top: 1px solid var(--line); color: var(--ink-2); }
   #tip .tsc .sw { display: inline-flex; flex: none; transform: translateY(1px); }
+  #tip .tsc .lbl { color: var(--muted); overflow-wrap: anywhere; }
   #tip table.tt td:not(.n) { font-weight: 600; }
   #tip table.tt .pos { color: var(--good); }
   #tip table.tt .zero { color: var(--muted); font-weight: 400; }
@@ -956,6 +983,32 @@ HTML = r"""<meta charset="utf-8">
         <dt><span class="pill st-miss">Not capturing</span></dt><dd>Searches jumped, but our visitors from there didn't reach 1.5× last week's (or stayed under 1 a day).</dd>
       </dl>
       <p>Click a row to open that metro's chart. Hover it for the term's exact values.</p>
+    </div></details>
+  </section>
+  <section class="movers" id="sq" hidden>
+    <div class="mhead">
+      <h2>Top search queries</h2>
+    </div>
+    <div class="psub" id="sqnote"></div>
+    <div id="sqlist"></div>
+    <details class="about"><summary>About these numbers</summary><div class="about-body">
+      <p>Search Console names the query for only about half of our impressions (44% over the last 14 days). Rare
+      searches are hidden to protect searchers' privacy, so these tables cover the named queries only.</p>
+      <p><b>Traffic</b> is clicks from Google search. Our own analytics (PostHog) can't see search terms, so it can't
+      split visits by query.</p>
+      <p><b>Rank</b> is the average position across all the searches that showed us. A query's position varies by
+      searcher, place and device, so a rank of 3.4 means we usually show third or fourth.</p>
+      <p>Similar phrasings are separate queries: “mn wildfires” and “wildfires mn” each get their own row.</p>
+      <p>The best-ranked list only counts queries with at least 50 impressions in the dates picked (20 when a state is
+      picked), and that many per 14 days for longer ranges. Without that floor it fills with searches seen once or
+      twice and with our own name, so brand searches are left out too.</p>
+      <p><b>Page</b> is the page that got the most clicks (then impressions) from that query over the preset range
+      closest in length to the dates picked. Hover or tap a row for its path.</p>
+      <p>The lists are built from the queries that lead one of the preset ranges (last 7, 14, 30 and 90 days, and all
+      data). For a custom date range they are ranked among those queries.</p>
+      <p>Trend lines show each day across the dates picked, or each week for ranges over 45 days, scaled to each
+      row's own range. The rank line is drawn with 1 at the top and breaks where Google didn't show us for that query.
+      The traffic line is clicks a day.</p>
     </div></details>
   </section>
   <section class="movers" id="tq" hidden>
@@ -1892,6 +1945,7 @@ function rangeChanged() {
   renderAll();
   updateModeStats();
   buildOverview();
+  buildSearchQueries();
 }
 
 function openState(key) {
@@ -2336,6 +2390,7 @@ const overviewHealths = () => DATA.states.filter(inFilter).map(healthOf);
 function applyStateFilter() {
   buildOverview();
   buildMovers();
+  buildSearchQueries();
   buildTopQueries();
   document.querySelectorAll(".card[data-si]").forEach(card => {
     const st = DATA.states[+card.dataset.si];
@@ -2679,6 +2734,174 @@ function buildTopQueries() {
   });
 }
 
+/* ---------- top search queries (Search Console, named queries) ----------
+   GSC.queries: per scope (national, or a state's pages) the candidate queries = the leaders of every preset window;
+   each has a daily series {k: day-index deltas, c, i, p: avg position × 10}, the scope's own (e.s) or the site-wide one */
+const SQ = GSC && GSC.queries;
+const SQ_SHOW = 20, SQ_DAILY_MAX = 45, SPW = 96, SPH = 22, SPP = 3;
+const fint = v => Math.round(v).toLocaleString();
+/* decoded once per series: sorted day indexes on the dashboard axis, plus clicks, impressions, position */
+function sqDecode(raw) {
+  if (!raw._d) {
+    let day = 0;
+    raw._d = { d: raw.k.map(dk => (day += dk)), c: raw.c, i: raw.i, p: raw.p.map(v => v / 10) };
+  }
+  return raw._d;
+}
+/* the period's totals; rank = impression-weighted average position */
+function sqSum(s, a, b) {
+  let c = 0, i = 0, pw = 0;
+  for (let j = 0; j < s.d.length; j++) {
+    const k = s.d[j];
+    if (k < a) continue;
+    if (k > b) break;
+    c += s.c[j]; i += s.i[j]; pw += s.p[j] * s.i[j];
+  }
+  return { c, i, pos: i ? pw / i : null };
+}
+/* trend buckets: each day up to SQ_DAILY_MAX days, else weeks counted back from the last day (the first may be short) */
+function sqBuckets(a, b) {
+  if (b - a + 1 <= SQ_DAILY_MAX) return Array.from({ length: b - a + 1 }, (_, j) => [a + j, a + j]);
+  const out = [];
+  for (let e = b; e >= a; e -= 7) out.unshift([Math.max(a, e - 6), e]);
+  return out;
+}
+function sqTrend(s, B) {
+  const T = B.map(([s0, s1]) => ({ s0, s1, c: 0, i: 0, pw: 0 }));
+  let t = 0;
+  for (let j = 0; j < s.d.length && t < T.length; j++) {
+    const k = s.d[j];
+    if (k < T[0].s0) continue;
+    while (t < T.length && k > T[t].s1) t++;
+    if (t === T.length) break;
+    T[t].c += s.c[j]; T[t].i += s.i[j]; T[t].pw += s.p[j] * s.i[j];
+  }
+  T.forEach(x => { x.cpd = x.c / (x.s1 - x.s0 + 1); x.pos = x.i ? x.pw / x.i : null; });
+  return T;
+}
+const sqX = (j, n) => n === 1 ? SPW / 2 : SPP + j / (n - 1) * (SPW - 2 * SPP);
+const sqDot = (x, y, color) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="${color}" stroke="var(--surface)" stroke-width="1.25"/>`;
+const sqNum = v => v >= 10 || Number.isInteger(v) ? String(Math.round(v)) : v.toFixed(1);
+/* rank sparkline: 1 at the top, scaled to the row's own range (at least 3 positions tall), breaks where Google didn't show us */
+function sparkRank(T, unit) {
+  const have = T.map((x, j) => [j, x.pos]).filter(p => p[1] != null);
+  if (!have.length) return "";
+  let lo = Math.min(...have.map(p => p[1])), hi = Math.max(...have.map(p => p[1]));
+  if (hi - lo < 3) { lo = Math.max(1, (lo + hi) / 2 - 1.5); hi = lo + 3; }
+  const y = v => SPP + (v - lo) / (hi - lo) * (SPH - 2 * SPP);
+  let d = "", dots = "", run = [];
+  const flush = () => {
+    if (run.length > 1) d += "M" + run.map(([j, v]) => `${sqX(j, T.length).toFixed(1)},${y(v).toFixed(1)}`).join("L");
+    else if (run.length === 1 && run[0][0] !== lj)
+      dots += `<circle cx="${sqX(run[0][0], T.length).toFixed(1)}" cy="${y(run[0][1]).toFixed(1)}" r="1.4" fill="var(--gp)"/>`;
+    run = [];
+  };
+  const [lj, lv] = have[have.length - 1];
+  T.forEach((x, j) => { if (x.pos == null) flush(); else run.push([j, x.pos]); });
+  flush();
+  const lbl = `Rank by ${unit}: ${fposn(have[0][1])} to ${fposn(lv)}`;
+  return `<svg width="${SPW}" height="${SPH}" viewBox="0 0 ${SPW} ${SPH}" role="img" aria-label="${lbl}"><title>${lbl}</title>` +
+    (d ? `<path d="${d}" fill="none" stroke="var(--gp)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` : "") +
+    dots + sqDot(sqX(lj, T.length), y(lv), "var(--gp)") + `</svg>`;
+}
+/* traffic sparkline: clicks a day per bucket, from zero up to the row's own peak */
+function sparkClicks(T, unit) {
+  const v = T.map(x => x.cpd), mx = Math.max(...v), base = SPH - SPP;
+  const y = c => base - (mx ? c / mx : 0) * (SPH - 2 * SPP);
+  const pts = v.map((c, j) => `${sqX(j, T.length).toFixed(1)},${y(c).toFixed(1)}`);
+  const line = "M" + pts.join("L");
+  const area = T.length > 1 ? `<path d="${line}L${sqX(T.length - 1, T.length).toFixed(1)},${base}L${sqX(0, T.length).toFixed(1)},${base}Z" fill="var(--traffic-fill)"/>` : "";
+  const lbl = `Clicks a day${unit === "week" ? ", by week" : ""}: ${sqNum(v[0])} to ${sqNum(v[v.length - 1])}`;
+  return `<svg width="${SPW}" height="${SPH}" viewBox="0 0 ${SPW} ${SPH}" role="img" aria-label="${lbl}"><title>${lbl}</title>${area}` +
+    (T.length > 1 ? `<path d="${line}" fill="none" stroke="var(--traffic)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` : "") +
+    sqDot(sqX(T.length - 1, T.length), y(v[v.length - 1]), "var(--traffic)") + `</svg>`;
+}
+let sqRows = { b: [], c: [] };
+function buildSearchQueries() {
+  const sec = document.getElementById("sq");
+  if (!SQ) { sec.hidden = true; return; }
+  sec.hidden = false;
+  const w = healthWin(), name = filterName(), only = name ? ` Showing ${name} only.` : "";
+  const note = document.getElementById("sqnote"), list = document.getElementById("sqlist");
+  const lead = "The searches we rank best for and the ones that bring us the most clicks, from Google Search Console";
+  if (!w.g) {
+    note.textContent = `${lead}.${only}`;
+    list.innerHTML = `<div class="mempty">Search Console has no complete days in the dates picked yet. It's complete through ${fdate(GSC.lastComplete)}, so pick dates that start on or before then.</div>`;
+    sqRows = { b: [], c: [] };
+    return;
+  }
+  const a = w.a, b = w.g.b, n = b - a + 1, nat = stateFilter === "-1";
+  note.textContent = `${lead}, ${spanText(a, b)}.${only}`;
+  const ents = (nat ? SQ.scopes.national : SQ.scopes[stateFilter]) || [];
+  const floor = (nat ? SQ.floor.national : SQ.floor.state) * Math.max(1, n / 14);
+  /* the landing page comes from the preset window closest in length to the period (a longer one when that has none) */
+  let wj = 0;
+  SQ.wins.forEach((L, k) => { if (Math.abs(L - n) < Math.abs(SQ.wins[wj] - n)) wj = k; });
+  const isBrand = q => SQ.brand.some(t => q.includes(t));
+  const rows = ents.map(e => {
+    const s = sqDecode(e.s || SQ.pool[e.q]);
+    let pi = null;
+    for (let k = wj; k < e.pg.length && pi == null; k++) pi = e.pg[k];
+    return { q: e.q, s, ...sqSum(s, a, b), page: pi == null ? null : SQ.pages[pi] };
+  }).filter(r => r.i > 0);
+  sqRows = {
+    b: rows.filter(r => r.i >= floor && !isBrand(r.q)).sort((x, y) => x.pos - y.pos || y.i - x.i).slice(0, SQ_SHOW),
+    c: rows.filter(r => r.c > 0).sort((x, y) => y.c - x.c || y.i - x.i).slice(0, SQ_SHOW),
+  };
+  const B = sqBuckets(a, b), unit = n > SQ_DAILY_MAX ? "week" : "day";
+  const where = nat ? "any of our pages" : `our ${name} pages`;
+  const pageName = p => p[0] === "" ? "Homepage" : p[1];
+  /* "Minnesota state page" wraps as the name over a muted "state page" */
+  const pageHtml = p => { const m = pageName(p).match(/^(.+) (state page)$/); return m ? `${esc(m[1])} <span class="lbl nw">${m[2]}</span>` : esc(pageName(p)); };
+  const head = `<colgroup><col><col style="width:50px"><col style="width:64px"><col style="width:20%"><col style="width:104px"><col style="width:104px"></colgroup>
+    <thead><tr><th class="l" title="What people typed into Google">Query</th>
+    <th title="Average position in Google's results over these dates, weighted by impressions. 1 is the top result.">Rank</th>
+    <th title="Clicks from Google search to ${esc(where)} over these dates">Traffic</th>
+    <th class="l" title="The page that got the most clicks from this query (then impressions), over the preset range closest in length to these dates. Hover a row for its path.">Page</th>
+    <th title="Average position each ${unit}, drawn with 1 at the top. Breaks are ${unit}s when Google didn't show us for this query.">Rank trend</th>
+    <th title="Clicks a day${unit === "week" ? ", averaged over each week" : ""}">Traffic trend</th></tr></thead>`;
+  const body = (R, k) => R.map((r, ri) => {
+    const T = sqTrend(r.s, B);
+    return `<tr data-k="${k}" data-i="${ri}">
+      <td class="q"><span>${esc(r.q)}</span></td>
+      <td>${fposn(r.pos)}</td>
+      <td>${fint(r.c)}</td>
+      ${r.page ? `<td class="pg" title="/${esc(r.page[0])}"><span>${pageHtml(r.page)}</span></td>` : `<td class="pg none">–</td>`}
+      <td class="sp">${sparkRank(T, unit)}</td>
+      <td class="sp">${sparkClicks(T, unit)}</td></tr>`;
+  }).join("");
+  const floorTxt = fint(Math.ceil(floor - 1e-9));
+  const col = (k, title, cap, empty) => `<div class="sqcol"><h3>${title}</h3><div class="sqcap">${cap}</div>` +
+    (sqRows[k].length ? hwrap(`<table class="mtab sqtab">${head}<tbody>${body(sqRows[k], k)}</tbody></table>`) : `<div class="mempty">${empty}</div>`) + `</div>`;
+  list.innerHTML = `<div class="sqcols">` +
+    col("b", "Best-ranked queries", `Highest in Google's results first, among queries with ${floorTxt}+ impressions. Brand searches left out.`,
+      `No query reached ${floorTxt} impressions${nat ? "" : ` on our ${esc(name)} pages`} in these dates.`) +
+    col("c", "Most clicks", `The queries that brought ${nat ? "us" : `our ${esc(name)} pages`} the most clicks from Google.`,
+      `No query brought clicks to ${esc(where)} in these dates.`) + `</div>`;
+  wireHScroll(list);
+  /* hover a row (or tap it on a phone, where the readout stays until the next tap or scroll) */
+  list.onpointermove = list.onpointerdown = e => {
+    const tr = e.target.closest && e.target.closest("tr[data-k]");
+    if (!tr) { if (!(e.target.closest && e.target.closest("th"))) { tip.style.display = "none"; sqTipOn = false; } return; }
+    const r = sqRows[tr.dataset.k][+tr.dataset.i];
+    if (!r) return;
+    const rw = (k, v) => `<div class="row"><span class="n">${k}</span><span class="v">${v}</span></div>`;
+    tip.innerHTML = `<div class="d">“${esc(r.q)}”<span class="lbl">${spanText(a, b)}</span></div>` +
+      rw("Clicks", fint(r.c)) + rw("Impressions", fint(r.i)) +
+      rw("CTR", fpct(r.i ? r.c / r.i : null)) + rw("Avg position", fposn(r.pos)) +
+      (r.page ? `<div class="tsc"><span>Most clicks land on <b>${esc(pageName(r.page))}</b><br><span class="lbl">/${esc(r.page[0])}</span></span></div>`
+        : `<div class="tnote">No landing page recorded for these dates.</div>`) +
+      (nat ? "" : `<div class="tnote">Our ${esc(name)} pages only</div>`);
+    sqTipOn = true;
+    placeTip(e);
+  };
+  list.onpointerleave = e => { if (e.pointerType !== "touch") { tip.style.display = "none"; sqTipOn = false; } };
+}
+let sqTipOn = false;
+const sqTipOff = () => { if (sqTipOn) { tip.style.display = "none"; sqTipOn = false; } };
+document.addEventListener("pointerdown", e => { if (!(e.target.closest && e.target.closest("#sqlist tr[data-k]"))) sqTipOff(); });
+addEventListener("scroll", sqTipOff, { passive: true });
+
 /* ---------- hover ---------- */
 const tip = document.getElementById("tip");
 function attachHover(card) {
@@ -2917,6 +3140,7 @@ buildCards();
 buildOverview();
 if (PHONE_Q.addEventListener) PHONE_Q.addEventListener("change", () => { buildOverview(); buildMovers(); buildTopQueries(); });
 initMovers();
+buildSearchQueries();
 buildTopQueries();
 renderAll();
 initTabs();

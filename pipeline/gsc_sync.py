@@ -232,6 +232,117 @@ def classify(path, known):
     return s if s in known else None
 
 
+QUERY_WINS = [7, 14, 30, 90]             # the Overview's date presets (plus "all data"), in days
+QUERY_KEEP = {"national": 25, "state": 20}   # per list, per preset window
+QUERY_FLOOR = {"national": 50, "state": 20}  # impressions a query needs (per 14 days) to count as "ranking"
+
+
+def export_top_queries(con, dates, di, last_complete, st_of, expected):
+    """The Overview's "Top queries" tables (web): for the whole site ("national") and each state's pages,
+    the candidate queries = the top QUERY_KEEP by clicks and the best-ranked QUERY_KEEP (average position,
+    with an impressions floor, brand searches left out) in each preset window ending at the last complete
+    day, so the page can rank any of those windows exactly. Each candidate carries its daily clicks,
+    impressions and impression-weighted position, and its top landing page per window (most clicks, then
+    impressions). Likely-automated queries (no clicks where this site's click curve predicts 10+) are left out.
+    A state's series is only stored when it differs from the site-wide one (a query landing on several
+    states' pages); otherwise the page reuses the pool entry."""
+    gl = di[last_complete]
+    wins = [w for w in QUERY_WINS if w <= gl + 1] + [gl + 1]
+    S = collections.defaultdict(lambda: collections.defaultdict(lambda: [0, 0, 0.0]))   # (scope, q) -> k -> [c, i, pw]
+    PG = collections.defaultdict(lambda: collections.defaultdict(lambda: [0, 0]))      # (scope, q, page) -> k -> [c, i]
+    for day, q, page, c, i, pos in con.execute(
+            "SELECT date, query, page, clicks, impressions, position FROM query_daily "
+            "WHERE search_type='web' AND date >= ? AND date <= ?", (dates[0], last_complete)):
+        k = di.get(day)
+        if k is None:
+            continue
+        s = st_of(page)
+        for scope in ("national", s) if s else ("national",):
+            b = S[(scope, q)][k]
+            b[0] += c
+            b[1] += i
+            b[2] += (pos or 0) * i
+            p = PG[(scope, q, page)][k]
+            p[0] += c
+            p[1] += i
+    tot = collections.defaultdict(lambda: [0, 0, 0.0])
+    for (scope, q), days in S.items():
+        if scope == "national":
+            for v in days.values():
+                t = tot[q]
+                t[0] += v[0]
+                t[1] += v[1]
+                t[2] += v[2]
+    robots = {q for q, (c, i, pw) in tot.items() if i and c == 0 and i * expected(pw / i) >= 10}
+
+    by_scope = collections.defaultdict(dict)
+    for (scope, q), days in S.items():
+        if q not in robots:
+            by_scope[scope][q] = days
+    pages_of = collections.defaultdict(list)
+    for (scope, q, page), days in PG.items():
+        if q not in robots:
+            pages_of[(scope, q)].append((page, days))
+
+    def window_sum(days, a):
+        c = i = 0
+        pw = 0.0
+        for k, v in days.items():
+            if a <= k <= gl:
+                c += v[0]
+                i += v[1]
+                pw += v[2]
+        return c, i, pw
+
+    def flat(days):
+        ks = sorted(k for k in days if k <= gl)
+        prev, dk = 0, []
+        for k in ks:
+            dk.append(k - prev)
+            prev = k
+        return {"k": dk, "c": [days[k][0] for k in ks], "i": [days[k][1] for k in ks],
+                "p": [round(days[k][2] / days[k][1] * 10) if days[k][1] else 0 for k in ks]}
+
+    page_ix, pages = {}, []
+    def page_ref(path):
+        if path not in page_ix:
+            page_ix[path] = len(pages)
+            pages.append([path, page_label(path)[0]])
+        return page_ix[path]
+
+    pool, scopes = {}, {}
+    for scope, qdays in by_scope.items():
+        kind = "national" if scope == "national" else "state"
+        keep = set()
+        for w in wins:
+            a = gl - w + 1
+            agg = [(q, *window_sum(days, a)) for q, days in qdays.items()]
+            agg = [x for x in agg if x[2]]
+            keep.update(x[0] for x in sorted(agg, key=lambda x: -x[1])[:QUERY_KEEP[kind]] if x[1] > 0)
+            floor = QUERY_FLOOR[kind] * max(1.0, w / 14)
+            ranked = [x for x in agg if x[2] >= floor and not any(t in x[0] for t in BRAND_TERMS)]
+            keep.update(x[0] for x in sorted(ranked, key=lambda x: (x[3] / x[2], -x[2]))[:QUERY_KEEP[kind]])
+        entries = []
+        for q in sorted(keep):
+            days = qdays[q]
+            if q not in pool:
+                pool[q] = flat(by_scope["national"][q])
+            e = {"q": q, "pg": []}
+            if scope != "national" and days != by_scope["national"][q]:
+                e["s"] = flat(days)
+            for w in wins:
+                a = gl - w + 1
+                best = max(pages_of[(scope, q)], key=lambda pd: window_sum({k: [*v, 0.0] for k, v in pd[1].items()}, a)[:2])
+                bc, bi, _ = window_sum({k: [*v, 0.0] for k, v in best[1].items()}, a)
+                e["pg"].append(page_ref(best[0]) if bi else None)
+            entries.append(e)
+        scopes[scope] = entries
+    log.info("top queries: %d candidate queries across %d scopes (%d likely-automated left out)",
+             len(pool), len(scopes), len(robots))
+    return {"wins": wins, "keep": QUERY_KEEP, "floor": QUERY_FLOOR, "brand": list(BRAND_TERMS),
+            "pages": pages, "pool": pool, "scopes": scopes}
+
+
 def export(con):
     from metros import METROS, STATE_ABBR, demand_terms
     known = set(STATE_ABBR)
@@ -459,6 +570,8 @@ def export(con):
     log.info("top opportunities: %d pages ranked; %d likely-automated queries excluded (%d impressions)",
              len(rows), len(automated), top["web"]["automated_impr"])
 
+    queries = export_top_queries(con, dates, di, last_complete, st_of, expected)
+
     # best position: for each day, the best average position over the BEST_DAYS days ending that day, among
     # queries with >= BEST_MIN_IMPR impressions on the area's pages in those days (a query on several of its
     # pages = impression-weighted across them). The trailing window keeps the line continuous instead of
@@ -561,6 +674,7 @@ def export(con):
         "tracked": tracked_out("national"),
         "states": out_states,
         "top_queries": top,
+        "queries": queries,
     }
     tmp = EXPORT_PATH + ".tmp"
     with open(tmp, "w") as f:
