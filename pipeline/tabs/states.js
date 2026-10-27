@@ -25,7 +25,7 @@
   const COLS = [
     { k: "name", label: "State", short: "State", tip: "Click a row to open Fire Page Health for that state, which counts only its fire pages." },
     { k: "d", label: "Search demand", short: "Demand", tip: `Google Trends interest, averaged over the dates (each day is the mean of the 4 terms). National: ${NAT_KWS.join(", ")} (US). State: the same terms after the state's name, ${EX_KWS ? `e.g. ${EX_KWS.join(", ")}` : ST_KWS.join(", ")} (searches made in the state). Each area has its own 0–100 scale (100 = its busiest term-day since ${fdate(T0)}), so compare a state with itself across periods, not with other states. 0 = below Google's reporting threshold on every day. Grey italic = reported on fewer than half the days.` },
-    { k: "i", label: "Impressions", short: "Impr.", tip: "Every Google web search that showed the state page or one of the state's fire pages, for any query and from anywhere (not just the state), summed over the dates. Search demand only counts four terms searched inside the state, so a state can show 0 demand and thousands of impressions. National = the whole site." },
+    { k: "i", label: "Impressions", short: "Impr.", tip: "How many times a link to the state page or one of the state's fire pages appeared in Google web search results, for any query and from anywhere (not just the state), summed over the dates. A link counts once it is on the page of results the searcher loaded, even if they never scrolled down to it: position 9 on page 1 counts, while a result on page 2 counts only if they open page 2. Links inside a carousel count only once scrolled into view. Each of our pages counts on its own, so a search that showed two of them adds 2. Search demand only counts four terms searched inside the state, so a state can show 0 demand and thousands of impressions. National = the whole site." },
     { k: "ctr", label: "CTR", short: "CTR", tip: "Click-through rate: search traffic ÷ impressions" },
     { k: "c", label: "Search traffic", short: "Traffic", tip: "Search Console clicks (web search), summed over the dates, for the same pages" },
     { k: "best", label: "Best position", short: "Best", tip: "The best position any one search reached during these dates: each day's value is a query's average position over the 7 days ending that day, among queries with at least 20 impressions in those 7 days (brand and likely-automated queries left out), the same measure as the Overview charts. Hover a value for the query. National = the best across all states." },
@@ -78,18 +78,37 @@
     const c = [cls, sort.k === k ? "on" : ""].filter(Boolean).join(" ");
     return `<td${c ? ` class="${c}"` : ""}${title ? ` title="${esc(title)}"` : ""}>${v}</td>`;
   };
-  const numCell = (k, v, fmt = x => x.toLocaleString()) => v == null ? td(k, "lbl", "–") : td(k, "", fmt(v));
-  const bestCell = s => s.best == null ? td("best", "lbl", "–", "No query reached 20 impressions in a 7-day stretch of these dates")
-    : td("best", "", fposn(s.best), `“${s.bestQ.q || "?"}”${s.bestQ.st ? ` (${s.bestQ.st})` : ""}, 7 days to ${fdate(s.bestQ.day)}`);
-  function demCell(a, s) {
+  const FMT = { d: v => v < 0.05 ? "<0.1" : v.toFixed(1), i: v => v.toLocaleString(), ctr: v => `${(v * 100).toFixed(1)}%`,
+                c: v => v.toLocaleString(), best: fposn, pos: fposn };
+  /* Comparison only: the % change from this period's number (was) to Top states' (now), on a small line under it.
+     Green ↑ / red ↓ = better / worse. Positions are better when lower, so ↑ there means higher in the results.
+     Search demand is neither, so it stays grey. None for a base of 0, sparse demand, or totals over different day counts */
+  const LOW_BETTER = { best: true, pos: true };
+  function dlt(k, now, was, sumsOk) {
+    const a = now && now[k], b = was[k];
+    if (a == null || !b || ((k === "i" || k === "c") && !sumsOk)) return "";
+    if (k === "d" && [now, was].some(x => !x.dnz || x.dnz < x.dn / 2)) return "";
+    const p = Math.abs(a - b) / b * 100, f = FMT[k];
+    if (p < 0.05) return `<span class="dlt lbl" title="${esc(`Top states: ${f(a)}, the same as here`)}">0%</span>`;
+    const pt = p >= 999.5 ? ">999" : p < 9.95 ? p.toFixed(1) : String(Math.round(p));
+    const low = LOW_BETTER[k], better = low ? a < b : a > b;
+    const title = low ? `Top states: ${f(a)}, ${pt}% ${a < b ? "lower (higher in the results)" : "higher (lower in the results)"} than ${f(b)}`
+      : `Top states: ${f(a)}, ${a > b ? "up" : "down"} ${pt}% from ${f(b)}`;
+    return `<span class="dlt ${k === "d" ? "nt" : better ? "up" : "dn"}" title="${esc(title)}">${(low ? better : a > b) ? "↑" : "↓"}${esc(pt)}%</span>`;
+  }
+  const numCell = (k, v, fmt = x => x.toLocaleString(), dl = "") => v == null ? td(k, "lbl", "–") : td(k, "", fmt(v) + dl);
+  const bestCell = (s, dl = "") => s.best == null ? td("best", "lbl", "–", "No query reached 20 impressions in a 7-day stretch of these dates")
+    : td("best", "", fposn(s.best) + dl, `“${s.bestQ.q || "?"}”${s.bestQ.st ? ` (${s.bestQ.st})` : ""}, 7 days to ${fdate(s.bestQ.day)}`);
+  function demCell(a, s, dl = "") {
     if (s.d == null) return td("d", "lbl", "–", `No Google Trends data for ${a.dem ? "these dates" : "this area"}`);
     if (!s.dnz) return td("d", "lbl", "0", `Below Google's reporting threshold ${s.dn > 1 ? `on all ${s.dn} days` : "that day"}`);
-    const v = s.d < 0.05 ? "&lt;0.1" : s.d.toFixed(1);
+    const v = esc(FMT.d(s.d));
     return s.dnz < s.dn / 2
       ? td("d", "lbl sp", v, `Google reported these terms on ${s.dnz} of ${s.dn} days; the rest were below its reporting threshold (0)`)
-      : td("d", "", v);
+      : td("d", "", v + dl);
   }
-  function tableHtml(top, stats, order, label) {
+  /* ref: the Top states numbers, given for the Comparison table only; sumsOk: both periods cover the same Search Console days */
+  function tableHtml(top, stats, order, label, ref, sumsOk) {
     const th = c => {
       const on = top && sort.k === c.k;
       /* both tables carry the indicator (hidden unless sorted), so their headers wrap alike */
@@ -100,13 +119,14 @@
         top ? `<button type="button" class="sortb" data-k="${c.k}">${txt}</button>` : txt}</th>`;
     };
     const row = key => {
-      const a = AREA[key], s = stats.get(key);
+      const a = AREA[key], s = stats.get(key), dl = k => ref ? dlt(k, ref.get(key), s, sumsOk) : "";
       return `<tr class="mrow${a.nat ? " nat" : ""}" data-key="${key}" tabindex="0"${a.nat
           ? ` title="National: US-wide Google Trends searches, and Search Console for the whole site"` : ""}>
-        <td class="mn"><span class="lf">${esc(a.name)}</span><span class="ls">${esc(a.abbr)}</span></td>${demCell(a, s)}${
-        numCell("i", s.i)}${numCell("ctr", s.ctr, v => `${(v * 100).toFixed(1)}%`)}${numCell("c", s.c)}${bestCell(s)}${numCell("pos", s.pos, fposn)}</tr>`;
+        <td class="mn"><span class="lf">${esc(a.name)}</span><span class="ls">${esc(a.abbr)}</span></td>${demCell(a, s, dl("d"))}${
+        numCell("i", s.i, FMT.i, dl("i"))}${numCell("ctr", s.ctr, FMT.ctr, dl("ctr"))}${numCell("c", s.c, FMT.c, dl("c"))}${
+        bestCell(s, dl("best"))}${numCell("pos", s.pos, fposn, dl("pos"))}</tr>`;
     };
-    return `<table class="mtab sttab" aria-label="${esc(label)}">
+    return `<table class="mtab sttab${top ? "" : " cmp"}" aria-label="${esc(label)}">
       <colgroup>${COLS.map((c, i) => `<col class="c${i}">`).join("")}</colgroup>
       <thead><tr class="grp"><th class="l"></th><th class="gt"><span>Google Trends</span></th><th colspan="5"><span>Search Console</span></th></tr>
       <tr>${COLS.map(th).join("")}</tr></thead>
@@ -147,11 +167,11 @@
           ...(prev && len < prevLen(m) ? [`Data starts ${fdate(DATA.dates[0])}, so this period is shorter.`] : []),
           ...(prev && len === prevLen(m) && len !== m.r1 - m.r0 + 1 ? ["Same length as the Search Console days in Top states."] : []),
           ...lagNotes(c.r0, c.r1)],
-        gm && gc && gm !== gc ? `Search Console totals here cover ${plural(gc, "day")} vs ${gm} in Top states.` : "");
+        gm && gc && gm !== gc ? `Search Console totals here cover ${plural(gc, "day")} vs ${gm} in Top states, so impressions and search traffic show no % change.` : "");
     /* the shared picker can't show an empty range: say so instead of a date the table doesn't use */
     if (none) cmp.el.querySelector(".rplabel").innerHTML = `Previous period <span class="lbl">none</span>`;
     pane.querySelector(".st-top").innerHTML = tableHtml(true, sm, order, `Top states, ${span(m.r0, m.r1)}`);
-    pane.querySelector(".st-cmp").innerHTML = tableHtml(false, sc, order, `Comparison, ${none ? "no dates" : span(c.r0, c.r1)}`);
+    pane.querySelector(".st-cmp").innerHTML = tableHtml(false, sc, order, `Comparison, ${none ? "no dates" : span(c.r0, c.r1)}`, sm, gm === gc);
     hl(hlKey);
   }
 
@@ -174,13 +194,20 @@
       <h4>What the columns mean</h4>
       <ul>
         <li><b>Search demand</b>: Google Trends interest in four search terms, averaged over the dates (each day is the mean of the four).</li>
-        <li><b>Impressions</b> and <b>search traffic</b>: Search Console impressions and clicks from Google web search, summed over the dates.</li>
+        <li><b>Impressions</b> and <b>search traffic</b>: Search Console impressions and clicks from Google web search, summed over the dates.
+          An impression is a link to one of the pages on a page of results the searcher loaded, whether or not they scrolled
+          down to it (a result on page 2 counts only if they open page 2). Each page counts on its own.</li>
         <li><b>CTR</b>: click-through rate, clicks ÷ impressions.</li>
         <li><b>Best position</b>: the best position any one search reached during the dates, as a 7-day average for that query (queries with at least 20 impressions in the week; brand and likely-automated queries left out). Hover a value for the query. National shows the best across all states.</li>
         <li><b>Avg position</b>: average position in Google results, weighted by impressions (1 = the top result).</li>
       </ul>
       <p>The Comparison table keeps the Top states row order, so the two tables line up row for row.
       Click a row to open Fire Page Health for that state, which counts only its fire pages.</p>
+      <p>Under each Comparison number is the % change from it to the same number in Top states: green ↑ is better, red ↓
+      is worse. Positions are better when lower, so ↑ there means Top states sits higher in the results. Search demand
+      is neither better nor worse, so its change is grey. There is no % change when the earlier number is 0, when
+      search demand is sparse in either period, or, for impressions and search traffic, when the two periods cover
+      different numbers of Search Console days.</p>
       <h4>Google Trends search terms</h4>
       <ul>
         <li><b>National</b>: ${kws(NAT_KWS)} (US&#8209;wide searches).</li>
@@ -215,7 +242,7 @@
         <section class="panel"><div class="sthead"><h2>Top states</h2></div>
           <div class="psub"><p class="stdesc st-desc"></p><div class="stmeta st-sub"></div></div><div class="stwrap st-top"></div></section>
         <section class="panel"><div class="sthead"><h2>Comparison</h2></div>
-          <div class="psub"><p class="stdesc">The same numbers for an earlier period, in the same row order.</p><div class="stmeta st-csub"></div></div><div class="stwrap st-cmp"></div></section>
+          <div class="psub"><p class="stdesc">The same numbers for an earlier period, in the same row order. Under each is the % change from it to Top states.</p><div class="stmeta st-csub"></div></div><div class="stwrap st-cmp"></div></section>
       </div>
       <div class="tabnotes">${aboutHtml(gl)}</div>`;
     const bar = pane.querySelector(".tbar");

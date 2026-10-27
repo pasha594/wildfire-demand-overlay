@@ -73,6 +73,12 @@
   .sttab tr.nat td.lbl { font-weight: 400; }
   .sttab tr.mrow.hl td, .sttab tr.nat.hl td, .sttab tr.nat:hover td { background: var(--chip-bg); }
   .sttab td.sp { font-style: italic; }   /* sparse demand: muted and italic, not colour alone */
+  /* Comparison: a small % change to Top states under each number (states.js dlt); search demand's is neutral grey */
+  .sttab .dlt { display: block; font-size: 12px; line-height: 14px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; }
+  .sttab .dlt.nt { color: var(--muted); font-weight: 600; }
+  .sttab.cmp td { vertical-align: top; padding-top: 6px; padding-bottom: 6px; line-height: 20px; }
+  /* side by side, both tables' rows take the Comparison rows' height, so they still line up row for row */
+  @media (min-width: 1150px) { .sttab tbody tr { height: 48px; } }
 
   /* phones: state abbreviations and short headers so all six columns fit without scrolling */
   @media (max-width: 560px) {
@@ -83,10 +89,14 @@
     .sttab th, .sttab td { padding-left: 6px; }
     .sttab th.l, .sttab td.mn { padding-left: 0; }
     .sttab td { padding-top: 8px; padding-bottom: 8px; }
-    .sttab col.c0 { width: 12%; } .sttab col.c1 { width: 17%; } .sttab col.c2 { width: 17%; }
-    .sttab col.c3 { width: 12%; } .sttab col.c4 { width: 15%; } .sttab col.c5 { width: 13.5%; } .sttab col.c6 { width: 13.5%; }
+    /* sized so the Comparison table's % changes (11px here) fit under every number at 390px */
+    .sttab col.c0 { width: 9.5%; } .sttab col.c1 { width: 16.5%; } .sttab col.c2 { width: 18.5%; }
+    .sttab col.c3 { width: 14%; } .sttab col.c4 { width: 14%; } .sttab col.c5 { width: 14%; } .sttab col.c6 { width: 13.5%; }
+    .sttab .dlt { font-size: 11px; line-height: 13px; }
+    /* stacked tables needn't wrap alike, so an unsorted header drops its hidden indicator and keeps its label whole */
+    .sttab .si:not(.on) { display: none; }
     .sttab tr.grp th { font-size: 12px; }
-    .sttab tr.grp th.gt span { margin-left: -38px; }
+    .sttab tr.grp th.gt span { margin-left: -34px; }
     .sthead .dpick { margin-left: 0; }
     .sthead details.pop-r .popbody { left: 0; right: auto; }
   }
