@@ -1281,6 +1281,8 @@ function buildControls() {
   const chev = `<span class="chev" aria-hidden="true"></span>`;
   let html = `<select class="statef sel" id="statef" aria-label="Show one state"><option value="-1">All states</option>` +
     DATA.states.map(st => `<option value="${st.key}">${st.name}</option>`).join("") + `</select>`;
+  const uq = urlView("main");
+  if (uq && DATA.states.some(st => st.key === uq.get("state"))) stateFilter = uq.get("state");
   html += `<details class="pop dpick" id="dpick"><summary class="lg dbtn" title="Dates every state chart shows, also used to judge SEO health">
       <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1.5" y="2.5" width="11" height="10" rx="1.5"/><line x1="1.5" y1="5.6" x2="12.5" y2="5.6"/><line x1="4.5" y1="1" x2="4.5" y2="3.8"/><line x1="9.5" y1="1" x2="9.5" y2="3.8"/></svg>
       <span id="dlabel"></span>${chev}</summary>
@@ -1290,6 +1292,7 @@ function buildControls() {
       <div class="dcals"><div class="dcal" id="dcal-start"></div><div class="dcal" id="dcal-end"></div></div>
     </div></details>`;
   c.innerHTML = html;
+  document.getElementById("statef").value = stateFilter;
 
   /* chart-only controls live with the charts: series toggles, search terms, smoothing, fire settings */
   const lgb = document.getElementById("lgbar");
@@ -1423,11 +1426,12 @@ function buildControls() {
     renderCal("start"); renderCal("end");
     try { localStorage.setItem("wdo-overview-range", JSON.stringify(range.preset === "custom"
       ? { p: "custom", from: DATA.dates[range.r0], to: DATA.dates[range.r1] } : { p: range.preset })); } catch (e) {}
+    syncUrl();
   };
   /* first index on or after a YYYY-MM-DD date */
   const idxAt = d => { const i = DATA.dates.findIndex(x => x >= d); return i < 0 ? N - 1 : i; };
   try {
-    const saved = JSON.parse(localStorage.getItem("wdo-overview-range") || "null");
+    const uq = urlView("main"), saved = uq ? urlPick(uq) : JSON.parse(localStorage.getItem("wdo-overview-range") || "null");
     if (saved && saved.p === "custom" && saved.from && saved.to) {
       const [a, b] = saved.from <= saved.to ? [saved.from, saved.to] : [saved.to, saved.from];
       if (b >= D0 && a <= D1) setRange("custom", idxAt(a), idxAt(b));   /* ignore a range the data has moved past */
@@ -2388,6 +2392,7 @@ const inFilter = st => stateFilter === "-1" || st.key === stateFilter;
 const filterName = () => stateFilter === "-1" ? null : (DATA.states.find(s => s.key === stateFilter) || {}).name;
 const overviewHealths = () => DATA.states.filter(inFilter).map(healthOf);
 function applyStateFilter() {
+  syncUrl();
   buildOverview();
   buildMovers();
   buildSearchQueries();
@@ -2981,7 +2986,8 @@ function hideTip(el) {
    Same look as the chart-dates button: presets on the left, a start and an end calendar.
    Ranges are inclusive index pairs into DATA.dates.
    opts: { title, presets: [{ key, label, get: () => [r0, r1] }], initial: preset key,
-           storageKey (optional, remembers the pick per viewer), minDays (default 1), onChange(range) }
+           storageKey (optional, remembers the pick per viewer), url + urlPrefix (optional: params from urlView(),
+           which replace the remembered pick), minDays (default 1), onChange(range) }
    Returns { el, get() -> { preset, r0, r1 }, refresh() }; refresh() re-evaluates a preset whose
    dates depend on something else (e.g. "previous period") and updates the label, without onChange. */
 function makeRangePicker(host, opts) {
@@ -3044,11 +3050,12 @@ function makeRangePicker(host, opts) {
     renderCal("start"); renderCal("end");
     if (opts.storageKey) try { localStorage.setItem(opts.storageKey, JSON.stringify(st.preset === "custom"
       ? { p: "custom", from: DATA.dates[st.r0], to: DATA.dates[st.r1] } : { p: st.preset })); } catch (e) {}
+    syncUrl();
   }
   const idxAt = d => { const i = DATA.dates.findIndex(x => x >= d); return i < 0 ? N - 1 : i; };
   apply(opts.initial);
-  if (opts.storageKey) try {
-    const saved = JSON.parse(localStorage.getItem(opts.storageKey) || "null");
+  if (opts.url || opts.storageKey) try {
+    const saved = opts.url ? urlPick(opts.url, opts.urlPrefix) : JSON.parse(localStorage.getItem(opts.storageKey) || "null");
     if (saved && saved.p === "custom" && saved.from && saved.to) {
       const [a, b] = saved.from <= saved.to ? [saved.from, saved.to] : [saved.to, saved.from];
       if (b >= D0 && a <= D1) apply("custom", idxAt(a), idxAt(b));   /* ignore a range the data has moved past */
@@ -3094,6 +3101,39 @@ const TABS = [
 ];
 const tabHooks = {};
 let curTab = "main";
+
+/* ---------- the view in the URL ----------
+   ?state= plus range=<preset key> or from=&to=<YYYY-MM-DD> (States in Play's comparison adds cfrom=&cto=) describe
+   the open tab's view and the #hash names the tab, so a refresh or a shared link opens the same view. Params win
+   over what this viewer last picked (localStorage), only for the tab that opens first, and define its whole view
+   (no state= means all states). Each newer tab's hooks add view() -> { param: value or null }. */
+const VIEW_KEYS = ["state", "range", "from", "to", "cfrom", "cto"];
+const START_TAB = (() => {
+  let k = (location.hash || "").slice(1);
+  if (!TABS.some(t => t.key === k)) try { k = localStorage.getItem("wdo-tab"); } catch (e) {}
+  return TABS.some(t => t.key === k) ? k : "main";
+})();
+const URL_VIEW = (() => { const q = new URLSearchParams(location.search); return VIEW_KEYS.some(k => q.has(k)) ? q : null; })();
+const urlView = tab => tab === START_TAB ? URL_VIEW : null;
+/* a date pick from the URL, in the shape the pickers save: { p, from, to } */
+function urlPick(q, pre = "") {
+  const from = q.get(pre + "from"), to = q.get(pre + "to"), iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (iso.test(from || "") && iso.test(to || "")) return { p: "custom", from, to };
+  return q.has(pre + "range") ? { p: q.get(pre + "range") } : null;
+}
+const pickParams = (pk, pre = "") => pk.preset === "custom"
+  ? { [pre + "from"]: DATA.dates[pk.r0], [pre + "to"]: DATA.dates[pk.r1] } : { [pre + "range"]: pk.preset };
+const mainView = () => ({ state: stateFilter === "-1" ? null : stateFilter, ...pickParams(range) });
+let urlLive = false;   /* off until the first tab opens, so boot doesn't write a half-built view */
+function syncUrl() {
+  if (!urlLive) return;
+  const v = curTab === "main" ? mainView() : (tabHooks[curTab] && tabHooks[curTab].view ? tabHooks[curTab].view() : {});
+  const q = new URLSearchParams(location.search);
+  VIEW_KEYS.forEach(k => q.delete(k));
+  for (const k in v) if (v[k] != null) q.set(k, v[k]);
+  const qs = q.toString();
+  try { history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + "#" + curTab); } catch (e) {}
+}
 function showTab(key) {
   if (!TABS.some(t => t.key === key)) key = "main";
   curTab = key;
@@ -3111,9 +3151,9 @@ function showTab(key) {
     else if (br.right > nr.right) nav.scrollLeft += br.right - nr.right + 16;
   }
   try { localStorage.setItem("wdo-tab", key); } catch (e) {}
-  try { history.replaceState(null, "", "#" + key); } catch (e) {}
   if (key === "main") { if (chartGeom().w !== renderedW) renderAll(); if (quadW() !== renderedQW) renderQuad(overviewHealths()); }
   else if (tabHooks[key] && tabHooks[key].show) tabHooks[key].show();
+  syncUrl();
 }
 function initTabs() {
   const nav = document.getElementById("tabs");
@@ -3126,9 +3166,8 @@ function initTabs() {
     showTab(TABS[j].key);
     document.getElementById("tab-" + TABS[j].key).focus();
   });
-  let start = (location.hash || "").slice(1);
-  if (!TABS.some(t => t.key === start)) try { start = localStorage.getItem("wdo-tab") || "main"; } catch (e) { start = "main"; }
-  showTab(start);
+  urlLive = true;
+  showTab(START_TAB);
   addEventListener("hashchange", () => { const k = location.hash.slice(1); if (k !== curTab && TABS.some(t => t.key === k)) showTab(k); });
 }
 
@@ -3143,6 +3182,7 @@ initMovers();
 buildSearchQueries();
 buildTopQueries();
 renderAll();
+if (stateFilter !== "-1") applyStateFilter();   /* a state from the URL: hide the other cards, show its map */
 initTabs();
 let resizeRaf = 0;
 addEventListener("resize", () => {

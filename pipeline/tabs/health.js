@@ -253,7 +253,9 @@ function makeHealthTab(key, scope) {
   const natLabel = scope === "page" ? "National (homepage)" : "National (all fire pages)";
   const valid = k => k === "national" || DATA.states.some(s => s.key === k);
   let built = false, picker, sel, live, smoothOn = false, area = "national", charts = [], cells = [], hoverI = null, hov = null, lastW = 0;
-  try { const s = localStorage.getItem(skey); if (valid(s)) area = s; } catch (e) {}
+  const uq = urlView(key);
+  if (uq) area = valid(uq.get("state")) ? uq.get("state") : "national";
+  else try { const s = localStorage.getItem(skey); if (valid(s)) area = s; } catch (e) {}
 
   function place(cx, cy) {
     let tx = cx + 14, ty = cy + 12;
@@ -294,11 +296,11 @@ function makeHealthTab(key, scope) {
     const pinH = () => pane.style.setProperty("--tbar-h", (getComputedStyle(bar).position === "sticky" ? bar.offsetHeight : 0) + "px");
     if (window.ResizeObserver) new ResizeObserver(pinH).observe(bar, { box: "border-box" });
     picker = makeRangePicker(bar, { title: "Dates for every chart and the table on this tab", presets: PRESETS, initial: "90",
-      storageKey: `wdo-${key}-range`, minDays: 7, onChange: render });
+      storageKey: `wdo-${key}-range`, url: uq, minDays: 7, onChange: render });
     bar.prepend(picker.el);
     sel = bar.querySelector("select");
     sel.value = area;
-    sel.addEventListener("change", () => { area = sel.value; try { localStorage.setItem(skey, area); } catch (e) {} render(); });
+    sel.addEventListener("change", () => { area = sel.value; try { localStorage.setItem(skey, area); } catch (e) {} syncUrl(); render(); });
     bar.querySelector(".smooth input").addEventListener("change", e => { smoothOn = e.target.checked; render(); });
     live = pane.querySelector(".hsr");
     cells = [...pane.querySelectorAll(".hbox")];
@@ -677,6 +679,7 @@ function makeHealthTab(key, scope) {
       else if (cells[0].clientWidth !== lastW) render();
     },
     resize() { if (built && cells[0].clientWidth !== lastW) render(); },
+    view: () => ({ state: area === "national" ? null : area, ...(picker ? pickParams(picker.get()) : {}) }),
     select(k) {
       if (!valid(k)) return;
       area = k;

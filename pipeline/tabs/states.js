@@ -253,7 +253,7 @@
     main = makeRangePicker(bar, {
       title: `Presets end at Search Console's last complete day${gl ? ` (${gl})` : ""}. It runs about two days behind.`,
       presets: [preset("7", "Last 7 days", 7), preset("14", "Last 14 days", 14), preset("30", "Last 30 days", 30), preset("90", "Last 90 days", 90)],
-      initial: "7", storageKey: "wdo-states-range", minDays: 1,
+      initial: "7", storageKey: "wdo-states-range", url: urlView("states"), minDays: 1,
       onChange: () => { cmp.refresh(); render(); },
     });
     bar.insertAdjacentHTML("beforeend", `<span class="tlabel">${gl ? `Search Console complete through ${gl}` : "No Search Console data"}${
@@ -261,7 +261,7 @@
     cmp = makeRangePicker(pane.querySelectorAll(".sthead")[1], {
       title: "Previous period is the same number of days immediately before the Top states dates, and moves with them. If those dates run past Search Console's last complete day, it covers as many days as Search Console has in them.",
       presets: [{ key: "prev", label: "Previous period", get: () => { const m = main.get(); return [Math.max(0, m.r0 - prevLen(m)), m.r0 - 1]; } }],
-      initial: "prev", storageKey: "wdo-states-cmp", minDays: 1,
+      initial: "prev", storageKey: "wdo-states-cmp", url: urlView("states"), urlPrefix: "c", minDays: 1,
       onChange: render,
     });
     cmp.el.classList.add("pop-r");   /* the popover opens leftward from the panel's right edge */
@@ -297,5 +297,9 @@
   tabHooks.states = {
     show() { if (!built) build(); },
     resize() {},   /* tables reflow on their own */
+    view() {   /* the comparison goes in the URL only when it isn't the default previous period */
+      const c = cmp && cmp.get();
+      return main ? { ...pickParams(main.get()), ...(c && c.preset === "custom" ? pickParams(c, "c") : {}) } : {};
+    },
   };
 })();

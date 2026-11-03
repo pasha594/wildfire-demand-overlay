@@ -9,7 +9,7 @@ or projection code reaches the page.
 import json, math, os
 
 import shapefile  # pyshp
-from shapely.geometry import shape as shp_shape, MultiPolygon, Polygon
+from shapely.geometry import shape as shp_shape, LineString, MultiPolygon, Polygon
 from shapely.ops import unary_union, transform
 import numpy as np
 
@@ -18,6 +18,7 @@ from metros import METROS, STATE_ABBR
 BASE = os.path.dirname(os.path.abspath(__file__))
 W = 420.0          # viewBox width per state map
 SIMPLIFY = 0.02    # degrees; ~2km — plenty for a card-sized map
+SLIVER = 0.08      # degrees (~8km); leftover strips narrower than this join the metro beside them (see below)
 
 # ---- decode TopoJSON ----
 topo = json.load(open(os.path.join(BASE, "nielsentopo.json")))
@@ -31,7 +32,15 @@ def decode_arc(arc):
         pts.append((x * tsc[0] + ttr[0], y * tsc[1] + ttr[1]))
     return pts
 
-ARCS = [decode_arc(a) for a in topo["arcs"]]
+def simplify_arc(pts):
+    """Simplify each shared arc once (ends kept), so neighbouring DMAs keep identical borders.
+    Simplifying each clipped DMA on its own left slivers between metros and along the state edge."""
+    if len(pts) <= 2:
+        return pts
+    s = list(LineString(pts).simplify(SIMPLIFY).coords)
+    return s if len(s) >= (4 if pts[0] == pts[-1] else 2) else pts
+
+ARCS = [simplify_arc(decode_arc(a)) for a in topo["arcs"]]
 
 def ring_coords(arc_idxs):
     out = []
@@ -80,6 +89,11 @@ WHOLE_STATE_DMA = {744: "HI"}
 for dma, ab in WHOLE_STATE_DMA.items():
     dma_shapes.setdefault(dma, state_shapes[ab])
 
+ALL_DMAS = unary_union(list(dma_shapes.values()))
+
+def polys_of(g):
+    return [p for p in getattr(g, "geoms", [g]) if p.geom_type == "Polygon" and not p.is_empty]
+
 def to_path(geom, project):
     """Multipolygon -> compact SVG path string."""
     polys = geom.geoms if geom.geom_type == "MultiPolygon" else [geom]
@@ -93,7 +107,8 @@ def to_path(geom, project):
 
 out = {}
 for state, abbr in STATE_ABBR.items():
-    st_shape = state_shapes[abbr].simplify(SIMPLIFY)
+    # metros are clipped to this same simplified outline, so their edges land exactly on the drawn border
+    st_shape = state_shapes[abbr].simplify(SIMPLIFY).buffer(0)
     minx, miny, maxx, maxy = st_shape.bounds
     lat_mid = (miny + maxy) / 2
     kx = math.cos(math.radians(lat_mid))
@@ -103,30 +118,50 @@ for state, abbr in STATE_ABBR.items():
     def project(lon, lat, minx=minx, maxy=maxy, kx=kx, scale=scale):
         return ((lon - minx) * kx * scale, (maxy - lat) * scale)
 
-    metros_paths = {}
+    metros_geom = {}
     for m in METROS.get(state, []):
         dma = dma_shapes.get(m["dma"])
         if dma is None:
             print(f"  {state}/{m['key']}: DMA {m['dma']} missing from topo")
             continue
-        inter = dma.intersection(state_shapes[abbr])
+        inter = dma.intersection(st_shape)
         if inter.is_empty:
             print(f"  {state}/{m['key']}: no overlap with state, skipped on map")
             continue
-        inter = inter.simplify(SIMPLIFY).buffer(0)
         if inter.is_empty or inter.geom_type not in ("Polygon", "MultiPolygon"):
             inter = unary_union([g for g in getattr(inter, "geoms", [inter])
                                  if g.geom_type in ("Polygon", "MultiPolygon")])
             if inter.is_empty:
                 continue
-        metros_paths[m["key"]] = to_path(inter, project)
+        metros_geom[m["key"]] = inter
 
-    covered = unary_union([dma_shapes[m["dma"]].intersection(state_shapes[abbr])
-                           for m in METROS.get(state, []) if m["dma"] in dma_shapes])
-    gap = (state_shapes[abbr].area - covered.area) / state_shapes[abbr].area > 0.02
+    # Nielsen's coastlines and state borders are coarser than the Census outline, so parts of the state end up in
+    # no DMA (bays, islands, coasts) or in a thin strip of a neighbouring state's DMA (borders). Land in no DMA goes
+    # to the nearest DMA, and joins that metro if it's listed; an unlisted-DMA piece narrower than SLIVER joins the
+    # listed metro it shares the most edge with (real unlisted markets are far wider).
+    if metros_geom:
+        near = {d: g for d, g in dma_shapes.items() if g.distance(st_shape) < SLIVER}
+        key_of = {m["dma"]: m["key"] for m in METROS.get(state, []) if m["key"] in metros_geom}
+        for piece in polys_of(st_shape.difference(ALL_DMAS)):
+            d = min(near, key=lambda d: near[d].distance(piece) - piece.boundary.intersection(near[d].buffer(1e-7)).length)
+            if d in key_of:
+                metros_geom[key_of[d]] = metros_geom[key_of[d]].union(piece)
+        for piece in polys_of(st_shape.difference(unary_union(list(metros_geom.values())))):
+            if not piece.buffer(-SLIVER / 2).is_empty:
+                continue
+            edge = {k: piece.boundary.intersection(g.buffer(1e-7)).length for k, g in metros_geom.items()}
+            k = max(edge, key=edge.get)
+            if edge[k] > 0:
+                metros_geom[k] = metros_geom[k].union(piece)
+        # a sub-metre close fuses pieces that touch along a line, which would otherwise draw as a hairline
+        metros_geom = {k: g.buffer(1e-6, join_style=2).buffer(-1e-6, join_style=2) for k, g in metros_geom.items()}
+    metros_paths = {k: to_path(g, project) for k, g in metros_geom.items()}
+
+    covered = unary_union(list(metros_geom.values())) if metros_geom else Polygon()
+    gap = (st_shape.area - covered.area) / st_shape.area > 0.02
 
     out[state] = {"w": W, "h": H, "gap": gap,
-                  "outline": to_path(st_shape if st_shape.geom_type in ("Polygon", "MultiPolygon") else st_shape.buffer(0), project),
+                  "outline": to_path(st_shape, project),
                   # client-side projection for point overlays: x=(lon-minx)*kx, y=(maxy-lat)*ky
                   "proj": {"minx": round(minx, 6), "maxy": round(maxy, 6),
                            "kx": round(kx * scale, 6), "ky": round(scale, 6)},
