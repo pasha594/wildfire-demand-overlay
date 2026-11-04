@@ -679,6 +679,13 @@ function makeHealthTab(key, scope) {
       else if (cells[0].clientWidth !== lastW) render();
     },
     resize() { if (built && cells[0].clientWidth !== lastW) render(); },
+    applyView(q) {
+      if (!built) return;
+      const s = q.get("state"), a = valid(s) ? s : "national", moved = picker.setFromUrl(q);
+      if (a !== area) { area = a; sel.value = a; try { localStorage.setItem(skey, a); } catch (e) {} }
+      else if (!moved) return;
+      render();
+    },
     view: () => ({ state: area === "national" ? null : area, ...(picker ? pickParams(picker.get()) : {}) }),
     select(k) {
       if (!valid(k)) return;

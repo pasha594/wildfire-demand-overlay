@@ -1388,6 +1388,8 @@ function buildControls() {
   document.getElementById("sm").addEventListener("change", e => { smooth = e.target.checked; renderAll(); });
   /* ---- chart dates: presets + a start calendar and an end calendar ---- */
   const dpick = document.getElementById("dpick");
+  let pickGroup = {};   /* calendar clicks while the popover is open make one history entry */
+  dpick.addEventListener("toggle", () => { if (dpick.open) pickGroup = {}; });
   const D0 = DATA.dates[0], D1 = DATA.dates[N - 1];
   const ymd = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   const monthOf = iso => { const [y, m] = iso.split("-"); return { y: +y, m: +m - 1 }; };
@@ -1426,21 +1428,30 @@ function buildControls() {
     renderCal("start"); renderCal("end");
     try { localStorage.setItem("wdo-overview-range", JSON.stringify(range.preset === "custom"
       ? { p: "custom", from: DATA.dates[range.r0], to: DATA.dates[range.r1] } : { p: range.preset })); } catch (e) {}
-    syncUrl();
   };
   /* first index on or after a YYYY-MM-DD date */
   const idxAt = d => { const i = DATA.dates.findIndex(x => x >= d); return i < 0 ? N - 1 : i; };
-  try {
-    const uq = urlView("main"), saved = uq ? urlPick(uq) : JSON.parse(localStorage.getItem("wdo-overview-range") || "null");
+  /* a saved pick ({ p, from, to }), or the default when it's missing or the data has moved past it */
+  const initial = range.preset;
+  const restore = saved => {
+    setRange(initial);
     if (saved && saved.p === "custom" && saved.from && saved.to) {
       const [a, b] = saved.from <= saved.to ? [saved.from, saved.to] : [saved.to, saved.from];
-      if (b >= D0 && a <= D1) setRange("custom", idxAt(a), idxAt(b));   /* ignore a range the data has moved past */
+      if (b >= D0 && a <= D1) setRange("custom", idxAt(a), idxAt(b));
     } else if (saved && RANGE_PRESETS.some(([k]) => k === saved.p)) setRange(saved.p);
-  } catch (e) {}
+  };
+  try { const uq = urlView("main"); restore(uq ? urlPick(uq) : JSON.parse(localStorage.getItem("wdo-overview-range") || "null")); } catch (e) {}
   syncRange();
+  applyMainView = q => {
+    const s = q.get("state"), sf = DATA.states.some(st => st.key === s) ? s : "-1", was = [range.r0, range.r1].join();
+    restore(urlPick(q));
+    syncRange();
+    if (sf !== stateFilter) { stateFilter = sf; document.getElementById("statef").value = sf; applyStateFilter(); }
+    if ([range.r0, range.r1].join() !== was) rangeChanged();
+  };
   dpick.querySelector(".dpbody").addEventListener("click", e => {
     const pr = e.target.closest("[data-p]"), nav = e.target.closest(".dnav"), day = e.target.closest(".dday");
-    if (pr) { setRange(pr.dataset.p); syncRange(); rangeChanged(); dpick.open = false; return; }
+    if (pr) { setRange(pr.dataset.p); syncRange(); syncUrl(); rangeChanged(); dpick.open = false; return; }
     if (nav && !nav.disabled) {
       const which = nav.closest(".dcal").id.slice(5), v = calView[which];
       const d = new Date(v.y, v.m + +nav.dataset.dir, 1);
@@ -1453,7 +1464,7 @@ function buildControls() {
       const which = day.closest(".dcal").id.slice(5), i = DIDX[day.dataset.d], span = range.r1 - range.r0;
       if (which === "start") setRange("custom", i, i < range.r1 ? range.r1 : i + span);
       else setRange("custom", i > range.r0 ? range.r0 : i - span, i);
-      syncRange(false); rangeChanged();
+      syncRange(false); syncUrl(pickGroup); rangeChanged();
       const again = dpick.querySelector(`#dcal-${which} .dday[data-d="${DATA.dates[which === "start" ? range.r0 : range.r1]}"]`);
       if (again) again.focus();
     }
@@ -3050,22 +3061,24 @@ function makeRangePicker(host, opts) {
     renderCal("start"); renderCal("end");
     if (opts.storageKey) try { localStorage.setItem(opts.storageKey, JSON.stringify(st.preset === "custom"
       ? { p: "custom", from: DATA.dates[st.r0], to: DATA.dates[st.r1] } : { p: st.preset })); } catch (e) {}
-    syncUrl();
   }
   const idxAt = d => { const i = DATA.dates.findIndex(x => x >= d); return i < 0 ? N - 1 : i; };
-  apply(opts.initial);
-  if (opts.url || opts.storageKey) try {
-    const saved = opts.url ? urlPick(opts.url, opts.urlPrefix) : JSON.parse(localStorage.getItem(opts.storageKey) || "null");
+  /* a saved pick ({ p, from, to }), or the initial preset when it's missing or the data has moved past it */
+  function restore(saved) {
+    apply(opts.initial);
     if (saved && saved.p === "custom" && saved.from && saved.to) {
       const [a, b] = saved.from <= saved.to ? [saved.from, saved.to] : [saved.to, saved.from];
-      if (b >= D0 && a <= D1) apply("custom", idxAt(a), idxAt(b));   /* ignore a range the data has moved past */
+      if (b >= D0 && a <= D1) apply("custom", idxAt(a), idxAt(b));
     } else if (saved && opts.presets.some(p => p.key === saved.p)) apply(saved.p);
-  } catch (e) {}
+  }
+  try { restore(opts.url ? urlPick(opts.url, opts.urlPrefix) : opts.storageKey ? JSON.parse(localStorage.getItem(opts.storageKey) || "null") : null); } catch (e) {}
   sync();
+  let group = {};   /* calendar clicks while the popover is open make one history entry */
+  el.addEventListener("toggle", () => { if (el.open) group = {}; });
   const fire = () => opts.onChange && opts.onChange({ ...st });
   el.querySelector(".dpbody").addEventListener("click", e => {
     const pr = e.target.closest("[data-p]"), nav = e.target.closest(".dnav"), day = e.target.closest(".dday");
-    if (pr) { apply(pr.dataset.p); sync(); fire(); el.open = false; return; }
+    if (pr) { apply(pr.dataset.p); sync(); syncUrl(); fire(); el.open = false; return; }
     if (nav && !nav.disabled) {
       const which = nav.closest(".dcal").dataset.which, v = cal[which];
       const d = new Date(v.y, v.m + +nav.dataset.dir, 1);
@@ -3078,7 +3091,7 @@ function makeRangePicker(host, opts) {
       const which = day.closest(".dcal").dataset.which, i = DIDX[day.dataset.d], span = st.r1 - st.r0;
       if (which === "start") apply("custom", i, i <= st.r1 ? st.r1 : i + span);
       else apply("custom", i >= st.r0 ? st.r0 : i - span, i);
-      sync(false); fire();
+      sync(false); syncUrl(group); fire();
       const again = el.querySelector(`.dcal[data-which="${which}"] .dday[data-d="${DATA.dates[which === "start" ? st.r0 : st.r1]}"]`);
       if (again) again.focus();
     }
@@ -3087,6 +3100,13 @@ function makeRangePicker(host, opts) {
     el,
     get: () => ({ ...st }),
     refresh() { if (st.preset !== "custom") { apply(st.preset); sync(); } },
+    /* back/forward: take the pick from URL params, without onChange; true when the dates moved */
+    setFromUrl(q) {
+      const was = [st.preset, st.r0, st.r1].join();
+      restore(urlPick(q, opts.urlPrefix));
+      sync();
+      return [st.preset, st.r0, st.r1].join() !== was;
+    },
   };
 }
 
@@ -3106,7 +3126,8 @@ let curTab = "main";
    ?state= plus range=<preset key> or from=&to=<YYYY-MM-DD> (States in Play's comparison adds cfrom=&cto=) describe
    the open tab's view and the #hash names the tab, so a refresh or a shared link opens the same view. Params win
    over what this viewer last picked (localStorage), only for the tab that opens first, and define its whole view
-   (no state= means all states). Each newer tab's hooks add view() -> { param: value or null }. */
+   (no state= means all states). Each newer tab's hooks add view() -> { param: value or null } and
+   applyView(URLSearchParams), which back/forward uses to put that entry's view back. */
 const VIEW_KEYS = ["state", "range", "from", "to", "cfrom", "cto"];
 const START_TAB = (() => {
   let k = (location.hash || "").slice(1);
@@ -3124,17 +3145,35 @@ function urlPick(q, pre = "") {
 const pickParams = (pk, pre = "") => pk.preset === "custom"
   ? { [pre + "from"]: DATA.dates[pk.r0], [pre + "to"]: DATA.dates[pk.r1] } : { [pre + "range"]: pk.preset };
 const mainView = () => ({ state: stateFilter === "-1" ? null : stateFilter, ...pickParams(range) });
-let urlLive = false;   /* off until the first tab opens, so boot doesn't write a half-built view */
-function syncUrl() {
-  if (!urlLive) return;
+let applyMainView = () => {};   /* set by buildControls */
+let urlLive = false, urlHold = 0, urlGroup = null;   /* off until the first tab opens, so boot doesn't write a half-built view */
+/* write the open tab's view to the URL: a new history entry for each change, so Back undoes it.
+   how = "replace" rewrites the current entry; an object groups changes (calendar clicks in one open
+   popover) so only the first of them makes an entry. */
+function syncUrl(how) {
+  if (!urlLive || urlHold) return;
   const v = curTab === "main" ? mainView() : (tabHooks[curTab] && tabHooks[curTab].view ? tabHooks[curTab].view() : {});
   const q = new URLSearchParams(location.search);
   VIEW_KEYS.forEach(k => q.delete(k));
   for (const k in v) if (v[k] != null) q.set(k, v[k]);
-  const qs = q.toString();
-  try { history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + "#" + curTab); } catch (e) {}
+  const qs = q.toString(), url = location.pathname + (qs ? "?" + qs : "") + "#" + curTab;
+  if (url === location.pathname + location.search + location.hash) return;
+  const push = how !== "replace" && (!how || how !== urlGroup);
+  urlGroup = how && how !== "replace" ? how : null;
+  try { history[push ? "pushState" : "replaceState"](null, "", url); } catch (e) {}
 }
-function showTab(key) {
+addEventListener("popstate", () => {
+  const k = (location.hash || "").slice(1), q = new URLSearchParams(location.search);
+  urlHold++;
+  try {
+    showTab(k);   /* first, so the pane is visible (and built) before its view changes */
+    if (curTab === "main") applyMainView(q);
+    else if (tabHooks[curTab] && tabHooks[curTab].applyView) tabHooks[curTab].applyView(q);
+  } finally { urlHold--; }
+  urlGroup = null;
+  syncUrl("replace");   /* tidies an entry whose params no longer fit the data */
+});
+function showTab(key, how) {
   if (!TABS.some(t => t.key === key)) key = "main";
   curTab = key;
   tip.style.display = "none";
@@ -3153,7 +3192,7 @@ function showTab(key) {
   try { localStorage.setItem("wdo-tab", key); } catch (e) {}
   if (key === "main") { if (chartGeom().w !== renderedW) renderAll(); if (quadW() !== renderedQW) renderQuad(overviewHealths()); }
   else if (tabHooks[key] && tabHooks[key].show) tabHooks[key].show();
-  syncUrl();
+  syncUrl(how);
 }
 function initTabs() {
   const nav = document.getElementById("tabs");
@@ -3167,8 +3206,7 @@ function initTabs() {
     document.getElementById("tab-" + TABS[j].key).focus();
   });
   urlLive = true;
-  showTab(START_TAB);
-  addEventListener("hashchange", () => { const k = location.hash.slice(1); if (k !== curTab && TABS.some(t => t.key === k)) showTab(k); });
+  showTab(START_TAB, "replace");   /* a hand-edited #hash arrives as popstate too */
 }
 
 /*__TABS_JS__*/

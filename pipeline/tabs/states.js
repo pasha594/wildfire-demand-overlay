@@ -297,6 +297,11 @@
   tabHooks.states = {
     show() { if (!built) build(); },
     resize() {},   /* tables reflow on their own */
+    applyView(q) {
+      if (!built) return;
+      const a = main.setFromUrl(q), b = cmp.setFromUrl(q);   /* main first: the previous period follows it */
+      if (a || b) render();
+    },
     view() {   /* the comparison goes in the URL only when it isn't the default previous period */
       const c = cmp && cmp.get();
       return main ? { ...pickParams(main.get()), ...(c && c.preset === "custom" ? pickParams(c, "c") : {}) } : {};
